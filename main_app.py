@@ -822,21 +822,34 @@ class AIManagerApp(ctk.CTk):
             font=ctk.CTkFont(size=13)
         )
         self.chat_input.grid(row=0, column=0, sticky="ew", padx=(0, 10))
+
+        # Keyboard shortcuts
         self.chat_input.bind("<Control-Return>", lambda e: self._send_query())
+        self.chat_input.bind("<Control-v>", lambda e: self._paste_from_clipboard())
+        self.chat_input.bind("<Control-V>", lambda e: self._paste_from_clipboard())
+
+        # Context menu for input
+        self._create_context_menu()
 
         # Buttons
         btn_frame = ctk.CTkFrame(input_frame, fg_color="transparent")
         btn_frame.grid(row=0, column=1)
 
         self.send_btn = ctk.CTkButton(
-            btn_frame, text="Send", width=100, height=45,
+            btn_frame, text="Send", width=100, height=40,
             corner_radius=10, font=ctk.CTkFont(size=14, weight="bold"),
             command=self._send_query
         )
-        self.send_btn.pack(pady=(0, 5))
+        self.send_btn.pack(pady=(0, 4))
 
         ctk.CTkButton(
-            btn_frame, text="Clear", width=100, height=35,
+            btn_frame, text="Paste", width=100, height=30,
+            corner_radius=10, fg_color="#2980b9", hover_color="#1f618d",
+            command=self._paste_from_clipboard
+        ).pack(pady=(0, 4))
+
+        ctk.CTkButton(
+            btn_frame, text="Clear", width=100, height=30,
             corner_radius=10, fg_color="gray30",
             command=self._clear_chat
         ).pack()
@@ -1090,6 +1103,121 @@ class AIManagerApp(ctk.CTk):
         self.chat_display.delete("1.0", "end")
         self.chat_display.configure(state="disabled")
         self.status_label.configure(text="Ready")
+
+    def _paste_from_clipboard(self):
+        """Paste text from clipboard to input field"""
+        try:
+            # Get clipboard content
+            clipboard_text = self.clipboard_get()
+            if clipboard_text:
+                # Insert at cursor position
+                self.chat_input.insert("end", clipboard_text)
+                self.chat_input.see("end")
+                self.status_label.configure(text=f"Pasted {len(clipboard_text)} characters")
+        except Exception:
+            # Clipboard is empty or contains non-text data
+            self.status_label.configure(text="Clipboard is empty or contains non-text")
+
+    def _copy_to_clipboard(self, text: str):
+        """Copy text to clipboard"""
+        try:
+            self.clipboard_clear()
+            self.clipboard_append(text)
+            self.status_label.configure(text="Copied to clipboard")
+        except Exception:
+            pass
+
+    def _create_context_menu(self):
+        """Create right-click context menu for text widgets"""
+        import tkinter as tk
+
+        # Context menu for input
+        self.input_menu = tk.Menu(self, tearoff=0)
+        self.input_menu.add_command(label="Paste", command=self._paste_from_clipboard, accelerator="Ctrl+V")
+        self.input_menu.add_command(label="Cut", command=self._cut_input)
+        self.input_menu.add_command(label="Copy", command=self._copy_input)
+        self.input_menu.add_separator()
+        self.input_menu.add_command(label="Select All", command=self._select_all_input, accelerator="Ctrl+A")
+        self.input_menu.add_command(label="Clear", command=lambda: self.chat_input.delete("1.0", "end"))
+
+        # Context menu for chat display
+        self.chat_menu = tk.Menu(self, tearoff=0)
+        self.chat_menu.add_command(label="Copy", command=self._copy_chat_selection)
+        self.chat_menu.add_command(label="Copy All", command=self._copy_all_chat)
+        self.chat_menu.add_separator()
+        self.chat_menu.add_command(label="Select All", command=self._select_all_chat)
+        self.chat_menu.add_command(label="Clear Chat", command=self._clear_chat)
+
+        # Bind right-click
+        self.chat_input.bind("<Button-3>", self._show_input_menu)
+        self.chat_display.bind("<Button-3>", self._show_chat_menu)
+
+        # Bind Ctrl+A for select all
+        self.chat_input.bind("<Control-a>", lambda e: self._select_all_input())
+        self.chat_input.bind("<Control-A>", lambda e: self._select_all_input())
+
+    def _show_input_menu(self, event):
+        """Show context menu for input"""
+        try:
+            self.input_menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            self.input_menu.grab_release()
+
+    def _show_chat_menu(self, event):
+        """Show context menu for chat"""
+        try:
+            self.chat_menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            self.chat_menu.grab_release()
+
+    def _cut_input(self):
+        """Cut selected text from input"""
+        try:
+            selected = self.chat_input.get("sel.first", "sel.last")
+            if selected:
+                self._copy_to_clipboard(selected)
+                self.chat_input.delete("sel.first", "sel.last")
+        except Exception:
+            pass
+
+    def _copy_input(self):
+        """Copy selected text from input"""
+        try:
+            selected = self.chat_input.get("sel.first", "sel.last")
+            if selected:
+                self._copy_to_clipboard(selected)
+        except Exception:
+            pass
+
+    def _select_all_input(self):
+        """Select all text in input"""
+        self.chat_input.tag_add("sel", "1.0", "end-1c")
+        return "break"
+
+    def _copy_chat_selection(self):
+        """Copy selected text from chat"""
+        try:
+            self.chat_display.configure(state="normal")
+            selected = self.chat_display.get("sel.first", "sel.last")
+            self.chat_display.configure(state="disabled")
+            if selected:
+                self._copy_to_clipboard(selected)
+        except Exception:
+            pass
+
+    def _copy_all_chat(self):
+        """Copy all chat content"""
+        self.chat_display.configure(state="normal")
+        content = self.chat_display.get("1.0", "end-1c")
+        self.chat_display.configure(state="disabled")
+        if content.strip():
+            self._copy_to_clipboard(content)
+
+    def _select_all_chat(self):
+        """Select all text in chat"""
+        self.chat_display.configure(state="normal")
+        self.chat_display.tag_add("sel", "1.0", "end-1c")
+        self.chat_display.configure(state="disabled")
 
     def _save_responses(self, question: str, responses: Dict[str, Tuple[str, float]]) -> Optional[str]:
         """Save responses to file"""

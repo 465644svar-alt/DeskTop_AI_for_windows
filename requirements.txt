@@ -1,11 +1,14 @@
-# AI Manager Desktop Application v8.0
+# AI Manager Desktop Application v9.0
 # Requirements for Windows build
 
-# Core dependencies
+# Modern UI Framework
+customtkinter>=5.2.0
+
+# HTTP Requests
 requests>=2.31.0
 
-# Optional: for PyInstaller build
+# For PyInstaller build (optional)
 pyinstaller>=6.0.0
 
-# Note: tkinter is included with Python on Windows
-# No additional AI SDK dependencies needed - using pure HTTP requests
+# Note: customtkinter provides modern, beautiful UI
+# that works on Windows, macOS, and Linux

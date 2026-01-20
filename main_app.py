@@ -1,8 +1,8 @@
 """
-AI Manager Desktop Application v8.0
-Менеджер нейросетей для Windows
+AI Manager Desktop Application v9.0
+Modern Neural Network Manager for Windows
 
-Поддерживаемые нейросети:
+Supported AI:
 - OpenAI GPT (GPT-4, GPT-3.5)
 - Anthropic Claude (Claude 3)
 - Google Gemini
@@ -10,47 +10,60 @@ AI Manager Desktop Application v8.0
 - Groq (Llama, Mixtral)
 - Mistral AI
 
-Автор: DeskTop AI Team
+Features:
+- Modern UI with customtkinter
+- Parallel requests to all AI providers
+- Save responses to text file
+- Dark/Light theme support
 """
 
-import tkinter as tk
-from tkinter import filedialog, messagebox, ttk, scrolledtext
+import customtkinter as ctk
+from tkinter import filedialog, messagebox
 import threading
 import os
 import sys
 import json
 import requests
-import socket
 import time
 from datetime import datetime
-from typing import Dict, Optional, Callable
+from typing import Dict, Optional, List, Tuple
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import webbrowser
 
-# Версия приложения
-APP_VERSION = "8.0"
+# App info
+APP_VERSION = "9.0"
 APP_NAME = "AI Manager"
 
+# Theme settings
+ctk.set_appearance_mode("dark")
+ctk.set_default_color_theme("blue")
+
+
+# ==================== AI Providers ====================
 
 class AIProvider:
-    """Базовый класс для AI провайдеров"""
+    """Base class for AI providers"""
 
-    def __init__(self, name: str, api_key: str = ""):
+    def __init__(self, name: str, api_key: str = "", color: str = "#3498db"):
         self.name = name
         self.api_key = api_key
+        self.color = color
         self.is_connected = False
+        self.enabled = True
 
     def test_connection(self) -> bool:
         raise NotImplementedError
 
-    def query(self, question: str) -> str:
+    def query(self, question: str) -> Tuple[str, float]:
+        """Returns (response, time_taken)"""
         raise NotImplementedError
 
 
 class OpenAIProvider(AIProvider):
-    """OpenAI GPT провайдер"""
+    """OpenAI GPT provider"""
 
     def __init__(self, api_key: str = ""):
-        super().__init__("OpenAI GPT", api_key)
+        super().__init__("OpenAI GPT", api_key, "#10a37f")
         self.base_url = "https://api.openai.com/v1"
         self.model = "gpt-4o-mini"
 
@@ -66,10 +79,11 @@ class OpenAIProvider(AIProvider):
             self.is_connected = False
             return False
 
-    def query(self, question: str) -> str:
+    def query(self, question: str) -> Tuple[str, float]:
         if not self.api_key:
-            return "Ошибка: Введите API ключ OpenAI"
+            return "Error: Enter OpenAI API key", 0
 
+        start_time = time.time()
         try:
             headers = {
                 "Authorization": f"Bearer {self.api_key}",
@@ -78,38 +92,39 @@ class OpenAIProvider(AIProvider):
             data = {
                 "model": self.model,
                 "messages": [
-                    {"role": "system", "content": "Вы - полезный ассистент. Отвечайте на русском языке."},
+                    {"role": "system", "content": "You are a helpful assistant."},
                     {"role": "user", "content": question}
                 ],
-                "max_tokens": 2000,
+                "max_tokens": 4000,
                 "temperature": 0.7
             }
             response = requests.post(
                 f"{self.base_url}/chat/completions",
                 headers=headers,
                 json=data,
-                timeout=60
+                timeout=120
             )
+            elapsed = time.time() - start_time
 
             if response.status_code == 200:
-                return response.json()["choices"][0]["message"]["content"]
+                return response.json()["choices"][0]["message"]["content"], elapsed
             elif response.status_code == 401:
-                return "Ошибка: Неверный API ключ OpenAI"
+                return "Error: Invalid OpenAI API key", elapsed
             elif response.status_code == 429:
-                return "Ошибка: Превышен лимит запросов OpenAI"
+                return "Error: OpenAI rate limit exceeded", elapsed
             else:
-                return f"Ошибка OpenAI: {response.status_code} - {response.text}"
+                return f"Error OpenAI: {response.status_code}", elapsed
         except requests.exceptions.Timeout:
-            return "Ошибка: Таймаут запроса к OpenAI"
+            return "Error: OpenAI request timeout", time.time() - start_time
         except Exception as e:
-            return f"Ошибка OpenAI: {str(e)}"
+            return f"Error OpenAI: {str(e)}", time.time() - start_time
 
 
 class AnthropicProvider(AIProvider):
-    """Anthropic Claude провайдер"""
+    """Anthropic Claude provider"""
 
     def __init__(self, api_key: str = ""):
-        super().__init__("Anthropic Claude", api_key)
+        super().__init__("Anthropic Claude", api_key, "#cc785c")
         self.base_url = "https://api.anthropic.com/v1"
         self.model = "claude-3-haiku-20240307"
 
@@ -121,7 +136,6 @@ class AnthropicProvider(AIProvider):
                 "x-api-key": self.api_key,
                 "anthropic-version": "2023-06-01"
             }
-            # Простой тест - отправляем минимальный запрос
             data = {
                 "model": self.model,
                 "max_tokens": 10,
@@ -139,10 +153,11 @@ class AnthropicProvider(AIProvider):
             self.is_connected = False
             return False
 
-    def query(self, question: str) -> str:
+    def query(self, question: str) -> Tuple[str, float]:
         if not self.api_key:
-            return "Ошибка: Введите API ключ Anthropic"
+            return "Error: Enter Anthropic API key", 0
 
+        start_time = time.time()
         try:
             headers = {
                 "x-api-key": self.api_key,
@@ -151,35 +166,36 @@ class AnthropicProvider(AIProvider):
             }
             data = {
                 "model": self.model,
-                "max_tokens": 2000,
+                "max_tokens": 4000,
                 "messages": [{"role": "user", "content": question}]
             }
             response = requests.post(
                 f"{self.base_url}/messages",
                 headers=headers,
                 json=data,
-                timeout=60
+                timeout=120
             )
+            elapsed = time.time() - start_time
 
             if response.status_code == 200:
-                return response.json()["content"][0]["text"]
+                return response.json()["content"][0]["text"], elapsed
             elif response.status_code == 401:
-                return "Ошибка: Неверный API ключ Anthropic"
+                return "Error: Invalid Anthropic API key", elapsed
             elif response.status_code == 429:
-                return "Ошибка: Превышен лимит запросов Anthropic"
+                return "Error: Anthropic rate limit exceeded", elapsed
             else:
-                return f"Ошибка Anthropic: {response.status_code} - {response.text}"
+                return f"Error Anthropic: {response.status_code}", elapsed
         except requests.exceptions.Timeout:
-            return "Ошибка: Таймаут запроса к Anthropic"
+            return "Error: Anthropic request timeout", time.time() - start_time
         except Exception as e:
-            return f"Ошибка Anthropic: {str(e)}"
+            return f"Error Anthropic: {str(e)}", time.time() - start_time
 
 
 class GeminiProvider(AIProvider):
-    """Google Gemini провайдер"""
+    """Google Gemini provider"""
 
     def __init__(self, api_key: str = ""):
-        super().__init__("Gemini", api_key)
+        super().__init__("Gemini", api_key, "#4285f4")
         self.base_url = "https://generativelanguage.googleapis.com/v1beta"
         self.model = "gemini-1.5-flash"
 
@@ -195,52 +211,43 @@ class GeminiProvider(AIProvider):
             self.is_connected = False
             return False
 
-    def query(self, question: str) -> str:
+    def query(self, question: str) -> Tuple[str, float]:
         if not self.api_key:
-            return "Ошибка: Введите API ключ Gemini"
+            return "Error: Enter Gemini API key", 0
 
+        start_time = time.time()
         try:
             url = f"{self.base_url}/models/{self.model}:generateContent?key={self.api_key}"
             headers = {"Content-Type": "application/json"}
             data = {
-                "contents": [
-                    {
-                        "parts": [
-                            {"text": question}
-                        ]
-                    }
-                ],
-                "generationConfig": {
-                    "temperature": 0.7,
-                    "maxOutputTokens": 2000
-                }
+                "contents": [{"parts": [{"text": question}]}],
+                "generationConfig": {"temperature": 0.7, "maxOutputTokens": 4000}
             }
-            response = requests.post(url, headers=headers, json=data, timeout=60)
+            response = requests.post(url, headers=headers, json=data, timeout=120)
+            elapsed = time.time() - start_time
 
             if response.status_code == 200:
                 result = response.json()
                 if "candidates" in result and len(result["candidates"]) > 0:
-                    return result["candidates"][0]["content"]["parts"][0]["text"]
-                return "Ошибка: Пустой ответ от Gemini"
-            elif response.status_code == 400:
-                return "Ошибка: Неверный запрос к Gemini"
+                    return result["candidates"][0]["content"]["parts"][0]["text"], elapsed
+                return "Error: Empty response from Gemini", elapsed
             elif response.status_code == 403:
-                return "Ошибка: Неверный API ключ Gemini или недостаточно прав"
+                return "Error: Invalid Gemini API key", elapsed
             elif response.status_code == 429:
-                return "Ошибка: Превышен лимит запросов Gemini"
+                return "Error: Gemini rate limit exceeded", elapsed
             else:
-                return f"Ошибка Gemini: {response.status_code} - {response.text}"
+                return f"Error Gemini: {response.status_code}", elapsed
         except requests.exceptions.Timeout:
-            return "Ошибка: Таймаут запроса к Gemini"
+            return "Error: Gemini request timeout", time.time() - start_time
         except Exception as e:
-            return f"Ошибка Gemini: {str(e)}"
+            return f"Error Gemini: {str(e)}", time.time() - start_time
 
 
 class DeepSeekProvider(AIProvider):
-    """DeepSeek провайдер"""
+    """DeepSeek provider"""
 
     def __init__(self, api_key: str = ""):
-        super().__init__("DeepSeek", api_key)
+        super().__init__("DeepSeek", api_key, "#5436da")
         self.base_url = "https://api.deepseek.com/v1"
         self.model = "deepseek-chat"
 
@@ -256,10 +263,11 @@ class DeepSeekProvider(AIProvider):
             self.is_connected = False
             return False
 
-    def query(self, question: str) -> str:
+    def query(self, question: str) -> Tuple[str, float]:
         if not self.api_key:
-            return "Ошибка: Введите API ключ DeepSeek"
+            return "Error: Enter DeepSeek API key", 0
 
+        start_time = time.time()
         try:
             headers = {
                 "Authorization": f"Bearer {self.api_key}",
@@ -268,46 +276,43 @@ class DeepSeekProvider(AIProvider):
             data = {
                 "model": self.model,
                 "messages": [
-                    {"role": "system", "content": "Вы - полезный ассистент. Отвечайте на русском языке."},
+                    {"role": "system", "content": "You are a helpful assistant."},
                     {"role": "user", "content": question}
                 ],
-                "max_tokens": 2000,
+                "max_tokens": 4000,
                 "temperature": 0.7
             }
             response = requests.post(
                 f"{self.base_url}/chat/completions",
                 headers=headers,
                 json=data,
-                timeout=60
+                timeout=120
             )
+            elapsed = time.time() - start_time
 
             if response.status_code == 200:
-                return response.json()["choices"][0]["message"]["content"]
+                return response.json()["choices"][0]["message"]["content"], elapsed
             elif response.status_code == 401:
-                return "Ошибка: Неверный API ключ DeepSeek"
+                return "Error: Invalid DeepSeek API key", elapsed
             elif response.status_code == 402:
-                return "Ошибка: Недостаточно средств на балансе DeepSeek"
+                return "Error: Insufficient DeepSeek balance", elapsed
             elif response.status_code == 429:
-                return "Ошибка: Превышен лимит запросов DeepSeek"
+                return "Error: DeepSeek rate limit exceeded", elapsed
             else:
-                return f"Ошибка DeepSeek: {response.status_code} - {response.text}"
+                return f"Error DeepSeek: {response.status_code}", elapsed
         except requests.exceptions.Timeout:
-            return "Ошибка: Таймаут запроса к DeepSeek"
+            return "Error: DeepSeek request timeout", time.time() - start_time
         except Exception as e:
-            return f"Ошибка DeepSeek: {str(e)}"
+            return f"Error DeepSeek: {str(e)}", time.time() - start_time
 
 
 class GroqProvider(AIProvider):
-    """Groq провайдер"""
+    """Groq provider"""
 
     def __init__(self, api_key: str = ""):
-        super().__init__("Groq", api_key)
+        super().__init__("Groq", api_key, "#f55036")
         self.base_url = "https://api.groq.com/openai/v1"
-        self.models = [
-            "llama-3.3-70b-versatile",
-            "llama-3.1-8b-instant",
-            "mixtral-8x7b-32768"
-        ]
+        self.model = "llama-3.3-70b-versatile"
 
     def test_connection(self) -> bool:
         if not self.api_key:
@@ -321,61 +326,52 @@ class GroqProvider(AIProvider):
             self.is_connected = False
             return False
 
-    def query(self, question: str) -> str:
+    def query(self, question: str) -> Tuple[str, float]:
         if not self.api_key:
-            return "Ошибка: Введите API ключ Groq"
+            return "Error: Enter Groq API key", 0
 
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json"
-        }
+        start_time = time.time()
+        try:
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json"
+            }
+            data = {
+                "model": self.model,
+                "messages": [
+                    {"role": "system", "content": "You are a helpful assistant."},
+                    {"role": "user", "content": question}
+                ],
+                "max_tokens": 4000,
+                "temperature": 0.7
+            }
+            response = requests.post(
+                f"{self.base_url}/chat/completions",
+                headers=headers,
+                json=data,
+                timeout=120
+            )
+            elapsed = time.time() - start_time
 
-        last_error = ""
-        for model in self.models:
-            try:
-                data = {
-                    "model": model,
-                    "messages": [
-                        {"role": "system", "content": "Вы - полезный ассистент. Отвечайте на русском языке."},
-                        {"role": "user", "content": question}
-                    ],
-                    "max_tokens": 2000,
-                    "temperature": 0.7
-                }
-                response = requests.post(
-                    f"{self.base_url}/chat/completions",
-                    headers=headers,
-                    json=data,
-                    timeout=60
-                )
-
-                if response.status_code == 200:
-                    return response.json()["choices"][0]["message"]["content"]
-                elif response.status_code == 401:
-                    return "Ошибка: Неверный API ключ Groq"
-                elif response.status_code == 429:
-                    return "Ошибка: Превышен лимит запросов Groq"
-                elif response.status_code == 400:
-                    last_error = f"Модель {model} недоступна"
-                    continue
-                else:
-                    last_error = f"{response.status_code} - {response.text}"
-                    continue
-            except requests.exceptions.Timeout:
-                last_error = "Таймаут"
-                continue
-            except Exception as e:
-                last_error = str(e)
-                continue
-
-        return f"Ошибка Groq: {last_error}"
+            if response.status_code == 200:
+                return response.json()["choices"][0]["message"]["content"], elapsed
+            elif response.status_code == 401:
+                return "Error: Invalid Groq API key", elapsed
+            elif response.status_code == 429:
+                return "Error: Groq rate limit exceeded", elapsed
+            else:
+                return f"Error Groq: {response.status_code}", elapsed
+        except requests.exceptions.Timeout:
+            return "Error: Groq request timeout", time.time() - start_time
+        except Exception as e:
+            return f"Error Groq: {str(e)}", time.time() - start_time
 
 
 class MistralProvider(AIProvider):
-    """Mistral AI провайдер"""
+    """Mistral AI provider"""
 
     def __init__(self, api_key: str = ""):
-        super().__init__("Mistral AI", api_key)
+        super().__init__("Mistral AI", api_key, "#ff7000")
         self.base_url = "https://api.mistral.ai/v1"
         self.model = "mistral-small-latest"
 
@@ -391,10 +387,11 @@ class MistralProvider(AIProvider):
             self.is_connected = False
             return False
 
-    def query(self, question: str) -> str:
+    def query(self, question: str) -> Tuple[str, float]:
         if not self.api_key:
-            return "Ошибка: Введите API ключ Mistral AI"
+            return "Error: Enter Mistral AI API key", 0
 
+        start_time = time.time()
         try:
             headers = {
                 "Authorization": f"Bearer {self.api_key}",
@@ -402,120 +399,232 @@ class MistralProvider(AIProvider):
             }
             data = {
                 "model": self.model,
-                "messages": [
-                    {"role": "user", "content": question}
-                ],
-                "max_tokens": 2000,
+                "messages": [{"role": "user", "content": question}],
+                "max_tokens": 4000,
                 "temperature": 0.7
             }
             response = requests.post(
                 f"{self.base_url}/chat/completions",
                 headers=headers,
                 json=data,
-                timeout=60
+                timeout=120
             )
+            elapsed = time.time() - start_time
 
             if response.status_code == 200:
-                return response.json()["choices"][0]["message"]["content"]
+                return response.json()["choices"][0]["message"]["content"], elapsed
             elif response.status_code == 401:
-                return "Ошибка: Неверный API ключ Mistral AI"
+                return "Error: Invalid Mistral AI API key", elapsed
             elif response.status_code == 429:
-                return "Ошибка: Превышен лимит запросов Mistral AI"
+                return "Error: Mistral AI rate limit exceeded", elapsed
             else:
-                return f"Ошибка Mistral AI: {response.status_code} - {response.text}"
+                return f"Error Mistral AI: {response.status_code}", elapsed
         except requests.exceptions.Timeout:
-            return "Ошибка: Таймаут запроса к Mistral AI"
+            return "Error: Mistral AI request timeout", time.time() - start_time
         except Exception as e:
-            return f"Ошибка Mistral AI: {str(e)}"
+            return f"Error Mistral AI: {str(e)}", time.time() - start_time
 
 
-class AIManagerApp:
-    """Главное окно приложения"""
+# ==================== UI Components ====================
 
-    # Список поддерживаемых нейросетей
-    SUPPORTED_NETWORKS = [
-        "OpenAI GPT",
-        "Anthropic Claude",
-        "Gemini",
-        "DeepSeek",
-        "Groq",
-        "Mistral AI"
+class ModernSwitch(ctk.CTkFrame):
+    """Modern toggle switch with label"""
+
+    def __init__(self, master, text: str, color: str = "#3498db", command=None, **kwargs):
+        super().__init__(master, fg_color="transparent", **kwargs)
+
+        self.color = color
+        self.command = command
+
+        # Status indicator
+        self.indicator = ctk.CTkLabel(
+            self, text="", width=12, height=12,
+            fg_color="gray", corner_radius=6
+        )
+        self.indicator.pack(side="left", padx=(0, 8))
+
+        # Label
+        self.label = ctk.CTkLabel(self, text=text, font=ctk.CTkFont(size=13))
+        self.label.pack(side="left", fill="x", expand=True)
+
+        # Switch
+        self.switch_var = ctk.BooleanVar(value=True)
+        self.switch = ctk.CTkSwitch(
+            self, text="", variable=self.switch_var,
+            command=self._on_toggle, width=40,
+            progress_color=color
+        )
+        self.switch.pack(side="right")
+
+    def _on_toggle(self):
+        if self.command:
+            self.command()
+
+    def get(self) -> bool:
+        return self.switch_var.get()
+
+    def set(self, value: bool):
+        self.switch_var.set(value)
+
+    def set_status(self, connected: bool):
+        color = "#2ecc71" if connected else "#e74c3c"
+        self.indicator.configure(fg_color=color)
+
+
+class APIKeyCard(ctk.CTkFrame):
+    """Modern card for API key input"""
+
+    def __init__(self, master, name: str, color: str, url: str, description: str, **kwargs):
+        super().__init__(master, corner_radius=12, **kwargs)
+
+        self.name = name
+        self.url = url
+        self.show_key = False
+
+        # Header with color accent
+        header = ctk.CTkFrame(self, fg_color=color, corner_radius=10, height=4)
+        header.pack(fill="x", padx=10, pady=(10, 0))
+
+        # Content frame
+        content = ctk.CTkFrame(self, fg_color="transparent")
+        content.pack(fill="x", padx=15, pady=10)
+
+        # Title row
+        title_row = ctk.CTkFrame(content, fg_color="transparent")
+        title_row.pack(fill="x")
+
+        ctk.CTkLabel(
+            title_row, text=name,
+            font=ctk.CTkFont(size=16, weight="bold")
+        ).pack(side="left")
+
+        # Status indicator
+        self.status_indicator = ctk.CTkLabel(
+            title_row, text="", width=10, height=10,
+            fg_color="gray", corner_radius=5
+        )
+        self.status_indicator.pack(side="right", padx=5)
+
+        # Description
+        ctk.CTkLabel(
+            content, text=description,
+            font=ctk.CTkFont(size=11),
+            text_color="gray"
+        ).pack(anchor="w", pady=(2, 8))
+
+        # Key input row
+        key_row = ctk.CTkFrame(content, fg_color="transparent")
+        key_row.pack(fill="x")
+
+        self.key_entry = ctk.CTkEntry(
+            key_row, placeholder_text="Enter API key...",
+            show="*", height=36, corner_radius=8
+        )
+        self.key_entry.pack(side="left", fill="x", expand=True, padx=(0, 8))
+
+        # Toggle visibility button
+        self.toggle_btn = ctk.CTkButton(
+            key_row, text="Show", width=60, height=36,
+            corner_radius=8, command=self._toggle_visibility
+        )
+        self.toggle_btn.pack(side="left", padx=(0, 8))
+
+        # Get key button
+        ctk.CTkButton(
+            key_row, text="Get Key", width=80, height=36,
+            corner_radius=8, fg_color=color, hover_color=self._darken(color),
+            command=lambda: webbrowser.open(url)
+        ).pack(side="left")
+
+    def _toggle_visibility(self):
+        self.show_key = not self.show_key
+        self.key_entry.configure(show="" if self.show_key else "*")
+        self.toggle_btn.configure(text="Hide" if self.show_key else "Show")
+
+    def _darken(self, hex_color: str) -> str:
+        """Darken a hex color"""
+        hex_color = hex_color.lstrip('#')
+        rgb = tuple(int(hex_color[i:i + 2], 16) for i in (0, 2, 4))
+        darker = tuple(max(0, int(c * 0.8)) for c in rgb)
+        return f"#{darker[0]:02x}{darker[1]:02x}{darker[2]:02x}"
+
+    def get_key(self) -> str:
+        return self.key_entry.get()
+
+    def set_key(self, key: str):
+        self.key_entry.delete(0, "end")
+        self.key_entry.insert(0, key)
+
+    def set_status(self, connected: bool):
+        color = "#2ecc71" if connected else "#e74c3c"
+        self.status_indicator.configure(fg_color=color)
+
+
+# ==================== Main Application ====================
+
+class AIManagerApp(ctk.CTk):
+    """Main application window"""
+
+    PROVIDER_INFO = [
+        ("OpenAI GPT", "openai", "#10a37f", "https://platform.openai.com/api-keys",
+         "GPT-4o, GPT-4, GPT-3.5 Turbo"),
+        ("Anthropic Claude", "anthropic", "#cc785c", "https://console.anthropic.com/",
+         "Claude 3.5 Sonnet, Claude 3 Haiku"),
+        ("Gemini", "gemini", "#4285f4", "https://aistudio.google.com/apikey",
+         "Gemini 1.5 Flash, Gemini 1.5 Pro"),
+        ("DeepSeek", "deepseek", "#5436da", "https://platform.deepseek.com/",
+         "DeepSeek Chat, DeepSeek Coder"),
+        ("Groq", "groq", "#f55036", "https://console.groq.com/keys",
+         "Llama 3.3, Mixtral (Ultra fast!)"),
+        ("Mistral AI", "mistral", "#ff7000", "https://console.mistral.ai/api-keys/",
+         "Mistral Small, Mistral Large")
     ]
 
-    def __init__(self, root):
-        self.root = root
-        self.root.title(f"{APP_NAME} v{APP_VERSION}")
-        self.root.geometry("1100x800")
-        self.root.minsize(900, 700)
+    def __init__(self):
+        super().__init__()
 
-        # Устанавливаем иконку (если есть)
-        self._set_icon()
+        self.title(f"{APP_NAME} v{APP_VERSION}")
+        self.geometry("1200x800")
+        self.minsize(1000, 700)
 
-        # Конфигурация
+        # Config
         self.config_file = "config.json"
         self.config = self._load_config()
+        self.output_dir = self.config.get("output_dir", os.path.expanduser("~/Documents"))
 
-        # Инициализация провайдеров
+        # Initialize providers
         self.providers: Dict[str, AIProvider] = {}
         self._init_providers()
 
-        # Статусы подключений
-        self.connection_status = {name: False for name in self.SUPPORTED_NETWORKS}
+        # UI variables
+        self.api_cards: Dict[str, APIKeyCard] = {}
+        self.provider_switches: Dict[str, ModernSwitch] = {}
+        self.is_processing = False
 
-        # Переменные UI
-        self.api_key_vars = {}
-        self.network_vars = {}
-        self.status_labels = {}
-        self.status_text_vars = {}
-
-        # Создаем интерфейс
-        self._setup_styles()
+        # Create UI
         self._create_ui()
 
-        # Загружаем конфигурацию в UI
+        # Load config to UI
         self._load_config_to_ui()
 
-        # Проверяем соединения в фоне
-        self.root.after(1000, self._check_connections_background)
-
-    def _set_icon(self):
-        """Установка иконки приложения"""
-        try:
-            # Для Windows .ico файл
-            if sys.platform == 'win32':
-                icon_path = os.path.join(os.path.dirname(__file__), 'icon.ico')
-                if os.path.exists(icon_path):
-                    self.root.iconbitmap(icon_path)
-        except:
-            pass
+        # Check connections in background
+        self.after(500, self._check_connections_background)
 
     def _load_config(self) -> dict:
-        """Загрузка конфигурации"""
+        """Load configuration"""
         default_config = {
             "api_keys": {
-                "openai": "",
-                "anthropic": "",
-                "gemini": "",
-                "deepseek": "",
-                "groq": "",
-                "mistral": ""
+                "openai": "", "anthropic": "", "gemini": "",
+                "deepseek": "", "groq": "", "mistral": ""
             },
-            "telegram": {
-                "bot_token": "",
-                "chat_id": ""
-            },
-            "settings": {
-                "last_directory": "",
-                "theme": "default",
-                "language": "ru"
-            }
+            "output_dir": os.path.expanduser("~/Documents"),
+            "theme": "dark"
         }
 
         if os.path.exists(self.config_file):
             try:
                 with open(self.config_file, 'r', encoding='utf-8') as f:
                     loaded = json.load(f)
-                    # Мержим с дефолтными значениями
                     for key in default_config:
                         if key in loaded:
                             if isinstance(default_config[key], dict):
@@ -525,20 +634,18 @@ class AIManagerApp:
                     return default_config
             except:
                 pass
-
         return default_config
 
-    def _save_config(self) -> bool:
-        """Сохранение конфигурации"""
+    def _save_config(self):
+        """Save configuration"""
         try:
             with open(self.config_file, 'w', encoding='utf-8') as f:
                 json.dump(self.config, f, ensure_ascii=False, indent=2)
-            return True
         except:
-            return False
+            pass
 
     def _init_providers(self):
-        """Инициализация провайдеров AI"""
+        """Initialize AI providers"""
         self.providers = {
             "OpenAI GPT": OpenAIProvider(self.config["api_keys"].get("openai", "")),
             "Anthropic Claude": AnthropicProvider(self.config["api_keys"].get("anthropic", "")),
@@ -548,804 +655,487 @@ class AIManagerApp:
             "Mistral AI": MistralProvider(self.config["api_keys"].get("mistral", ""))
         }
 
-    def _setup_styles(self):
-        """Настройка стилей"""
-        style = ttk.Style()
-
-        # Пробуем установить тему
-        available_themes = style.theme_names()
-        if 'clam' in available_themes:
-            style.theme_use('clam')
-
-        # Настройка стилей
-        style.configure("Title.TLabel", font=('Segoe UI', 14, 'bold'))
-        style.configure("Header.TLabel", font=('Segoe UI', 11, 'bold'))
-        style.configure("Status.TLabel", font=('Segoe UI', 9))
-        style.configure("Success.TLabel", foreground='green')
-        style.configure("Error.TLabel", foreground='red')
-        style.configure("Accent.TButton", font=('Segoe UI', 10, 'bold'))
-
     def _create_ui(self):
-        """Создание пользовательского интерфейса"""
-        # Создаем notebook (вкладки)
-        self.notebook = ttk.Notebook(self.root)
-        self.notebook.pack(fill='both', expand=True, padx=10, pady=10)
+        """Create main UI"""
+        # Configure grid
+        self.grid_columnconfigure(1, weight=1)
+        self.grid_rowconfigure(0, weight=1)
 
-        # Вкладка 1: Чат
+        # Left sidebar
+        self._create_sidebar()
+
+        # Main content
+        self._create_main_content()
+
+    def _create_sidebar(self):
+        """Create left sidebar"""
+        sidebar = ctk.CTkFrame(self, width=280, corner_radius=0)
+        sidebar.grid(row=0, column=0, sticky="nsew")
+        sidebar.grid_propagate(False)
+
+        # Logo/Title
+        logo_frame = ctk.CTkFrame(sidebar, fg_color="transparent")
+        logo_frame.pack(fill="x", padx=20, pady=20)
+
+        ctk.CTkLabel(
+            logo_frame, text=APP_NAME,
+            font=ctk.CTkFont(size=24, weight="bold")
+        ).pack(anchor="w")
+
+        ctk.CTkLabel(
+            logo_frame, text=f"v{APP_VERSION}",
+            font=ctk.CTkFont(size=12),
+            text_color="gray"
+        ).pack(anchor="w")
+
+        # Divider
+        ctk.CTkFrame(sidebar, height=2, fg_color="gray30").pack(fill="x", padx=20, pady=10)
+
+        # AI Selection section
+        ctk.CTkLabel(
+            sidebar, text="Active AI Providers",
+            font=ctk.CTkFont(size=14, weight="bold")
+        ).pack(anchor="w", padx=20, pady=(10, 15))
+
+        # Provider switches
+        switches_frame = ctk.CTkFrame(sidebar, fg_color="transparent")
+        switches_frame.pack(fill="x", padx=20)
+
+        for name, key, color, url, desc in self.PROVIDER_INFO:
+            switch = ModernSwitch(switches_frame, text=name, color=color)
+            switch.pack(fill="x", pady=4)
+            self.provider_switches[name] = switch
+
+        # Select/Deselect all buttons
+        btn_frame = ctk.CTkFrame(sidebar, fg_color="transparent")
+        btn_frame.pack(fill="x", padx=20, pady=15)
+
+        ctk.CTkButton(
+            btn_frame, text="Select All", height=32,
+            corner_radius=8, fg_color="gray30",
+            command=self._select_all_providers
+        ).pack(side="left", fill="x", expand=True, padx=(0, 5))
+
+        ctk.CTkButton(
+            btn_frame, text="Deselect All", height=32,
+            corner_radius=8, fg_color="gray30",
+            command=self._deselect_all_providers
+        ).pack(side="left", fill="x", expand=True, padx=(5, 0))
+
+        # Divider
+        ctk.CTkFrame(sidebar, height=2, fg_color="gray30").pack(fill="x", padx=20, pady=10)
+
+        # Output directory
+        ctk.CTkLabel(
+            sidebar, text="Output Directory",
+            font=ctk.CTkFont(size=14, weight="bold")
+        ).pack(anchor="w", padx=20, pady=(10, 10))
+
+        dir_frame = ctk.CTkFrame(sidebar, fg_color="transparent")
+        dir_frame.pack(fill="x", padx=20)
+
+        self.output_dir_label = ctk.CTkLabel(
+            dir_frame, text=self._truncate_path(self.output_dir),
+            font=ctk.CTkFont(size=11),
+            text_color="gray",
+            anchor="w"
+        )
+        self.output_dir_label.pack(fill="x")
+
+        ctk.CTkButton(
+            dir_frame, text="Change Directory",
+            height=32, corner_radius=8, fg_color="gray30",
+            command=self._select_output_dir
+        ).pack(fill="x", pady=(8, 0))
+
+        # Theme toggle at bottom
+        theme_frame = ctk.CTkFrame(sidebar, fg_color="transparent")
+        theme_frame.pack(side="bottom", fill="x", padx=20, pady=20)
+
+        ctk.CTkLabel(
+            theme_frame, text="Dark Mode",
+            font=ctk.CTkFont(size=12)
+        ).pack(side="left")
+
+        self.theme_switch = ctk.CTkSwitch(
+            theme_frame, text="",
+            command=self._toggle_theme
+        )
+        self.theme_switch.pack(side="right")
+        self.theme_switch.select()
+
+    def _create_main_content(self):
+        """Create main content area"""
+        main = ctk.CTkFrame(self, fg_color="transparent")
+        main.grid(row=0, column=1, sticky="nsew", padx=20, pady=20)
+        main.grid_rowconfigure(1, weight=1)
+        main.grid_columnconfigure(0, weight=1)
+
+        # Tabs
+        self.tabview = ctk.CTkTabview(main, corner_radius=12)
+        self.tabview.grid(row=0, column=0, sticky="nsew", rowspan=2)
+
+        # Create tabs
+        self.tab_chat = self.tabview.add("Chat")
+        self.tab_settings = self.tabview.add("API Settings")
+
         self._create_chat_tab()
-
-        # Вкладка 2: Настройки API
-        self._create_api_tab()
-
-        # Вкладка 3: Пакетная обработка
-        self._create_batch_tab()
-
-        # Вкладка 4: Статус соединений
-        self._create_status_tab()
-
-        # Вкладка 5: История
-        self._create_history_tab()
-
-        # Вкладка 6: О программе
-        self._create_about_tab()
+        self._create_settings_tab()
 
     def _create_chat_tab(self):
-        """Создание вкладки чата"""
-        self.chat_tab = ttk.Frame(self.notebook)
-        self.notebook.add(self.chat_tab, text="Чат")
+        """Create chat tab"""
+        self.tab_chat.grid_rowconfigure(1, weight=1)
+        self.tab_chat.grid_columnconfigure(0, weight=1)
 
-        # Верхняя панель - выбор нейросети
-        top_frame = ttk.Frame(self.chat_tab)
-        top_frame.pack(fill='x', padx=10, pady=5)
+        # Header
+        header = ctk.CTkFrame(self.tab_chat, fg_color="transparent")
+        header.grid(row=0, column=0, sticky="ew", pady=(0, 10))
 
-        ttk.Label(top_frame, text="Нейросеть:", style="Header.TLabel").pack(side='left', padx=(0, 10))
+        ctk.CTkLabel(
+            header, text="Ask AI",
+            font=ctk.CTkFont(size=20, weight="bold")
+        ).pack(side="left")
 
-        self.chat_network_var = tk.StringVar(value=self.SUPPORTED_NETWORKS[0])
-        network_combo = ttk.Combobox(
-            top_frame,
-            textvariable=self.chat_network_var,
-            values=self.SUPPORTED_NETWORKS,
-            state='readonly',
-            width=25
+        # Status label
+        self.status_label = ctk.CTkLabel(
+            header, text="Ready",
+            font=ctk.CTkFont(size=12),
+            text_color="gray"
         )
-        network_combo.pack(side='left', padx=(0, 20))
+        self.status_label.pack(side="right")
 
-        # Индикатор статуса
-        self.chat_status_label = ttk.Label(top_frame, text="", style="Status.TLabel")
-        self.chat_status_label.pack(side='left')
-
-        # Область чата
-        chat_frame = ttk.LabelFrame(self.chat_tab, text="Диалог", padding=10)
-        chat_frame.pack(fill='both', expand=True, padx=10, pady=5)
-
-        # Текстовое поле для чата
-        self.chat_display = scrolledtext.ScrolledText(
-            chat_frame,
-            wrap='word',
-            font=('Consolas', 10),
-            state='disabled'
+        # Chat display
+        self.chat_display = ctk.CTkTextbox(
+            self.tab_chat, corner_radius=12,
+            font=ctk.CTkFont(family="Consolas", size=12),
+            state="disabled"
         )
-        self.chat_display.pack(fill='both', expand=True)
+        self.chat_display.grid(row=1, column=0, sticky="nsew", pady=(0, 10))
 
-        # Настройка тегов для форматирования
-        self.chat_display.tag_configure('user', foreground='blue', font=('Consolas', 10, 'bold'))
-        self.chat_display.tag_configure('assistant', foreground='green')
-        self.chat_display.tag_configure('error', foreground='red')
-        self.chat_display.tag_configure('system', foreground='gray', font=('Consolas', 9, 'italic'))
+        # Input area
+        input_frame = ctk.CTkFrame(self.tab_chat, fg_color="transparent")
+        input_frame.grid(row=2, column=0, sticky="ew")
+        input_frame.grid_columnconfigure(0, weight=1)
 
-        # Поле ввода
-        input_frame = ttk.Frame(self.chat_tab)
-        input_frame.pack(fill='x', padx=10, pady=5)
-
-        self.chat_input = scrolledtext.ScrolledText(
-            input_frame,
-            wrap='word',
-            font=('Consolas', 10),
-            height=4
+        self.chat_input = ctk.CTkTextbox(
+            input_frame, height=100, corner_radius=12,
+            font=ctk.CTkFont(size=13)
         )
-        self.chat_input.pack(side='left', fill='x', expand=True, padx=(0, 10))
-        self.chat_input.bind('<Control-Return>', lambda e: self._send_chat_message())
+        self.chat_input.grid(row=0, column=0, sticky="ew", padx=(0, 10))
+        self.chat_input.bind("<Control-Return>", lambda e: self._send_query())
 
-        # Кнопки
-        btn_frame = ttk.Frame(input_frame)
-        btn_frame.pack(side='right', fill='y')
+        # Buttons
+        btn_frame = ctk.CTkFrame(input_frame, fg_color="transparent")
+        btn_frame.grid(row=0, column=1)
 
-        ttk.Button(btn_frame, text="Отправить\n(Ctrl+Enter)",
-                   command=self._send_chat_message, style="Accent.TButton").pack(fill='x', pady=2)
-        ttk.Button(btn_frame, text="Очистить",
-                   command=self._clear_chat).pack(fill='x', pady=2)
-
-    def _create_api_tab(self):
-        """Создание вкладки настроек API"""
-        self.api_tab = ttk.Frame(self.notebook)
-        self.notebook.add(self.api_tab, text="Настройки API")
-
-        # Scrollable frame
-        canvas = tk.Canvas(self.api_tab)
-        scrollbar = ttk.Scrollbar(self.api_tab, orient="vertical", command=canvas.yview)
-        scrollable_frame = ttk.Frame(canvas)
-
-        scrollable_frame.bind(
-            "<Configure>",
-            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        self.send_btn = ctk.CTkButton(
+            btn_frame, text="Send", width=100, height=45,
+            corner_radius=10, font=ctk.CTkFont(size=14, weight="bold"),
+            command=self._send_query
         )
+        self.send_btn.pack(pady=(0, 5))
 
-        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
-        canvas.configure(yscrollcommand=scrollbar.set)
+        ctk.CTkButton(
+            btn_frame, text="Clear", width=100, height=35,
+            corner_radius=10, fg_color="gray30",
+            command=self._clear_chat
+        ).pack()
 
-        canvas.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
+        # Progress bar
+        self.progress = ctk.CTkProgressBar(self.tab_chat, mode="indeterminate", height=3)
 
-        # Привязка прокрутки колесом мыши
-        def _on_mousewheel(event):
-            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
-        canvas.bind_all("<MouseWheel>", _on_mousewheel)
+    def _create_settings_tab(self):
+        """Create settings tab"""
+        # Scrollable frame for API cards
+        scroll = ctk.CTkScrollableFrame(self.tab_settings, corner_radius=0)
+        scroll.pack(fill="both", expand=True)
 
-        # API настройки для каждой нейросети
-        api_configs = [
-            ("OpenAI GPT", "openai", "https://platform.openai.com/api-keys",
-             "Модели: GPT-4o, GPT-4, GPT-3.5-turbo"),
-            ("Anthropic Claude", "anthropic", "https://console.anthropic.com/",
-             "Модели: Claude 3.5 Sonnet, Claude 3 Haiku"),
-            ("Gemini", "gemini", "https://aistudio.google.com/apikey",
-             "Модели: Gemini 1.5 Flash, Gemini 1.5 Pro"),
-            ("DeepSeek", "deepseek", "https://platform.deepseek.com/",
-             "Модели: DeepSeek-Chat, DeepSeek-Coder"),
-            ("Groq", "groq", "https://console.groq.com/keys",
-             "Модели: Llama 3.3, Mixtral (быстрые!)"),
-            ("Mistral AI", "mistral", "https://console.mistral.ai/api-keys/",
-             "Модели: Mistral Small, Mistral Large")
-        ]
+        ctk.CTkLabel(
+            scroll, text="API Keys Configuration",
+            font=ctk.CTkFont(size=20, weight="bold")
+        ).pack(anchor="w", pady=(0, 15))
 
-        for name, key_name, url, description in api_configs:
-            frame = ttk.LabelFrame(scrollable_frame, text=name, padding=10)
-            frame.pack(fill='x', padx=10, pady=5)
+        # API cards grid
+        cards_frame = ctk.CTkFrame(scroll, fg_color="transparent")
+        cards_frame.pack(fill="x")
 
-            # Описание
-            ttk.Label(frame, text=description, font=('Segoe UI', 8, 'italic'),
-                      foreground='gray').grid(row=0, column=0, columnspan=3, sticky='w', pady=(0, 5))
+        for i, (name, key, color, url, desc) in enumerate(self.PROVIDER_INFO):
+            card = APIKeyCard(cards_frame, name, color, url, desc)
+            card.pack(fill="x", pady=8)
+            self.api_cards[key] = card
 
-            # API ключ
-            ttk.Label(frame, text="API ключ:").grid(row=1, column=0, sticky='w')
+        # Save button
+        btn_frame = ctk.CTkFrame(scroll, fg_color="transparent")
+        btn_frame.pack(fill="x", pady=20)
 
-            key_var = tk.StringVar()
-            self.api_key_vars[key_name] = key_var
+        ctk.CTkButton(
+            btn_frame, text="Save Settings", height=45,
+            corner_radius=10, font=ctk.CTkFont(size=14, weight="bold"),
+            command=self._save_settings
+        ).pack(side="left", padx=(0, 10))
 
-            entry = ttk.Entry(frame, textvariable=key_var, width=60, show="*")
-            entry.grid(row=1, column=1, padx=5, pady=2)
+        ctk.CTkButton(
+            btn_frame, text="Test Connections", height=45,
+            corner_radius=10, fg_color="gray30",
+            command=self._check_all_connections
+        ).pack(side="left")
 
-            # Кнопки
-            btn_frame = ttk.Frame(frame)
-            btn_frame.grid(row=1, column=2, padx=5)
+    # ==================== Actions ====================
 
-            ttk.Button(btn_frame, text="Показать", width=10,
-                       command=lambda e=entry: self._toggle_password(e)).pack(side='left', padx=2)
-            ttk.Button(btn_frame, text="Получить ключ", width=12,
-                       command=lambda u=url: webbrowser.open(u)).pack(side='left', padx=2)
+    def _select_all_providers(self):
+        for switch in self.provider_switches.values():
+            switch.set(True)
 
-        # Telegram настройки
-        telegram_frame = ttk.LabelFrame(scrollable_frame, text="Telegram (опционально)", padding=10)
-        telegram_frame.pack(fill='x', padx=10, pady=5)
+    def _deselect_all_providers(self):
+        for switch in self.provider_switches.values():
+            switch.set(False)
 
-        ttk.Label(telegram_frame, text="Токен бота:").grid(row=0, column=0, sticky='w')
-        self.telegram_token_var = tk.StringVar()
-        ttk.Entry(telegram_frame, textvariable=self.telegram_token_var, width=60).grid(
-            row=0, column=1, padx=5, pady=2)
+    def _select_output_dir(self):
+        directory = filedialog.askdirectory(
+            title="Select Output Directory",
+            initialdir=self.output_dir
+        )
+        if directory:
+            self.output_dir = directory
+            self.config["output_dir"] = directory
+            self._save_config()
+            self.output_dir_label.configure(text=self._truncate_path(directory))
 
-        ttk.Label(telegram_frame, text="Chat ID:").grid(row=1, column=0, sticky='w')
-        self.telegram_chat_id_var = tk.StringVar()
-        ttk.Entry(telegram_frame, textvariable=self.telegram_chat_id_var, width=60).grid(
-            row=1, column=1, padx=5, pady=2)
+    def _truncate_path(self, path: str, max_len: int = 35) -> str:
+        if len(path) <= max_len:
+            return path
+        return "..." + path[-(max_len - 3):]
 
-        # Кнопка сохранения
-        save_frame = ttk.Frame(scrollable_frame)
-        save_frame.pack(fill='x', padx=10, pady=20)
-
-        ttk.Button(save_frame, text="Сохранить настройки",
-                   command=self._save_api_settings, style="Accent.TButton").pack(side='left', padx=5)
-        ttk.Button(save_frame, text="Проверить все соединения",
-                   command=self._check_all_connections).pack(side='left', padx=5)
-
-    def _create_batch_tab(self):
-        """Создание вкладки пакетной обработки"""
-        self.batch_tab = ttk.Frame(self.notebook)
-        self.notebook.add(self.batch_tab, text="Пакетная обработка")
-
-        # Выбор файла
-        file_frame = ttk.LabelFrame(self.batch_tab, text="Файл с вопросом", padding=10)
-        file_frame.pack(fill='x', padx=10, pady=5)
-
-        self.file_path_var = tk.StringVar()
-        ttk.Entry(file_frame, textvariable=self.file_path_var, width=80).pack(side='left', fill='x', expand=True, padx=(0, 10))
-        ttk.Button(file_frame, text="Выбрать...", command=self._select_file).pack(side='left')
-
-        # Директория сохранения
-        save_frame = ttk.LabelFrame(self.batch_tab, text="Директория сохранения", padding=10)
-        save_frame.pack(fill='x', padx=10, pady=5)
-
-        self.save_path_var = tk.StringVar()
-        ttk.Entry(save_frame, textvariable=self.save_path_var, width=80).pack(side='left', fill='x', expand=True, padx=(0, 10))
-        ttk.Button(save_frame, text="Выбрать...", command=self._select_save_dir).pack(side='left')
-
-        # Выбор нейросетей
-        networks_frame = ttk.LabelFrame(self.batch_tab, text="Нейросети для запроса", padding=10)
-        networks_frame.pack(fill='x', padx=10, pady=5)
-
-        for i, name in enumerate(self.SUPPORTED_NETWORKS):
-            var = tk.BooleanVar(value=True)
-            self.network_vars[name] = var
-            cb = ttk.Checkbutton(networks_frame, text=name, variable=var)
-            cb.grid(row=i // 3, column=i % 3, sticky='w', padx=20, pady=2)
-
-        # Кнопки управления
-        button_frame = ttk.Frame(self.batch_tab)
-        button_frame.pack(fill='x', padx=10, pady=10)
-
-        ttk.Button(button_frame, text="Отправить запросы",
-                   command=self._send_batch_requests, style="Accent.TButton").pack(side='left', padx=5)
-        ttk.Button(button_frame, text="Очистить лог",
-                   command=self._clear_batch_log).pack(side='left', padx=5)
-
-        # Прогресс
-        self.batch_progress = ttk.Progressbar(self.batch_tab, mode='indeterminate')
-        self.batch_progress.pack(fill='x', padx=10, pady=5)
-
-        # Лог
-        log_frame = ttk.LabelFrame(self.batch_tab, text="Лог выполнения", padding=10)
-        log_frame.pack(fill='both', expand=True, padx=10, pady=5)
-
-        self.batch_log = scrolledtext.ScrolledText(log_frame, wrap='word', height=15)
-        self.batch_log.pack(fill='both', expand=True)
-
-    def _create_status_tab(self):
-        """Создание вкладки статуса соединений"""
-        self.status_tab = ttk.Frame(self.notebook)
-        self.notebook.add(self.status_tab, text="Статус")
-
-        # Заголовок
-        ttk.Label(self.status_tab, text="Статус подключения к API",
-                  style="Title.TLabel").pack(pady=20)
-
-        # Статусы
-        status_frame = ttk.Frame(self.status_tab)
-        status_frame.pack(fill='both', expand=True, padx=20)
-
-        for i, name in enumerate(self.SUPPORTED_NETWORKS):
-            row_frame = ttk.Frame(status_frame)
-            row_frame.pack(fill='x', pady=10)
-
-            # Название
-            ttk.Label(row_frame, text=name, width=20, anchor='w',
-                      font=('Segoe UI', 11)).pack(side='left', padx=10)
-
-            # Индикатор (Canvas)
-            canvas = tk.Canvas(row_frame, width=24, height=24, highlightthickness=0)
-            canvas.pack(side='left', padx=10)
-            canvas.create_oval(2, 2, 22, 22, fill='gray', outline='')
-            self.status_labels[name] = canvas
-
-            # Текст статуса
-            status_var = tk.StringVar(value="Не проверено")
-            self.status_text_vars[name] = status_var
-            ttk.Label(row_frame, textvariable=status_var, width=20).pack(side='left', padx=10)
-
-            # Кнопка проверки
-            ttk.Button(row_frame, text="Проверить", width=12,
-                       command=lambda n=name: self._check_single_connection(n)).pack(side='left', padx=10)
-
-        # Кнопка проверки всех
-        ttk.Button(self.status_tab, text="Проверить все соединения",
-                   command=self._check_all_connections, style="Accent.TButton").pack(pady=30)
-
-    def _create_history_tab(self):
-        """Создание вкладки истории"""
-        self.history_tab = ttk.Frame(self.notebook)
-        self.notebook.add(self.history_tab, text="История")
-
-        # Панель управления
-        control_frame = ttk.Frame(self.history_tab)
-        control_frame.pack(fill='x', padx=10, pady=5)
-
-        ttk.Button(control_frame, text="Обновить", command=self._load_history).pack(side='left', padx=5)
-        ttk.Button(control_frame, text="Отправить в Telegram",
-                   command=self._send_to_telegram).pack(side='left', padx=5)
-
-        # Список файлов
-        list_frame = ttk.Frame(self.history_tab)
-        list_frame.pack(fill='both', expand=True, padx=10, pady=5)
-
-        # Левая панель - список
-        left_frame = ttk.LabelFrame(list_frame, text="Файлы", padding=5)
-        left_frame.pack(side='left', fill='y', padx=(0, 5))
-
-        self.history_listbox = tk.Listbox(left_frame, width=40, height=20)
-        scrollbar = ttk.Scrollbar(left_frame, command=self.history_listbox.yview)
-        self.history_listbox.configure(yscrollcommand=scrollbar.set)
-        self.history_listbox.pack(side='left', fill='y')
-        scrollbar.pack(side='right', fill='y')
-        self.history_listbox.bind('<<ListboxSelect>>', self._on_history_select)
-
-        # Правая панель - содержимое
-        right_frame = ttk.LabelFrame(list_frame, text="Содержимое", padding=5)
-        right_frame.pack(side='left', fill='both', expand=True)
-
-        self.history_text = scrolledtext.ScrolledText(right_frame, wrap='word')
-        self.history_text.pack(fill='both', expand=True)
-
-    def _create_about_tab(self):
-        """Создание вкладки 'О программе'"""
-        self.about_tab = ttk.Frame(self.notebook)
-        self.notebook.add(self.about_tab, text="О программе")
-
-        # Центрированный контент
-        center_frame = ttk.Frame(self.about_tab)
-        center_frame.place(relx=0.5, rely=0.5, anchor='center')
-
-        ttk.Label(center_frame, text=f"{APP_NAME}",
-                  font=('Segoe UI', 24, 'bold')).pack(pady=10)
-        ttk.Label(center_frame, text=f"Версия {APP_VERSION}",
-                  font=('Segoe UI', 14)).pack(pady=5)
-
-        ttk.Label(center_frame, text="Менеджер нейросетей для Windows",
-                  font=('Segoe UI', 11)).pack(pady=20)
-
-        # Поддерживаемые нейросети
-        networks_text = "Поддерживаемые нейросети:\n" + "\n".join(f"  - {n}" for n in self.SUPPORTED_NETWORKS)
-        ttk.Label(center_frame, text=networks_text,
-                  font=('Segoe UI', 10), justify='left').pack(pady=20)
-
-        ttk.Label(center_frame, text="2024-2025 DeskTop AI Team",
-                  font=('Segoe UI', 9, 'italic'), foreground='gray').pack(pady=20)
-
-    # ==================== Методы работы ====================
-
-    def _toggle_password(self, entry):
-        """Переключение видимости пароля"""
-        current = entry.cget('show')
-        entry.config(show='' if current == '*' else '*')
+    def _toggle_theme(self):
+        mode = "dark" if self.theme_switch.get() else "light"
+        ctk.set_appearance_mode(mode)
+        self.config["theme"] = mode
+        self._save_config()
 
     def _load_config_to_ui(self):
-        """Загрузка конфигурации в UI"""
-        # API ключи
-        key_mapping = {
-            "openai": "openai",
-            "anthropic": "anthropic",
-            "gemini": "gemini",
-            "deepseek": "deepseek",
-            "groq": "groq",
-            "mistral": "mistral"
-        }
+        """Load config to UI"""
+        for key, card in self.api_cards.items():
+            card.set_key(self.config["api_keys"].get(key, ""))
 
-        for ui_key, config_key in key_mapping.items():
-            if ui_key in self.api_key_vars:
-                self.api_key_vars[ui_key].set(self.config["api_keys"].get(config_key, ""))
+        # Theme
+        if self.config.get("theme") == "light":
+            self.theme_switch.deselect()
+            ctk.set_appearance_mode("light")
 
-        # Telegram
-        self.telegram_token_var.set(self.config["telegram"].get("bot_token", ""))
-        self.telegram_chat_id_var.set(self.config["telegram"].get("chat_id", ""))
+    def _save_settings(self):
+        """Save API settings"""
+        for key, card in self.api_cards.items():
+            self.config["api_keys"][key] = card.get_key()
 
-        # Последняя директория
-        if self.config["settings"].get("last_directory"):
-            self.save_path_var.set(self.config["settings"]["last_directory"])
-
-    def _save_api_settings(self):
-        """Сохранение настроек API"""
-        # API ключи
-        key_mapping = {
-            "openai": "openai",
-            "anthropic": "anthropic",
-            "gemini": "gemini",
-            "deepseek": "deepseek",
-            "groq": "groq",
-            "mistral": "mistral"
-        }
-
-        for ui_key, config_key in key_mapping.items():
-            if ui_key in self.api_key_vars:
-                self.config["api_keys"][config_key] = self.api_key_vars[ui_key].get()
-
-        # Telegram
-        self.config["telegram"]["bot_token"] = self.telegram_token_var.get()
-        self.config["telegram"]["chat_id"] = self.telegram_chat_id_var.get()
-
-        # Обновляем провайдеры
         self._update_providers()
+        self._save_config()
 
-        # Сохраняем
-        if self._save_config():
-            messagebox.showinfo("Успех", "Настройки сохранены!")
-        else:
-            messagebox.showerror("Ошибка", "Не удалось сохранить настройки")
+        messagebox.showinfo("Success", "Settings saved successfully!")
+        self._check_all_connections()
 
     def _update_providers(self):
-        """Обновление API ключей в провайдерах"""
-        provider_keys = {
-            "OpenAI GPT": self.api_key_vars.get("openai", tk.StringVar()).get(),
-            "Anthropic Claude": self.api_key_vars.get("anthropic", tk.StringVar()).get(),
-            "Gemini": self.api_key_vars.get("gemini", tk.StringVar()).get(),
-            "DeepSeek": self.api_key_vars.get("deepseek", tk.StringVar()).get(),
-            "Groq": self.api_key_vars.get("groq", tk.StringVar()).get(),
-            "Mistral AI": self.api_key_vars.get("mistral", tk.StringVar()).get()
+        """Update provider API keys"""
+        key_map = {
+            "OpenAI GPT": "openai",
+            "Anthropic Claude": "anthropic",
+            "Gemini": "gemini",
+            "DeepSeek": "deepseek",
+            "Groq": "groq",
+            "Mistral AI": "mistral"
         }
-
-        for name, key in provider_keys.items():
+        for name, key in key_map.items():
             if name in self.providers:
-                self.providers[name].api_key = key
+                self.providers[name].api_key = self.config["api_keys"].get(key, "")
 
     def _check_connections_background(self):
-        """Фоновая проверка соединений"""
+        """Check connections in background"""
+        thread = threading.Thread(target=self._check_all_connections_thread, daemon=True)
+        thread.start()
+
+    def _check_all_connections(self):
+        """Check all connections"""
         thread = threading.Thread(target=self._check_all_connections_thread, daemon=True)
         thread.start()
 
     def _check_all_connections_thread(self):
-        """Поток проверки всех соединений"""
+        """Thread for checking connections"""
         self._update_providers()
-        for name in self.SUPPORTED_NETWORKS:
-            self._check_single_connection_internal(name)
-            time.sleep(0.5)
 
-    def _check_all_connections(self):
-        """Проверка всех соединений с UI"""
-        self._add_batch_log("Проверяем соединения...")
-        thread = threading.Thread(target=self._check_all_connections_thread, daemon=True)
-        thread.start()
-
-    def _check_single_connection(self, name: str):
-        """Проверка одного соединения"""
-        thread = threading.Thread(
-            target=self._check_single_connection_internal,
-            args=(name,),
-            daemon=True
-        )
-        thread.start()
-
-    def _check_single_connection_internal(self, name: str):
-        """Внутренняя проверка соединения"""
-        if name not in self.providers:
-            return
-
-        # Обновляем ключ
-        key_mapping = {
-            "OpenAI GPT": "openai",
-            "Anthropic Claude": "anthropic",
-            "Gemini": "gemini",
-            "DeepSeek": "deepseek",
-            "Groq": "groq",
-            "Mistral AI": "mistral"
+        key_map = {
+            "openai": "OpenAI GPT",
+            "anthropic": "Anthropic Claude",
+            "gemini": "Gemini",
+            "deepseek": "DeepSeek",
+            "groq": "Groq",
+            "mistral": "Mistral AI"
         }
 
-        if key_mapping[name] in self.api_key_vars:
-            self.providers[name].api_key = self.api_key_vars[key_mapping[name]].get()
+        for key, name in key_map.items():
+            if name in self.providers:
+                status = self.providers[name].test_connection()
 
-        # Проверяем
-        status = self.providers[name].test_connection()
-        self.connection_status[name] = status
+                # Update UI
+                self.after(0, lambda n=name, s=status: self._update_connection_status(n, s))
+                self.after(0, lambda k=key, s=status: self._update_card_status(k, s))
 
-        # Обновляем UI
-        self.root.after(0, lambda: self._update_status_ui(name, status))
+    def _update_connection_status(self, name: str, status: bool):
+        if name in self.provider_switches:
+            self.provider_switches[name].set_status(status)
 
-    def _update_status_ui(self, name: str, status: bool):
-        """Обновление UI статуса"""
-        if name in self.status_labels:
-            canvas = self.status_labels[name]
-            canvas.delete("all")
+    def _update_card_status(self, key: str, status: bool):
+        if key in self.api_cards:
+            self.api_cards[key].set_status(status)
 
-            if status:
-                canvas.create_oval(2, 2, 22, 22, fill='green', outline='')
-                self.status_text_vars[name].set("Подключено")
-            else:
-                canvas.create_oval(2, 2, 22, 22, fill='red', outline='')
-                self.status_text_vars[name].set("Ошибка")
-
-    # ==================== Чат ====================
-
-    def _send_chat_message(self):
-        """Отправка сообщения в чат"""
-        message = self.chat_input.get("1.0", "end-1c").strip()
-        if not message:
+    def _send_query(self):
+        """Send query to selected providers"""
+        if self.is_processing:
             return
 
-        network = self.chat_network_var.get()
-        if network not in self.providers:
-            self._add_chat_message("Ошибка: Выбрана неизвестная нейросеть", "error")
+        question = self.chat_input.get("1.0", "end-1c").strip()
+        if not question:
             return
 
-        # Обновляем ключ
-        key_mapping = {
-            "OpenAI GPT": "openai",
-            "Anthropic Claude": "anthropic",
-            "Gemini": "gemini",
-            "DeepSeek": "deepseek",
-            "Groq": "groq",
-            "Mistral AI": "mistral"
-        }
+        # Get selected providers
+        selected = [name for name, switch in self.provider_switches.items() if switch.get()]
+        if not selected:
+            messagebox.showwarning("Warning", "Please select at least one AI provider!")
+            return
 
-        if key_mapping[network] in self.api_key_vars:
-            self.providers[network].api_key = self.api_key_vars[key_mapping[network]].get()
+        # Update UI
+        self.is_processing = True
+        self.send_btn.configure(state="disabled")
+        self.progress.grid(row=3, column=0, sticky="ew", pady=(10, 0))
+        self.progress.start()
+        self.status_label.configure(text=f"Querying {len(selected)} AI providers...")
 
-        # Очищаем поле ввода
+        # Add user message to chat
+        self._add_to_chat(f"You: {question}\n", "user")
+        self._add_to_chat("-" * 60 + "\n", "divider")
+
+        # Clear input
         self.chat_input.delete("1.0", "end")
 
-        # Добавляем сообщение пользователя
-        self._add_chat_message(f"Вы: {message}", "user")
-        self._add_chat_message(f"[{network}] Думает...", "system")
-
-        # Отправляем в отдельном потоке
-        thread = threading.Thread(
-            target=self._process_chat_message,
-            args=(network, message),
-            daemon=True
-        )
-        thread.start()
-
-    def _process_chat_message(self, network: str, message: str):
-        """Обработка сообщения чата"""
-        try:
-            response = self.providers[network].query(message)
-            self.root.after(0, lambda: self._show_chat_response(network, response))
-        except Exception as e:
-            self.root.after(0, lambda: self._show_chat_response(network, f"Ошибка: {str(e)}", True))
-
-    def _show_chat_response(self, network: str, response: str, is_error: bool = False):
-        """Показ ответа в чате"""
-        # Удаляем "Думает..."
-        self.chat_display.config(state='normal')
-        content = self.chat_display.get("1.0", "end")
-        lines = content.split('\n')
-        new_lines = [l for l in lines if "Думает..." not in l]
-        self.chat_display.delete("1.0", "end")
-        self.chat_display.insert("1.0", '\n'.join(new_lines))
-        self.chat_display.config(state='disabled')
-
-        # Добавляем ответ
-        tag = "error" if is_error or response.startswith("Ошибка") else "assistant"
-        self._add_chat_message(f"{network}: {response}", tag)
-
-    def _add_chat_message(self, message: str, tag: str = None):
-        """Добавление сообщения в чат"""
-        self.chat_display.config(state='normal')
-        timestamp = datetime.now().strftime("%H:%M:%S")
-        self.chat_display.insert("end", f"[{timestamp}] {message}\n\n", tag)
-        self.chat_display.see("end")
-        self.chat_display.config(state='disabled')
-
-    def _clear_chat(self):
-        """Очистка чата"""
-        self.chat_display.config(state='normal')
-        self.chat_display.delete("1.0", "end")
-        self.chat_display.config(state='disabled')
-
-    # ==================== Пакетная обработка ====================
-
-    def _select_file(self):
-        """Выбор файла"""
-        filename = filedialog.askopenfilename(
-            title="Выберите файл с вопросом",
-            filetypes=[("Текстовые файлы", "*.txt"), ("Все файлы", "*.*")]
-        )
-        if filename:
-            self.file_path_var.set(filename)
-
-    def _select_save_dir(self):
-        """Выбор директории сохранения"""
-        directory = filedialog.askdirectory(title="Выберите папку для сохранения")
-        if directory:
-            self.save_path_var.set(directory)
-            self.config["settings"]["last_directory"] = directory
-            self._save_config()
-
-    def _send_batch_requests(self):
-        """Отправка пакетных запросов"""
-        question_file = self.file_path_var.get()
-        save_dir = self.save_path_var.get()
-
-        if not question_file or not os.path.exists(question_file):
-            messagebox.showerror("Ошибка", "Выберите файл с вопросом")
-            return
-
-        if not save_dir or not os.path.exists(save_dir):
-            messagebox.showerror("Ошибка", "Выберите папку для сохранения")
-            return
-
-        # Читаем вопрос
-        try:
-            with open(question_file, 'r', encoding='utf-8') as f:
-                question = f.read().strip()
-        except Exception as e:
-            messagebox.showerror("Ошибка", f"Не удалось прочитать файл: {e}")
-            return
-
-        if not question:
-            messagebox.showerror("Ошибка", "Файл пустой")
-            return
-
-        # Выбранные сети
-        selected = [name for name, var in self.network_vars.items() if var.get()]
-        if not selected:
-            messagebox.showerror("Ошибка", "Выберите хотя бы одну нейросеть")
-            return
-
-        # Обновляем провайдеры
+        # Update providers
         self._update_providers()
 
-        # Запуск в потоке
-        self.batch_progress.start()
+        # Start query thread
         thread = threading.Thread(
-            target=self._process_batch_requests,
-            args=(question, selected, save_dir, question_file),
+            target=self._process_query,
+            args=(question, selected),
             daemon=True
         )
         thread.start()
 
-    def _process_batch_requests(self, question: str, networks: list, save_dir: str, original_file: str):
-        """Обработка пакетных запросов"""
-        self._add_batch_log(f"Начинаем обработку для {len(networks)} нейросетей...")
-
+    def _process_query(self, question: str, providers: List[str]):
+        """Process query in parallel"""
         responses = {}
-        for network in networks:
-            self._add_batch_log(f"Запрос к {network}...")
+        total_time = 0
 
-            if network not in self.providers:
-                self._add_batch_log(f"  Ошибка: провайдер {network} не найден")
-                continue
+        # Use ThreadPoolExecutor for parallel requests
+        with ThreadPoolExecutor(max_workers=len(providers)) as executor:
+            futures = {}
+            for name in providers:
+                if name in self.providers:
+                    future = executor.submit(self.providers[name].query, question)
+                    futures[future] = name
 
-            try:
-                response = self.providers[network].query(question)
-                if response.startswith("Ошибка"):
-                    self._add_batch_log(f"  {response}")
-                else:
-                    responses[network] = response
-                    self._add_batch_log(f"  Получен ответ ({len(response)} символов)")
-            except Exception as e:
-                self._add_batch_log(f"  Ошибка: {str(e)}")
+            for future in as_completed(futures):
+                name = futures[future]
+                try:
+                    response, elapsed = future.result()
+                    responses[name] = (response, elapsed)
+                    total_time = max(total_time, elapsed)
 
-        # Сохраняем результаты
-        if responses:
-            filepath = self._save_responses(responses, save_dir, original_file)
-            if filepath:
-                self._add_batch_log(f"Результаты сохранены: {filepath}")
+                    # Update UI immediately
+                    self.after(0, lambda n=name, r=response, t=elapsed: self._show_response(n, r, t))
+                except Exception as e:
+                    responses[name] = (f"Error: {str(e)}", 0)
+                    self.after(0, lambda n=name, e=str(e): self._show_response(n, f"Error: {e}", 0))
 
-                # Отправляем в Telegram
-                bot_token = self.telegram_token_var.get()
-                chat_id = self.telegram_chat_id_var.get()
-                if bot_token and chat_id:
-                    self._send_file_to_telegram(filepath, bot_token, chat_id)
-        else:
-            self._add_batch_log("Не получено ни одного ответа")
+        # Save to file
+        filepath = self._save_responses(question, responses)
 
-        self.root.after(0, self.batch_progress.stop)
-        self._add_batch_log("Готово!")
+        # Finish
+        self.after(0, lambda: self._finish_query(len(responses), total_time, filepath))
 
-    def _save_responses(self, responses: dict, save_dir: str, original_file: str) -> Optional[str]:
-        """Сохранение ответов"""
+    def _show_response(self, name: str, response: str, elapsed: float):
+        """Show response in chat"""
+        color = self.providers[name].color if name in self.providers else "#3498db"
+        header = f"\n[{name}] ({elapsed:.1f}s)\n"
+        self._add_to_chat(header, "header")
+        self._add_to_chat(response + "\n", "response")
+        self._add_to_chat("-" * 60 + "\n", "divider")
+
+    def _finish_query(self, count: int, total_time: float, filepath: str):
+        """Finish query processing"""
+        self.is_processing = False
+        self.send_btn.configure(state="normal")
+        self.progress.stop()
+        self.progress.grid_forget()
+        self.status_label.configure(text=f"Completed: {count} responses in {total_time:.1f}s")
+
+        if filepath:
+            self._add_to_chat(f"\nSaved to: {filepath}\n\n", "info")
+
+    def _add_to_chat(self, text: str, tag: str = None):
+        """Add text to chat display"""
+        self.chat_display.configure(state="normal")
+        self.chat_display.insert("end", text)
+        self.chat_display.see("end")
+        self.chat_display.configure(state="disabled")
+
+    def _clear_chat(self):
+        """Clear chat display"""
+        self.chat_display.configure(state="normal")
+        self.chat_display.delete("1.0", "end")
+        self.chat_display.configure(state="disabled")
+        self.status_label.configure(text="Ready")
+
+    def _save_responses(self, question: str, responses: Dict[str, Tuple[str, float]]) -> Optional[str]:
+        """Save responses to file"""
         try:
-            base_name = os.path.splitext(os.path.basename(original_file))[0]
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"{base_name}_answers_{timestamp}.txt"
-            filepath = os.path.join(save_dir, filename)
+            filename = f"ai_responses_{timestamp}.txt"
+            filepath = os.path.join(self.output_dir, filename)
 
             with open(filepath, 'w', encoding='utf-8') as f:
-                f.write("=" * 60 + "\n")
-                f.write(f"Дата: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-                f.write(f"Исходный файл: {original_file}\n")
-                f.write("=" * 60 + "\n\n")
+                f.write("=" * 70 + "\n")
+                f.write(f"AI MANAGER RESPONSES\n")
+                f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write("=" * 70 + "\n\n")
 
-                for network, response in responses.items():
-                    f.write(f"--- {network} ---\n")
+                f.write("QUESTION:\n")
+                f.write("-" * 70 + "\n")
+                f.write(question + "\n")
+                f.write("-" * 70 + "\n\n")
+
+                for name, (response, elapsed) in responses.items():
+                    f.write(f"\n{'='*70}\n")
+                    f.write(f"[{name}] - Response time: {elapsed:.2f}s\n")
+                    f.write(f"{'='*70}\n\n")
                     f.write(response + "\n")
-                    f.write("=" * 60 + "\n\n")
+
+                f.write("\n" + "=" * 70 + "\n")
+                f.write(f"Total providers: {len(responses)}\n")
+                f.write("=" * 70 + "\n")
 
             return filepath
         except Exception as e:
-            self._add_batch_log(f"Ошибка сохранения: {e}")
+            print(f"Error saving file: {e}")
             return None
-
-    def _add_batch_log(self, message: str):
-        """Добавление в лог пакетной обработки"""
-        def _add():
-            timestamp = datetime.now().strftime("%H:%M:%S")
-            self.batch_log.insert("end", f"[{timestamp}] {message}\n")
-            self.batch_log.see("end")
-        self.root.after(0, _add)
-
-    def _clear_batch_log(self):
-        """Очистка лога"""
-        self.batch_log.delete("1.0", "end")
-
-    # ==================== История ====================
-
-    def _load_history(self):
-        """Загрузка истории"""
-        save_dir = self.save_path_var.get()
-        if not save_dir or not os.path.exists(save_dir):
-            return
-
-        self.history_listbox.delete(0, "end")
-
-        try:
-            files = [f for f in os.listdir(save_dir)
-                     if f.endswith('.txt') and ('_answer' in f or '_answers_' in f)]
-            files.sort(reverse=True)
-
-            for f in files:
-                self.history_listbox.insert("end", f)
-        except:
-            pass
-
-    def _on_history_select(self, event):
-        """Обработка выбора файла истории"""
-        selection = self.history_listbox.curselection()
-        if not selection:
-            return
-
-        filename = self.history_listbox.get(selection[0])
-        save_dir = self.save_path_var.get()
-        filepath = os.path.join(save_dir, filename)
-
-        try:
-            with open(filepath, 'r', encoding='utf-8') as f:
-                content = f.read()
-
-            self.history_text.delete("1.0", "end")
-            self.history_text.insert("1.0", content)
-        except Exception as e:
-            self.history_text.delete("1.0", "end")
-            self.history_text.insert("1.0", f"Ошибка чтения: {e}")
-
-    # ==================== Telegram ====================
-
-    def _send_to_telegram(self):
-        """Отправка выбранного файла в Telegram"""
-        selection = self.history_listbox.curselection()
-        if not selection:
-            messagebox.showwarning("Внимание", "Выберите файл")
-            return
-
-        bot_token = self.telegram_token_var.get()
-        chat_id = self.telegram_chat_id_var.get()
-
-        if not bot_token or not chat_id:
-            messagebox.showerror("Ошибка", "Настройте Telegram API")
-            return
-
-        filename = self.history_listbox.get(selection[0])
-        save_dir = self.save_path_var.get()
-        filepath = os.path.join(save_dir, filename)
-
-        if self._send_file_to_telegram(filepath, bot_token, chat_id):
-            messagebox.showinfo("Успех", "Файл отправлен в Telegram")
-        else:
-            messagebox.showerror("Ошибка", "Не удалось отправить файл")
-
-    def _send_file_to_telegram(self, filepath: str, bot_token: str, chat_id: str) -> bool:
-        """Отправка файла в Telegram"""
-        try:
-            url = f"https://api.telegram.org/bot{bot_token}/sendDocument"
-            with open(filepath, 'rb') as f:
-                response = requests.post(
-                    url,
-                    files={'document': f},
-                    data={'chat_id': chat_id},
-                    timeout=30
-                )
-            return response.status_code == 200
-        except:
-            return False
 
 
 def main():
-    """Точка входа"""
-    root = tk.Tk()
-
-    # Устанавливаем DPI awareness для Windows
+    """Entry point"""
+    # Windows DPI awareness
     try:
         from ctypes import windll
         windll.shcore.SetProcessDpiAwareness(1)
     except:
         pass
 
-    app = AIManagerApp(root)
-    root.mainloop()
+    app = AIManagerApp()
+    app.mainloop()
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-AI Manager - Cross-platform Build Script
+AI Manager v9.0 - Cross-platform Build Script
 Builds executable for Windows using PyInstaller
 """
 
@@ -13,7 +13,7 @@ from pathlib import Path
 
 def main():
     print("=" * 50)
-    print("AI Manager - Build Script")
+    print("AI Manager v9.0 - Build Script")
     print("=" * 50)
     print()
 
@@ -53,6 +53,9 @@ def main():
         "--windowed",
         "--name", "AI_Manager",
         "--clean",
+        # Hidden imports for customtkinter
+        "--hidden-import", "customtkinter",
+        "--collect-all", "customtkinter",
     ]
 
     # Add icon if exists

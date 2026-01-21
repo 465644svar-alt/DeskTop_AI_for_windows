@@ -1485,6 +1485,12 @@ class AIManagerApp(ctk.CTk):
             btn_frame, text="New Chat", width=100, height=30,
             corner_radius=10, fg_color="#e74c3c", hover_color="#c0392b",
             command=self._new_chat
+        ).pack(pady=(0, 4))
+
+        ctk.CTkButton(
+            btn_frame, text="Save Chat", width=100, height=30,
+            corner_radius=10, fg_color="#9b59b6", hover_color="#8e44ad",
+            command=self._save_chat_to_file
         ).pack()
 
         # Progress bar
@@ -1650,10 +1656,7 @@ class AIManagerApp(ctk.CTk):
 
         # Bind right-click and keyboard shortcuts for logs
         self.logs_display.bind("<Button-3>", self._show_logs_menu)
-        self.logs_display.bind("<Control-a>", lambda e: self._select_all_logs() or "break")
-        self.logs_display.bind("<Control-A>", lambda e: self._select_all_logs() or "break")
-        self.logs_display.bind("<Control-c>", lambda e: self._copy_logs_selection() or "break")
-        self.logs_display.bind("<Control-C>", lambda e: self._copy_logs_selection() or "break")
+        self._bind_clipboard_shortcuts(self.logs_display, editable=False)
 
         # Buttons
         btn_frame = ctk.CTkFrame(self.tab_logs, fg_color="transparent")
@@ -2116,6 +2119,53 @@ class AIManagerApp(ctk.CTk):
         self.status_label.configure(text="New chat started - history cleared")
         self.current_branch_label.configure(text="Current: None")
 
+    def _save_chat_to_file(self):
+        """Save chat content to a file with directory selection"""
+        # Get chat content
+        self.chat_display.configure(state="normal")
+        content = self.chat_display.get("1.0", "end-1c")
+        self.chat_display.configure(state="disabled")
+
+        if not content.strip():
+            messagebox.showwarning("Warning", "Chat is empty. Nothing to save.")
+            return
+
+        # Generate default filename
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        default_name = f"chat_log_{timestamp}.txt"
+
+        # Ask user for save location
+        filepath = filedialog.asksaveasfilename(
+            defaultextension=".txt",
+            filetypes=[
+                ("Text files", "*.txt"),
+                ("Markdown files", "*.md"),
+                ("All files", "*.*")
+            ],
+            initialfile=default_name,
+            title="Save Chat Log"
+        )
+
+        if not filepath:
+            return  # User cancelled
+
+        try:
+            with open(filepath, 'w', encoding='utf-8') as f:
+                f.write("=" * 70 + "\n")
+                f.write(f"AI Manager Chat Log\n")
+                f.write(f"Saved: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write("=" * 70 + "\n\n")
+                f.write(content)
+                f.write("\n\n" + "=" * 70 + "\n")
+                f.write("End of chat log\n")
+                f.write("=" * 70 + "\n")
+
+            self.status_label.configure(text=f"Chat saved to {os.path.basename(filepath)}")
+            messagebox.showinfo("Success", f"Chat saved to:\n{filepath}")
+
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to save chat:\n{str(e)}")
+
     # ==================== Branch Management ====================
 
     def _refresh_branches_list(self):
@@ -2312,13 +2362,71 @@ class AIManagerApp(ctk.CTk):
         self.chat_input.bind("<Button-3>", self._show_input_menu)
         self.chat_display.bind("<Button-3>", self._show_chat_menu)
 
-        # ===== Keyboard shortcuts =====
-        # Note: Ctrl+C, Ctrl+V, Ctrl+X work natively in CTkTextbox
-        # Only bind Ctrl+A for select all
-        self.chat_input.bind("<Control-a>", lambda e: (self._select_all_input(), "break")[1])
-        self.chat_input.bind("<Control-A>", lambda e: (self._select_all_input(), "break")[1])
-        self.chat_display.bind("<Control-a>", lambda e: (self._select_all_chat(), "break")[1])
-        self.chat_display.bind("<Control-A>", lambda e: (self._select_all_chat(), "break")[1])
+        # ===== Keyboard shortcuts for all text widgets =====
+        # CTkTextbox needs explicit bindings for clipboard operations
+        self._bind_clipboard_shortcuts(self.chat_input, editable=True)
+        self._bind_clipboard_shortcuts(self.chat_display, editable=False)
+
+    def _bind_clipboard_shortcuts(self, widget, editable=True):
+        """Bind clipboard shortcuts to a text widget"""
+        # Ctrl+A - Select All
+        def select_all(e):
+            widget.tag_add("sel", "1.0", "end-1c")
+            return "break"
+        widget.bind("<Control-a>", select_all)
+        widget.bind("<Control-A>", select_all)
+
+        # Ctrl+C - Copy
+        def copy_text(e):
+            try:
+                # Get the underlying tkinter widget
+                text_widget = widget._textbox if hasattr(widget, '_textbox') else widget
+                text_widget.event_generate("<<Copy>>")
+            except:
+                try:
+                    sel = widget.get("sel.first", "sel.last")
+                    if sel:
+                        self.clipboard_clear()
+                        self.clipboard_append(sel)
+                except:
+                    pass
+            return "break"
+        widget.bind("<Control-c>", copy_text)
+        widget.bind("<Control-C>", copy_text)
+
+        if editable:
+            # Ctrl+V - Paste
+            def paste_text(e):
+                try:
+                    text_widget = widget._textbox if hasattr(widget, '_textbox') else widget
+                    text_widget.event_generate("<<Paste>>")
+                except:
+                    try:
+                        text = self.clipboard_get()
+                        widget.insert("insert", text)
+                    except:
+                        pass
+                return "break"
+            widget.bind("<Control-v>", paste_text)
+            widget.bind("<Control-V>", paste_text)
+
+            # Ctrl+X - Cut
+            def cut_text(e):
+                try:
+                    text_widget = widget._textbox if hasattr(widget, '_textbox') else widget
+                    text_widget.event_generate("<<Cut>>")
+                except:
+                    try:
+                        sel = widget.get("sel.first", "sel.last")
+                        if sel:
+                            self.clipboard_clear()
+                            self.clipboard_append(sel)
+                            widget.delete("sel.first", "sel.last")
+                    except:
+                        pass
+                return "break"
+            widget.bind("<Control-x>", cut_text)
+            widget.bind("<Control-X>", cut_text)
 
     def _show_input_menu(self, event):
         """Show context menu for input"""

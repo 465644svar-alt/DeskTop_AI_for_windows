@@ -181,6 +181,8 @@ class AIProvider:
         self.color = color
         self.is_connected = False
         self.enabled = True
+        self.conversation_history: List[dict] = []  # Store conversation history
+        self.max_history = 20  # Max messages to keep
 
     def test_connection(self) -> bool:
         raise NotImplementedError
@@ -188,6 +190,17 @@ class AIProvider:
     def query(self, question: str) -> Tuple[str, float]:
         """Returns (response, time_taken)"""
         raise NotImplementedError
+
+    def clear_history(self):
+        """Clear conversation history"""
+        self.conversation_history = []
+
+    def add_to_history(self, role: str, content: str):
+        """Add message to history"""
+        self.conversation_history.append({"role": role, "content": content})
+        # Keep only last N messages
+        if len(self.conversation_history) > self.max_history:
+            self.conversation_history = self.conversation_history[-self.max_history:]
 
 
 class OpenAIProvider(AIProvider):
@@ -214,18 +227,23 @@ class OpenAIProvider(AIProvider):
         if not self.api_key:
             return "Error: Enter OpenAI API key", 0
 
+        # Add user message to history
+        self.add_to_history("user", question)
+
         start_time = time.time()
         try:
             headers = {
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json"
             }
+
+            # Build messages with history
+            messages = [{"role": "system", "content": "You are a helpful assistant."}]
+            messages.extend(self.conversation_history)
+
             data = {
                 "model": self.model,
-                "messages": [
-                    {"role": "system", "content": "You are a helpful assistant."},
-                    {"role": "user", "content": question}
-                ],
+                "messages": messages,
                 "max_tokens": 4000,
                 "temperature": 0.7
             }
@@ -238,7 +256,10 @@ class OpenAIProvider(AIProvider):
             elapsed = time.time() - start_time
 
             if response.status_code == 200:
-                return response.json()["choices"][0]["message"]["content"], elapsed
+                assistant_response = response.json()["choices"][0]["message"]["content"]
+                # Add assistant response to history
+                self.add_to_history("assistant", assistant_response)
+                return assistant_response, elapsed
             elif response.status_code == 401:
                 return "Error: Invalid OpenAI API key", elapsed
             elif response.status_code == 429:
@@ -288,6 +309,9 @@ class AnthropicProvider(AIProvider):
         if not self.api_key:
             return "Error: Enter Anthropic API key", 0
 
+        # Add user message to history
+        self.add_to_history("user", question)
+
         start_time = time.time()
         try:
             headers = {
@@ -298,7 +322,7 @@ class AnthropicProvider(AIProvider):
             data = {
                 "model": self.model,
                 "max_tokens": 4000,
-                "messages": [{"role": "user", "content": question}]
+                "messages": self.conversation_history.copy()
             }
             response = requests.post(
                 f"{self.base_url}/messages",
@@ -309,7 +333,9 @@ class AnthropicProvider(AIProvider):
             elapsed = time.time() - start_time
 
             if response.status_code == 200:
-                return response.json()["content"][0]["text"], elapsed
+                assistant_response = response.json()["content"][0]["text"]
+                self.add_to_history("assistant", assistant_response)
+                return assistant_response, elapsed
             elif response.status_code == 401:
                 return "Error: Invalid Anthropic API key", elapsed
             elif response.status_code == 429:
@@ -346,12 +372,22 @@ class GeminiProvider(AIProvider):
         if not self.api_key:
             return "Error: Enter Gemini API key", 0
 
+        # Add user message to history
+        self.add_to_history("user", question)
+
         start_time = time.time()
         try:
             url = f"{self.base_url}/models/{self.model}:generateContent?key={self.api_key}"
             headers = {"Content-Type": "application/json"}
+
+            # Build contents from history for Gemini format
+            contents = []
+            for msg in self.conversation_history:
+                role = "user" if msg["role"] == "user" else "model"
+                contents.append({"role": role, "parts": [{"text": msg["content"]}]})
+
             data = {
-                "contents": [{"parts": [{"text": question}]}],
+                "contents": contents,
                 "generationConfig": {"temperature": 0.7, "maxOutputTokens": 4000}
             }
             response = requests.post(url, headers=headers, json=data, timeout=120)
@@ -360,7 +396,9 @@ class GeminiProvider(AIProvider):
             if response.status_code == 200:
                 result = response.json()
                 if "candidates" in result and len(result["candidates"]) > 0:
-                    return result["candidates"][0]["content"]["parts"][0]["text"], elapsed
+                    assistant_response = result["candidates"][0]["content"]["parts"][0]["text"]
+                    self.add_to_history("assistant", assistant_response)
+                    return assistant_response, elapsed
                 return "Error: Empty response from Gemini", elapsed
             elif response.status_code == 403:
                 return "Error: Invalid Gemini API key", elapsed
@@ -398,18 +436,23 @@ class DeepSeekProvider(AIProvider):
         if not self.api_key:
             return "Error: Enter DeepSeek API key", 0
 
+        # Add user message to history
+        self.add_to_history("user", question)
+
         start_time = time.time()
         try:
             headers = {
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json"
             }
+
+            # Build messages with history
+            messages = [{"role": "system", "content": "You are a helpful assistant."}]
+            messages.extend(self.conversation_history)
+
             data = {
                 "model": self.model,
-                "messages": [
-                    {"role": "system", "content": "You are a helpful assistant."},
-                    {"role": "user", "content": question}
-                ],
+                "messages": messages,
                 "max_tokens": 4000,
                 "temperature": 0.7
             }
@@ -422,7 +465,9 @@ class DeepSeekProvider(AIProvider):
             elapsed = time.time() - start_time
 
             if response.status_code == 200:
-                return response.json()["choices"][0]["message"]["content"], elapsed
+                assistant_response = response.json()["choices"][0]["message"]["content"]
+                self.add_to_history("assistant", assistant_response)
+                return assistant_response, elapsed
             elif response.status_code == 401:
                 return "Error: Invalid DeepSeek API key", elapsed
             elif response.status_code == 402:
@@ -461,18 +506,23 @@ class GroqProvider(AIProvider):
         if not self.api_key:
             return "Error: Enter Groq API key", 0
 
+        # Add user message to history
+        self.add_to_history("user", question)
+
         start_time = time.time()
         try:
             headers = {
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json"
             }
+
+            # Build messages with history
+            messages = [{"role": "system", "content": "You are a helpful assistant."}]
+            messages.extend(self.conversation_history)
+
             data = {
                 "model": self.model,
-                "messages": [
-                    {"role": "system", "content": "You are a helpful assistant."},
-                    {"role": "user", "content": question}
-                ],
+                "messages": messages,
                 "max_tokens": 4000,
                 "temperature": 0.7
             }
@@ -485,7 +535,9 @@ class GroqProvider(AIProvider):
             elapsed = time.time() - start_time
 
             if response.status_code == 200:
-                return response.json()["choices"][0]["message"]["content"], elapsed
+                assistant_response = response.json()["choices"][0]["message"]["content"]
+                self.add_to_history("assistant", assistant_response)
+                return assistant_response, elapsed
             elif response.status_code == 401:
                 return "Error: Invalid Groq API key", elapsed
             elif response.status_code == 429:
@@ -522,15 +574,22 @@ class MistralProvider(AIProvider):
         if not self.api_key:
             return "Error: Enter Mistral AI API key", 0
 
+        # Add user message to history
+        self.add_to_history("user", question)
+
         start_time = time.time()
         try:
             headers = {
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json"
             }
+
+            # Build messages with history
+            messages = self.conversation_history.copy()
+
             data = {
                 "model": self.model,
-                "messages": [{"role": "user", "content": question}],
+                "messages": messages,
                 "max_tokens": 4000,
                 "temperature": 0.7
             }
@@ -543,7 +602,9 @@ class MistralProvider(AIProvider):
             elapsed = time.time() - start_time
 
             if response.status_code == 200:
-                return response.json()["choices"][0]["message"]["content"], elapsed
+                assistant_response = response.json()["choices"][0]["message"]["content"]
+                self.add_to_history("assistant", assistant_response)
+                return assistant_response, elapsed
             elif response.status_code == 401:
                 return "Error: Invalid Mistral AI API key", elapsed
             elif response.status_code == 429:
@@ -1064,6 +1125,12 @@ class AIManagerApp(ctk.CTk):
             btn_frame, text="Clear", width=100, height=30,
             corner_radius=10, fg_color="gray30",
             command=self._clear_chat
+        ).pack(pady=(0, 4))
+
+        ctk.CTkButton(
+            btn_frame, text="New Chat", width=100, height=30,
+            corner_radius=10, fg_color="#e74c3c", hover_color="#c0392b",
+            command=self._new_chat
         ).pack()
 
         # Progress bar
@@ -1595,6 +1662,15 @@ class AIManagerApp(ctk.CTk):
         self.chat_display.delete("1.0", "end")
         self.chat_display.configure(state="disabled")
         self.status_label.configure(text="Ready")
+
+    def _new_chat(self):
+        """Clear conversation history and start new chat"""
+        # Clear history for all providers
+        for provider in self.providers.values():
+            provider.clear_history()
+        # Clear chat display
+        self._clear_chat()
+        self.status_label.configure(text="New chat started - history cleared")
 
     def _paste_from_clipboard(self):
         """Paste text from clipboard to input field"""

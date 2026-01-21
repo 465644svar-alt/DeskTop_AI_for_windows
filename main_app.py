@@ -35,10 +35,174 @@ from typing import Dict, Optional, List, Tuple
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import webbrowser
 from collections import deque
+import base64
+import hashlib
+
+# Try to import keyring for secure storage
+try:
+    import keyring
+    KEYRING_AVAILABLE = True
+except ImportError:
+    KEYRING_AVAILABLE = False
 
 # App info
-APP_VERSION = "10.0"
+APP_VERSION = "11.0"
 APP_NAME = "AI Manager"
+
+
+# ==================== Secure Key Storage ====================
+
+class SecureKeyStorage:
+    """Secure storage for API keys using system keyring or encrypted fallback"""
+
+    SERVICE_NAME = "AIManager"
+    FALLBACK_FILE = "config_secure.dat"
+
+    def __init__(self, config_dir: str = "."):
+        self.config_dir = config_dir
+        self.fallback_path = os.path.join(config_dir, self.FALLBACK_FILE)
+        self._machine_key = self._get_machine_key()
+
+    def _get_machine_key(self) -> bytes:
+        """Get a machine-specific key for fallback encryption"""
+        import platform
+        try:
+            user = os.getlogin()
+        except Exception:
+            user = os.environ.get('USER', os.environ.get('USERNAME', 'user'))
+        machine_id = f"{platform.node()}-{user}"
+        return hashlib.sha256(machine_id.encode()).digest()
+
+    def _simple_encrypt(self, data: str) -> str:
+        """Simple XOR encryption with machine key"""
+        key = self._machine_key
+        encrypted = bytearray()
+        for i, char in enumerate(data.encode('utf-8')):
+            encrypted.append(char ^ key[i % len(key)])
+        return base64.b64encode(encrypted).decode('ascii')
+
+    def _simple_decrypt(self, data: str) -> str:
+        """Simple XOR decryption with machine key"""
+        key = self._machine_key
+        encrypted = base64.b64decode(data.encode('ascii'))
+        decrypted = bytearray()
+        for i, byte in enumerate(encrypted):
+            decrypted.append(byte ^ key[i % len(key)])
+        return decrypted.decode('utf-8')
+
+    def set_key(self, provider: str, api_key: str) -> bool:
+        """Store API key securely"""
+        if not api_key:
+            return self.delete_key(provider)
+        try:
+            if KEYRING_AVAILABLE:
+                keyring.set_password(self.SERVICE_NAME, provider, api_key)
+            else:
+                self._save_to_fallback(provider, api_key)
+            return True
+        except Exception as e:
+            logging.error(f"Failed to store key for {provider}: {e}")
+            return False
+
+    def get_key(self, provider: str) -> Optional[str]:
+        """Retrieve API key"""
+        try:
+            if KEYRING_AVAILABLE:
+                key = keyring.get_password(self.SERVICE_NAME, provider)
+                if key:
+                    return key
+            return self._load_from_fallback(provider)
+        except Exception as e:
+            logging.error(f"Failed to retrieve key for {provider}: {e}")
+            return None
+
+    def delete_key(self, provider: str) -> bool:
+        """Delete stored API key"""
+        try:
+            if KEYRING_AVAILABLE:
+                try:
+                    keyring.delete_password(self.SERVICE_NAME, provider)
+                except Exception:
+                    pass
+            self._delete_from_fallback(provider)
+            return True
+        except Exception:
+            return False
+
+    def _save_to_fallback(self, provider: str, api_key: str):
+        """Save to encrypted fallback file"""
+        data = self._load_fallback_data()
+        data[provider] = self._simple_encrypt(api_key)
+        with open(self.fallback_path, 'w', encoding='utf-8') as f:
+            json.dump(data, f)
+
+    def _load_from_fallback(self, provider: str) -> Optional[str]:
+        """Load from encrypted fallback file"""
+        data = self._load_fallback_data()
+        encrypted = data.get(provider)
+        if encrypted:
+            try:
+                return self._simple_decrypt(encrypted)
+            except Exception:
+                return None
+        return None
+
+    def _delete_from_fallback(self, provider: str):
+        """Delete from fallback file"""
+        data = self._load_fallback_data()
+        if provider in data:
+            del data[provider]
+            with open(self.fallback_path, 'w', encoding='utf-8') as f:
+                json.dump(data, f)
+
+    def _load_fallback_data(self) -> Dict[str, str]:
+        """Load fallback data file"""
+        if os.path.exists(self.fallback_path):
+            try:
+                with open(self.fallback_path, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            except Exception:
+                return {}
+        return {}
+
+    def migrate_from_plain_config(self, config_path: str) -> int:
+        """Migrate keys from plain config.json to secure storage"""
+        migrated = 0
+        if not os.path.exists(config_path):
+            return migrated
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+
+            key_mappings = {
+                "openai_key": "openai",
+                "anthropic_key": "anthropic",
+                "gemini_key": "gemini",
+                "deepseek_key": "deepseek",
+                "groq_key": "groq",
+                "mistral_key": "mistral"
+            }
+
+            for config_key, provider in key_mappings.items():
+                if config_key in config and config[config_key]:
+                    if self.set_key(provider, config[config_key]):
+                        migrated += 1
+                        config[config_key] = ""  # Remove from plain config
+
+            # Save config without keys
+            with open(config_path, 'w', encoding='utf-8') as f:
+                json.dump(config, f, indent=2)
+
+            if migrated > 0:
+                logging.info(f"Migrated {migrated} keys to secure storage")
+        except Exception as e:
+            logging.error(f"Migration failed: {e}")
+
+        return migrated
+
+
+# Global secure storage instance
+secure_storage = SecureKeyStorage()
 
 
 # ==================== Logging System ====================
@@ -1026,7 +1190,7 @@ class AIManagerApp(ctk.CTk):
         self.after(500, self._check_connections_background)
 
     def _load_config(self) -> dict:
-        """Load configuration"""
+        """Load configuration (keys from secure storage)"""
         default_config = {
             "api_keys": {
                 "openai": "", "anthropic": "", "gemini": "",
@@ -1036,26 +1200,44 @@ class AIManagerApp(ctk.CTk):
             "theme": "dark"
         }
 
+        # Migrate old plain config if exists
+        if os.path.exists(self.config_file):
+            secure_storage.migrate_from_plain_config(self.config_file)
+
+        # Load non-sensitive config
         if os.path.exists(self.config_file):
             try:
                 with open(self.config_file, 'r', encoding='utf-8') as f:
                     loaded = json.load(f)
                     for key in default_config:
-                        if key in loaded:
-                            if isinstance(default_config[key], dict):
-                                default_config[key].update(loaded[key])
-                            else:
-                                default_config[key] = loaded[key]
-                    return default_config
+                        if key in loaded and key != "api_keys":
+                            default_config[key] = loaded[key]
             except:
                 pass
+
+        # Load keys from secure storage
+        for provider in default_config["api_keys"]:
+            key = secure_storage.get_key(provider)
+            if key:
+                default_config["api_keys"][provider] = key
+
         return default_config
 
     def _save_config(self):
-        """Save configuration"""
+        """Save configuration (keys to secure storage)"""
+        # Save keys to secure storage
+        for provider, api_key in self.config["api_keys"].items():
+            secure_storage.set_key(provider, api_key)
+
+        # Save non-sensitive config (without keys)
+        safe_config = {
+            "output_dir": self.config.get("output_dir", ""),
+            "theme": self.config.get("theme", "dark"),
+            "api_keys": {}  # Empty - keys are in secure storage
+        }
         try:
             with open(self.config_file, 'w', encoding='utf-8') as f:
-                json.dump(self.config, f, ensure_ascii=False, indent=2)
+                json.dump(safe_config, f, ensure_ascii=False, indent=2)
         except:
             pass
 
@@ -1733,14 +1915,18 @@ class AIManagerApp(ctk.CTk):
             ctk.set_appearance_mode("light")
 
     def _save_settings(self):
-        """Save API settings"""
+        """Save API settings securely"""
         for key, card in self.api_cards.items():
-            self.config["api_keys"][key] = card.get_key()
+            api_key = card.get_key()
+            self.config["api_keys"][key] = api_key
+            # Save directly to secure storage
+            secure_storage.set_key(key, api_key)
 
         self._update_providers()
         self._save_config()
 
-        messagebox.showinfo("Success", "Settings saved successfully!")
+        storage_type = "system keyring" if KEYRING_AVAILABLE else "encrypted file"
+        messagebox.showinfo("Success", f"Settings saved securely!\n(Keys stored in {storage_type})")
         self._check_all_connections()
 
     def _update_providers(self):

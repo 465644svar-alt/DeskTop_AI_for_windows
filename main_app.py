@@ -757,13 +757,25 @@ class APIKeyCard(ctk.CTkFrame):
     def _create_entry_menu(self):
         """Create right-click context menu for entry"""
         self.entry_menu = tk.Menu(self, tearoff=0)
-        self.entry_menu.add_command(label="Paste", command=self._paste_key)
-        self.entry_menu.add_command(label="Clear", command=lambda: self.key_entry.delete(0, "end"))
+        self.entry_menu.add_command(label="Cut", command=self._cut_entry, accelerator="Ctrl+X")
+        self.entry_menu.add_command(label="Copy", command=self._copy_entry, accelerator="Ctrl+C")
+        self.entry_menu.add_command(label="Paste", command=self._paste_key, accelerator="Ctrl+V")
         self.entry_menu.add_separator()
-        self.entry_menu.add_command(label="Select All", command=self._select_all_entry)
-        self.entry_menu.add_command(label="Copy", command=self._copy_entry)
+        self.entry_menu.add_command(label="Select All", command=self._select_all_entry, accelerator="Ctrl+A")
+        self.entry_menu.add_command(label="Clear", command=lambda: self.key_entry.delete(0, "end"))
 
+        # Right-click menu
         self.key_entry.bind("<Button-3>", self._show_entry_menu)
+
+        # Keyboard shortcuts for entry
+        self.key_entry.bind("<Control-a>", lambda e: self._select_all_entry() or "break")
+        self.key_entry.bind("<Control-A>", lambda e: self._select_all_entry() or "break")
+        self.key_entry.bind("<Control-c>", lambda e: self._copy_entry() or "break")
+        self.key_entry.bind("<Control-C>", lambda e: self._copy_entry() or "break")
+        self.key_entry.bind("<Control-v>", lambda e: self._paste_key() or "break")
+        self.key_entry.bind("<Control-V>", lambda e: self._paste_key() or "break")
+        self.key_entry.bind("<Control-x>", lambda e: self._cut_entry() or "break")
+        self.key_entry.bind("<Control-X>", lambda e: self._cut_entry() or "break")
 
     def _show_entry_menu(self, event):
         """Show context menu"""
@@ -778,12 +790,36 @@ class APIKeyCard(ctk.CTkFrame):
         self.key_entry.focus()
 
     def _copy_entry(self):
-        """Copy entry content"""
+        """Copy entry content or selection"""
         try:
+            # Try to get selection first
+            try:
+                selected = self.key_entry.selection_get()
+                if selected:
+                    self.clipboard_clear()
+                    self.clipboard_append(selected)
+                    return
+            except:
+                pass
+            # If no selection, copy all
             content = self.key_entry.get()
             if content:
                 self.clipboard_clear()
                 self.clipboard_append(content)
+        except:
+            pass
+
+    def _cut_entry(self):
+        """Cut selected text from entry"""
+        try:
+            # Get selection indices
+            if self.key_entry.selection_present():
+                selected = self.key_entry.selection_get()
+                if selected:
+                    self.clipboard_clear()
+                    self.clipboard_append(selected)
+                    # Delete selection
+                    self.key_entry.delete("sel.first", "sel.last")
         except:
             pass
 
@@ -1225,6 +1261,20 @@ class AIManagerApp(ctk.CTk):
             state="disabled"
         )
         self.logs_display.grid(row=2, column=0, sticky="nsew", pady=(0, 10))
+
+        # Context menu for logs
+        self.logs_menu = tk.Menu(self, tearoff=0)
+        self.logs_menu.add_command(label="Copy", command=self._copy_logs_selection, accelerator="Ctrl+C")
+        self.logs_menu.add_command(label="Copy All", command=self._copy_all_logs)
+        self.logs_menu.add_separator()
+        self.logs_menu.add_command(label="Select All", command=self._select_all_logs, accelerator="Ctrl+A")
+
+        # Bind right-click and keyboard shortcuts for logs
+        self.logs_display.bind("<Button-3>", self._show_logs_menu)
+        self.logs_display.bind("<Control-a>", lambda e: self._select_all_logs() or "break")
+        self.logs_display.bind("<Control-A>", lambda e: self._select_all_logs() or "break")
+        self.logs_display.bind("<Control-c>", lambda e: self._copy_logs_selection() or "break")
+        self.logs_display.bind("<Control-C>", lambda e: self._copy_logs_selection() or "break")
 
         # Buttons
         btn_frame = ctk.CTkFrame(self.tab_logs, fg_color="transparent")
@@ -1708,28 +1758,46 @@ class AIManagerApp(ctk.CTk):
 
         # Context menu for input
         self.input_menu = tk.Menu(self, tearoff=0)
+        self.input_menu.add_command(label="Cut", command=self._cut_input, accelerator="Ctrl+X")
+        self.input_menu.add_command(label="Copy", command=self._copy_input, accelerator="Ctrl+C")
         self.input_menu.add_command(label="Paste", command=self._paste_from_clipboard, accelerator="Ctrl+V")
-        self.input_menu.add_command(label="Cut", command=self._cut_input)
-        self.input_menu.add_command(label="Copy", command=self._copy_input)
         self.input_menu.add_separator()
         self.input_menu.add_command(label="Select All", command=self._select_all_input, accelerator="Ctrl+A")
         self.input_menu.add_command(label="Clear", command=lambda: self.chat_input.delete("1.0", "end"))
 
         # Context menu for chat display
         self.chat_menu = tk.Menu(self, tearoff=0)
-        self.chat_menu.add_command(label="Copy", command=self._copy_chat_selection)
+        self.chat_menu.add_command(label="Copy", command=self._copy_chat_selection, accelerator="Ctrl+C")
         self.chat_menu.add_command(label="Copy All", command=self._copy_all_chat)
         self.chat_menu.add_separator()
-        self.chat_menu.add_command(label="Select All", command=self._select_all_chat)
+        self.chat_menu.add_command(label="Select All", command=self._select_all_chat, accelerator="Ctrl+A")
         self.chat_menu.add_command(label="Clear Chat", command=self._clear_chat)
 
         # Bind right-click
         self.chat_input.bind("<Button-3>", self._show_input_menu)
         self.chat_display.bind("<Button-3>", self._show_chat_menu)
 
-        # Bind Ctrl+A for select all
+        # ===== Keyboard shortcuts for Chat Input =====
+        # Ctrl+A - Select All
         self.chat_input.bind("<Control-a>", lambda e: self._select_all_input())
         self.chat_input.bind("<Control-A>", lambda e: self._select_all_input())
+        # Ctrl+C - Copy (override default)
+        self.chat_input.bind("<Control-c>", lambda e: self._copy_input() or "break")
+        self.chat_input.bind("<Control-C>", lambda e: self._copy_input() or "break")
+        # Ctrl+X - Cut
+        self.chat_input.bind("<Control-x>", lambda e: self._cut_input() or "break")
+        self.chat_input.bind("<Control-X>", lambda e: self._cut_input() or "break")
+        # Ctrl+V - Paste (CTkTextbox handles this, but add explicit binding)
+        self.chat_input.bind("<Control-v>", lambda e: self._paste_from_clipboard() or "break")
+        self.chat_input.bind("<Control-V>", lambda e: self._paste_from_clipboard() or "break")
+
+        # ===== Keyboard shortcuts for Chat Display (read-only) =====
+        # Ctrl+A - Select All
+        self.chat_display.bind("<Control-a>", lambda e: self._select_all_chat() or "break")
+        self.chat_display.bind("<Control-A>", lambda e: self._select_all_chat() or "break")
+        # Ctrl+C - Copy
+        self.chat_display.bind("<Control-c>", lambda e: self._copy_chat_selection() or "break")
+        self.chat_display.bind("<Control-C>", lambda e: self._copy_chat_selection() or "break")
 
     def _show_input_menu(self, event):
         """Show context menu for input"""
@@ -1793,6 +1861,40 @@ class AIManagerApp(ctk.CTk):
         self.chat_display.configure(state="normal")
         self.chat_display.tag_add("sel", "1.0", "end-1c")
         self.chat_display.configure(state="disabled")
+
+    # ==================== Logs Keyboard Shortcuts ====================
+
+    def _show_logs_menu(self, event):
+        """Show context menu for logs"""
+        try:
+            self.logs_menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            self.logs_menu.grab_release()
+
+    def _copy_logs_selection(self):
+        """Copy selected text from logs"""
+        try:
+            self.logs_display.configure(state="normal")
+            selected = self.logs_display.get("sel.first", "sel.last")
+            self.logs_display.configure(state="disabled")
+            if selected:
+                self._copy_to_clipboard(selected)
+        except Exception:
+            pass
+
+    def _copy_all_logs(self):
+        """Copy all logs content"""
+        self.logs_display.configure(state="normal")
+        content = self.logs_display.get("1.0", "end-1c")
+        self.logs_display.configure(state="disabled")
+        if content.strip():
+            self._copy_to_clipboard(content)
+
+    def _select_all_logs(self):
+        """Select all text in logs"""
+        self.logs_display.configure(state="normal")
+        self.logs_display.tag_add("sel", "1.0", "end-1c")
+        self.logs_display.configure(state="disabled")
 
     def _save_responses(self, question: str, responses: Dict[str, Tuple[str, float]]) -> Optional[str]:
         """Save responses to file"""

@@ -1,5 +1,5 @@
 """
-AI Manager Desktop Application v9.0
+AI Manager Desktop Application v10.0
 Modern Neural Network Manager for Windows
 
 Supported AI:
@@ -15,24 +15,155 @@ Features:
 - Parallel requests to all AI providers
 - Save responses to text file
 - Dark/Light theme support
+- Connection testing & status
+- Response logging with download
+- Error logging
 """
 
 import customtkinter as ctk
 from tkinter import filedialog, messagebox
+import tkinter as tk
 import threading
 import os
 import sys
 import json
 import requests
 import time
+import logging
 from datetime import datetime
 from typing import Dict, Optional, List, Tuple
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import webbrowser
+from collections import deque
 
 # App info
-APP_VERSION = "9.0"
+APP_VERSION = "10.0"
 APP_NAME = "AI Manager"
+
+
+# ==================== Logging System ====================
+
+class AppLogger:
+    """Application logger for responses and errors"""
+
+    def __init__(self, log_dir: str = "logs"):
+        self.log_dir = log_dir
+        self.responses_log: deque = deque(maxlen=1000)  # Last 1000 responses
+        self.errors_log: deque = deque(maxlen=500)  # Last 500 errors
+        self.session_start = datetime.now()
+
+        # Create log directory
+        os.makedirs(log_dir, exist_ok=True)
+
+        # Setup file logging
+        self._setup_file_logging()
+
+    def _setup_file_logging(self):
+        """Setup file-based logging"""
+        log_file = os.path.join(
+            self.log_dir,
+            f"app_{self.session_start.strftime('%Y%m%d_%H%M%S')}.log"
+        )
+
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s | %(levelname)s | %(message)s',
+            handlers=[
+                logging.FileHandler(log_file, encoding='utf-8'),
+                logging.StreamHandler()
+            ]
+        )
+        self.logger = logging.getLogger(__name__)
+
+    def log_response(self, provider: str, question: str, response: str, elapsed: float, success: bool = True):
+        """Log AI response"""
+        entry = {
+            "timestamp": datetime.now().isoformat(),
+            "provider": provider,
+            "question": question[:500],  # Truncate for log
+            "response": response,
+            "elapsed_time": elapsed,
+            "success": success
+        }
+        self.responses_log.append(entry)
+
+        status = "SUCCESS" if success else "FAILED"
+        self.logger.info(f"[{provider}] {status} | {elapsed:.2f}s | Q: {question[:100]}...")
+
+    def log_error(self, provider: str, error: str, details: str = ""):
+        """Log error"""
+        entry = {
+            "timestamp": datetime.now().isoformat(),
+            "provider": provider,
+            "error": error,
+            "details": details
+        }
+        self.errors_log.append(entry)
+        self.logger.error(f"[{provider}] {error} | {details}")
+
+    def log_connection_test(self, provider: str, success: bool, message: str = ""):
+        """Log connection test"""
+        status = "CONNECTED" if success else "FAILED"
+        self.logger.info(f"[CONNECTION] {provider}: {status} {message}")
+
+    def get_responses_log(self) -> List[dict]:
+        """Get all response logs"""
+        return list(self.responses_log)
+
+    def get_errors_log(self) -> List[dict]:
+        """Get all error logs"""
+        return list(self.errors_log)
+
+    def export_logs(self, filepath: str, log_type: str = "all") -> bool:
+        """Export logs to file"""
+        try:
+            with open(filepath, 'w', encoding='utf-8') as f:
+                f.write("=" * 70 + "\n")
+                f.write(f"AI MANAGER LOGS EXPORT\n")
+                f.write(f"Session started: {self.session_start.strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write(f"Exported: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write("=" * 70 + "\n\n")
+
+                if log_type in ["all", "responses"]:
+                    f.write("\n" + "=" * 70 + "\n")
+                    f.write("RESPONSES LOG\n")
+                    f.write("=" * 70 + "\n\n")
+                    for entry in self.responses_log:
+                        f.write(f"[{entry['timestamp']}] {entry['provider']}\n")
+                        f.write(f"Question: {entry['question']}\n")
+                        f.write(f"Response ({entry['elapsed_time']:.2f}s):\n")
+                        f.write(f"{entry['response']}\n")
+                        f.write("-" * 50 + "\n\n")
+
+                if log_type in ["all", "errors"]:
+                    f.write("\n" + "=" * 70 + "\n")
+                    f.write("ERRORS LOG\n")
+                    f.write("=" * 70 + "\n\n")
+                    for entry in self.errors_log:
+                        f.write(f"[{entry['timestamp']}] {entry['provider']}\n")
+                        f.write(f"Error: {entry['error']}\n")
+                        if entry['details']:
+                            f.write(f"Details: {entry['details']}\n")
+                        f.write("-" * 50 + "\n\n")
+
+                f.write("\n" + "=" * 70 + "\n")
+                f.write(f"Total responses: {len(self.responses_log)}\n")
+                f.write(f"Total errors: {len(self.errors_log)}\n")
+                f.write("=" * 70 + "\n")
+
+            return True
+        except Exception as e:
+            self.logger.error(f"Failed to export logs: {e}")
+            return False
+
+    def clear_logs(self):
+        """Clear in-memory logs"""
+        self.responses_log.clear()
+        self.errors_log.clear()
+
+
+# Global logger instance
+app_logger = AppLogger()
 
 # Theme settings
 ctk.set_appearance_mode("dark")
@@ -722,6 +853,32 @@ class AIManagerApp(ctk.CTk):
             command=self._deselect_all_providers
         ).pack(side="left", fill="x", expand=True, padx=(5, 0))
 
+        # Connection test buttons
+        test_frame = ctk.CTkFrame(sidebar, fg_color="transparent")
+        test_frame.pack(fill="x", padx=20, pady=(10, 0))
+
+        ctk.CTkButton(
+            test_frame, text="Test Connections",
+            height=36, corner_radius=8,
+            fg_color="#27ae60", hover_color="#1e8449",
+            command=self._test_all_connections
+        ).pack(fill="x", pady=(0, 5))
+
+        ctk.CTkButton(
+            test_frame, text="Send Test Query",
+            height=36, corner_radius=8,
+            fg_color="#3498db", hover_color="#2980b9",
+            command=self._send_test_query
+        ).pack(fill="x")
+
+        # Connection status display
+        self.connection_status_label = ctk.CTkLabel(
+            sidebar, text="Status: Not tested",
+            font=ctk.CTkFont(size=11),
+            text_color="gray"
+        )
+        self.connection_status_label.pack(anchor="w", padx=20, pady=(5, 0))
+
         # Divider
         ctk.CTkFrame(sidebar, height=2, fg_color="gray30").pack(fill="x", padx=20, pady=10)
 
@@ -778,9 +935,11 @@ class AIManagerApp(ctk.CTk):
         # Create tabs
         self.tab_chat = self.tabview.add("Chat")
         self.tab_settings = self.tabview.add("API Settings")
+        self.tab_logs = self.tabview.add("Logs")
 
         self._create_chat_tab()
         self._create_settings_tab()
+        self._create_logs_tab()
 
     def _create_chat_tab(self):
         """Create chat tab"""
@@ -892,6 +1051,277 @@ class AIManagerApp(ctk.CTk):
             corner_radius=10, fg_color="gray30",
             command=self._check_all_connections
         ).pack(side="left")
+
+    def _create_logs_tab(self):
+        """Create logs tab"""
+        self.tab_logs.grid_rowconfigure(1, weight=1)
+        self.tab_logs.grid_columnconfigure(0, weight=1)
+
+        # Header
+        header = ctk.CTkFrame(self.tab_logs, fg_color="transparent")
+        header.grid(row=0, column=0, sticky="ew", pady=(0, 10))
+
+        ctk.CTkLabel(
+            header, text="Logs & History",
+            font=ctk.CTkFont(size=20, weight="bold")
+        ).pack(side="left")
+
+        # Stats label
+        self.logs_stats_label = ctk.CTkLabel(
+            header, text="Responses: 0 | Errors: 0",
+            font=ctk.CTkFont(size=12),
+            text_color="gray"
+        )
+        self.logs_stats_label.pack(side="right")
+
+        # Log type selector
+        selector_frame = ctk.CTkFrame(self.tab_logs, fg_color="transparent")
+        selector_frame.grid(row=1, column=0, sticky="ew", pady=(0, 10))
+
+        self.log_type_var = ctk.StringVar(value="responses")
+
+        ctk.CTkRadioButton(
+            selector_frame, text="Responses",
+            variable=self.log_type_var, value="responses",
+            command=self._refresh_logs_display
+        ).pack(side="left", padx=(0, 20))
+
+        ctk.CTkRadioButton(
+            selector_frame, text="Errors",
+            variable=self.log_type_var, value="errors",
+            command=self._refresh_logs_display
+        ).pack(side="left", padx=(0, 20))
+
+        ctk.CTkRadioButton(
+            selector_frame, text="All",
+            variable=self.log_type_var, value="all",
+            command=self._refresh_logs_display
+        ).pack(side="left")
+
+        # Logs display
+        self.logs_display = ctk.CTkTextbox(
+            self.tab_logs, corner_radius=12,
+            font=ctk.CTkFont(family="Consolas", size=11),
+            state="disabled"
+        )
+        self.logs_display.grid(row=2, column=0, sticky="nsew", pady=(0, 10))
+
+        # Buttons
+        btn_frame = ctk.CTkFrame(self.tab_logs, fg_color="transparent")
+        btn_frame.grid(row=3, column=0, sticky="ew")
+
+        ctk.CTkButton(
+            btn_frame, text="Refresh", height=36,
+            corner_radius=8, fg_color="gray30",
+            command=self._refresh_logs_display
+        ).pack(side="left", padx=(0, 10))
+
+        ctk.CTkButton(
+            btn_frame, text="Export Logs", height=36,
+            corner_radius=8, fg_color="#27ae60", hover_color="#1e8449",
+            command=self._export_logs
+        ).pack(side="left", padx=(0, 10))
+
+        ctk.CTkButton(
+            btn_frame, text="Export Responses", height=36,
+            corner_radius=8, fg_color="#3498db", hover_color="#2980b9",
+            command=lambda: self._export_logs("responses")
+        ).pack(side="left", padx=(0, 10))
+
+        ctk.CTkButton(
+            btn_frame, text="Export Errors", height=36,
+            corner_radius=8, fg_color="#e74c3c", hover_color="#c0392b",
+            command=lambda: self._export_logs("errors")
+        ).pack(side="left", padx=(0, 10))
+
+        ctk.CTkButton(
+            btn_frame, text="Clear Logs", height=36,
+            corner_radius=8, fg_color="gray30",
+            command=self._clear_logs
+        ).pack(side="right")
+
+    def _refresh_logs_display(self):
+        """Refresh logs display"""
+        log_type = self.log_type_var.get()
+
+        self.logs_display.configure(state="normal")
+        self.logs_display.delete("1.0", "end")
+
+        responses = app_logger.get_responses_log()
+        errors = app_logger.get_errors_log()
+
+        # Update stats
+        self.logs_stats_label.configure(
+            text=f"Responses: {len(responses)} | Errors: {len(errors)}"
+        )
+
+        if log_type in ["all", "responses"]:
+            self.logs_display.insert("end", "=" * 50 + "\n")
+            self.logs_display.insert("end", "RESPONSES LOG\n")
+            self.logs_display.insert("end", "=" * 50 + "\n\n")
+
+            for entry in reversed(responses):  # Newest first
+                self.logs_display.insert("end", f"[{entry['timestamp'][:19]}] {entry['provider']}\n")
+                self.logs_display.insert("end", f"Q: {entry['question'][:100]}...\n")
+                status = "OK" if entry['success'] else "FAIL"
+                self.logs_display.insert("end", f"Status: {status} | Time: {entry['elapsed_time']:.2f}s\n")
+                self.logs_display.insert("end", f"Response: {entry['response'][:200]}...\n")
+                self.logs_display.insert("end", "-" * 40 + "\n\n")
+
+        if log_type in ["all", "errors"]:
+            self.logs_display.insert("end", "\n" + "=" * 50 + "\n")
+            self.logs_display.insert("end", "ERRORS LOG\n")
+            self.logs_display.insert("end", "=" * 50 + "\n\n")
+
+            for entry in reversed(errors):  # Newest first
+                self.logs_display.insert("end", f"[{entry['timestamp'][:19]}] {entry['provider']}\n")
+                self.logs_display.insert("end", f"Error: {entry['error']}\n")
+                if entry['details']:
+                    self.logs_display.insert("end", f"Details: {entry['details']}\n")
+                self.logs_display.insert("end", "-" * 40 + "\n\n")
+
+        self.logs_display.configure(state="disabled")
+
+    def _export_logs(self, log_type: str = "all"):
+        """Export logs to file"""
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        default_name = f"ai_manager_logs_{log_type}_{timestamp}.txt"
+
+        filepath = filedialog.asksaveasfilename(
+            title="Export Logs",
+            defaultextension=".txt",
+            initialfile=default_name,
+            filetypes=[("Text files", "*.txt"), ("All files", "*.*")]
+        )
+
+        if filepath:
+            if app_logger.export_logs(filepath, log_type):
+                messagebox.showinfo("Success", f"Logs exported to:\n{filepath}")
+                self.status_label.configure(text=f"Logs exported")
+            else:
+                messagebox.showerror("Error", "Failed to export logs")
+
+    def _clear_logs(self):
+        """Clear in-memory logs"""
+        if messagebox.askyesno("Confirm", "Clear all in-memory logs?"):
+            app_logger.clear_logs()
+            self._refresh_logs_display()
+            self.status_label.configure(text="Logs cleared")
+
+    def _test_all_connections(self):
+        """Test all connections with detailed status"""
+        self.connection_status_label.configure(text="Testing connections...")
+
+        thread = threading.Thread(target=self._test_connections_thread, daemon=True)
+        thread.start()
+
+    def _test_connections_thread(self):
+        """Thread for testing connections"""
+        self._update_providers()
+
+        results = {}
+        connected = 0
+        total = 0
+
+        key_map = {
+            "openai": "OpenAI GPT",
+            "anthropic": "Anthropic Claude",
+            "gemini": "Gemini",
+            "deepseek": "DeepSeek",
+            "groq": "Groq",
+            "mistral": "Mistral AI"
+        }
+
+        for key, name in key_map.items():
+            if name in self.providers and self.provider_switches[name].get():
+                total += 1
+                status = self.providers[name].test_connection()
+                results[name] = status
+
+                if status:
+                    connected += 1
+
+                # Log the test
+                app_logger.log_connection_test(name, status)
+
+                # Update UI
+                self.after(0, lambda n=name, s=status: self._update_connection_status(n, s))
+                self.after(0, lambda k=key, s=status: self._update_card_status(k, s))
+
+        # Update status label
+        status_text = f"Connected: {connected}/{total}"
+        self.after(0, lambda: self.connection_status_label.configure(
+            text=status_text,
+            text_color="#2ecc71" if connected == total else "#e74c3c"
+        ))
+
+    def _send_test_query(self):
+        """Send a simple test query to all selected providers"""
+        selected = [name for name, switch in self.provider_switches.items() if switch.get()]
+
+        if not selected:
+            messagebox.showwarning("Warning", "Please select at least one AI provider!")
+            return
+
+        # Simple test question
+        test_question = "Hello! Please respond with 'OK' if you can receive this message."
+
+        self.connection_status_label.configure(text="Sending test query...")
+        self._add_to_chat(f"[TEST] Sending test query to {len(selected)} providers...\n", "system")
+
+        self._update_providers()
+
+        thread = threading.Thread(
+            target=self._process_test_query,
+            args=(test_question, selected),
+            daemon=True
+        )
+        thread.start()
+
+    def _process_test_query(self, question: str, providers: List[str]):
+        """Process test query"""
+        results = {}
+
+        with ThreadPoolExecutor(max_workers=len(providers)) as executor:
+            futures = {}
+            for name in providers:
+                if name in self.providers:
+                    future = executor.submit(self.providers[name].query, question)
+                    futures[future] = name
+
+            for future in as_completed(futures):
+                name = futures[future]
+                try:
+                    response, elapsed = future.result()
+                    success = not response.startswith("Error")
+                    results[name] = (success, elapsed)
+
+                    # Log response
+                    app_logger.log_response(name, question, response, elapsed, success)
+
+                    # Show result
+                    status = "OK" if success else "FAIL"
+                    self.after(0, lambda n=name, s=status, t=elapsed:
+                        self._add_to_chat(f"[TEST] {n}: {s} ({t:.2f}s)\n", "response"))
+
+                except Exception as e:
+                    results[name] = (False, 0)
+                    app_logger.log_error(name, str(e), "Test query failed")
+                    self.after(0, lambda n=name, e=str(e):
+                        self._add_to_chat(f"[TEST] {n}: ERROR - {e}\n", "error"))
+
+        # Summary
+        success_count = sum(1 for v in results.values() if v[0])
+        total = len(results)
+
+        self.after(0, lambda: self._add_to_chat(
+            f"\n[TEST COMPLETE] {success_count}/{total} providers responded successfully\n\n",
+            "system"
+        ))
+        self.after(0, lambda: self.connection_status_label.configure(
+            text=f"Test: {success_count}/{total} OK",
+            text_color="#2ecc71" if success_count == total else "#e74c3c"
+        ))
 
     # ==================== Actions ====================
 
@@ -1059,10 +1489,19 @@ class AIManagerApp(ctk.CTk):
                     responses[name] = (response, elapsed)
                     total_time = max(total_time, elapsed)
 
+                    # Log response
+                    success = not response.startswith("Error")
+                    app_logger.log_response(name, question, response, elapsed, success)
+
+                    if not success:
+                        app_logger.log_error(name, response, f"Query: {question[:100]}")
+
                     # Update UI immediately
                     self.after(0, lambda n=name, r=response, t=elapsed: self._show_response(n, r, t))
                 except Exception as e:
                     responses[name] = (f"Error: {str(e)}", 0)
+                    # Log error
+                    app_logger.log_error(name, str(e), f"Exception during query: {question[:100]}")
                     self.after(0, lambda n=name, e=str(e): self._show_response(n, f"Error: {e}", 0))
 
         # Save to file

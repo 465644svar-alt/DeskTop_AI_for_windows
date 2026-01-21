@@ -2126,27 +2126,13 @@ class AIManagerApp(ctk.CTk):
         self.chat_input.bind("<Button-3>", self._show_input_menu)
         self.chat_display.bind("<Button-3>", self._show_chat_menu)
 
-        # ===== Keyboard shortcuts for Chat Input =====
-        # Ctrl+A - Select All
-        self.chat_input.bind("<Control-a>", lambda e: self._select_all_input())
-        self.chat_input.bind("<Control-A>", lambda e: self._select_all_input())
-        # Ctrl+C - Copy (override default)
-        self.chat_input.bind("<Control-c>", lambda e: self._copy_input() or "break")
-        self.chat_input.bind("<Control-C>", lambda e: self._copy_input() or "break")
-        # Ctrl+X - Cut
-        self.chat_input.bind("<Control-x>", lambda e: self._cut_input() or "break")
-        self.chat_input.bind("<Control-X>", lambda e: self._cut_input() or "break")
-        # Ctrl+V - Paste (CTkTextbox handles this, but add explicit binding)
-        self.chat_input.bind("<Control-v>", lambda e: self._paste_from_clipboard() or "break")
-        self.chat_input.bind("<Control-V>", lambda e: self._paste_from_clipboard() or "break")
-
-        # ===== Keyboard shortcuts for Chat Display (read-only) =====
-        # Ctrl+A - Select All
-        self.chat_display.bind("<Control-a>", lambda e: self._select_all_chat() or "break")
-        self.chat_display.bind("<Control-A>", lambda e: self._select_all_chat() or "break")
-        # Ctrl+C - Copy
-        self.chat_display.bind("<Control-c>", lambda e: self._copy_chat_selection() or "break")
-        self.chat_display.bind("<Control-C>", lambda e: self._copy_chat_selection() or "break")
+        # ===== Keyboard shortcuts =====
+        # Note: Ctrl+C, Ctrl+V, Ctrl+X work natively in CTkTextbox
+        # Only bind Ctrl+A for select all
+        self.chat_input.bind("<Control-a>", lambda e: (self._select_all_input(), "break")[1])
+        self.chat_input.bind("<Control-A>", lambda e: (self._select_all_input(), "break")[1])
+        self.chat_display.bind("<Control-a>", lambda e: (self._select_all_chat(), "break")[1])
+        self.chat_display.bind("<Control-A>", lambda e: (self._select_all_chat(), "break")[1])
 
     def _show_input_menu(self, event):
         """Show context menu for input"""

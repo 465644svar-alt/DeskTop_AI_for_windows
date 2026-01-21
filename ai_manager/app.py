@@ -388,17 +388,11 @@ class AIManagerApp(ctk.CTk):
         self.chat_input.bind("<Button-3>", lambda e: self._show_menu(e, self.input_menu))
         self.chat_display.bind("<Button-3>", lambda e: self._show_menu(e, self.chat_menu))
 
-        # Keyboard shortcuts
-        for key in ["<Control-a>", "<Control-A>"]:
-            self.chat_input.bind(key, lambda e: self._select_all_input() or "break")
-            self.chat_display.bind(key, lambda e: self._select_all_chat() or "break")
-        for key in ["<Control-c>", "<Control-C>"]:
-            self.chat_input.bind(key, lambda e: self._copy_input() or "break")
-            self.chat_display.bind(key, lambda e: self._copy_chat() or "break")
-        for key in ["<Control-v>", "<Control-V>"]:
-            self.chat_input.bind(key, lambda e: self._paste_input() or "break")
-        for key in ["<Control-x>", "<Control-X>"]:
-            self.chat_input.bind(key, lambda e: self._cut_input() or "break")
+        # Only bind Ctrl+A for select all (Ctrl+C/V/X work natively in CTkTextbox)
+        self.chat_input.bind("<Control-a>", lambda e: (self._select_all_input(), "break")[1])
+        self.chat_input.bind("<Control-A>", lambda e: (self._select_all_input(), "break")[1])
+        self.chat_display.bind("<Control-a>", lambda e: (self._select_all_chat(), "break")[1])
+        self.chat_display.bind("<Control-A>", lambda e: (self._select_all_chat(), "break")[1])
 
     def _setup_logs_bindings(self):
         """Setup keyboard bindings for logs"""

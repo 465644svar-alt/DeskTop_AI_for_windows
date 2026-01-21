@@ -1,4 +1,4 @@
-# AI Manager Desktop Application v9.0
+# AI Manager Desktop Application v11.0
 # Requirements for Windows build
 
 # Modern UI Framework
@@ -7,8 +7,16 @@ customtkinter>=5.2.0
 # HTTP Requests
 requests>=2.31.0
 
+# Secure API Key Storage (optional but recommended)
+keyring>=24.0.0
+
+# Token counting (optional - for accurate token management)
+tiktoken>=0.5.0
+
 # For PyInstaller build (optional)
 pyinstaller>=6.0.0
 
-# Note: customtkinter provides modern, beautiful UI
-# that works on Windows, macOS, and Linux
+# Note:
+# - keyring provides secure OS-level credential storage
+# - tiktoken provides accurate OpenAI-compatible token counting
+# - If these are not installed, the app will use fallback methods

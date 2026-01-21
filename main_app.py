@@ -984,8 +984,7 @@ class AIManagerApp(ctk.CTk):
 
         # Keyboard shortcuts
         self.chat_input.bind("<Control-Return>", lambda e: self._send_query())
-        self.chat_input.bind("<Control-v>", lambda e: self._paste_from_clipboard())
-        self.chat_input.bind("<Control-V>", lambda e: self._paste_from_clipboard())
+        # Note: Ctrl+V works by default in CTkTextbox
 
         # Context menu for input
         self._create_context_menu()
@@ -1549,13 +1548,20 @@ class AIManagerApp(ctk.CTk):
             # Get clipboard content
             clipboard_text = self.clipboard_get()
             if clipboard_text:
-                # Insert at cursor position
-                self.chat_input.insert("end", clipboard_text)
-                self.chat_input.see("end")
+                # Delete selected text if any
+                try:
+                    self.chat_input.delete("sel.first", "sel.last")
+                except:
+                    pass
+                # Insert at cursor position (INSERT = current cursor position)
+                self.chat_input.insert("insert", clipboard_text)
+                self.chat_input.see("insert")
                 self.status_label.configure(text=f"Pasted {len(clipboard_text)} characters")
-        except Exception:
+        except tk.TclError:
             # Clipboard is empty or contains non-text data
             self.status_label.configure(text="Clipboard is empty or contains non-text")
+        except Exception as e:
+            self.status_label.configure(text=f"Paste error: {str(e)[:30]}")
 
     def _copy_to_clipboard(self, text: str):
         """Copy text to clipboard"""

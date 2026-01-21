@@ -653,6 +653,13 @@ class APIKeyCard(ctk.CTkFrame):
         )
         self.key_entry.pack(side="left", fill="x", expand=True, padx=(0, 8))
 
+        # Paste button
+        ctk.CTkButton(
+            key_row, text="Paste", width=60, height=36,
+            corner_radius=8, fg_color="#2980b9", hover_color="#1f618d",
+            command=self._paste_key
+        ).pack(side="left", padx=(0, 8))
+
         # Toggle visibility button
         self.toggle_btn = ctk.CTkButton(
             key_row, text="Show", width=60, height=36,
@@ -667,10 +674,57 @@ class APIKeyCard(ctk.CTkFrame):
             command=lambda: webbrowser.open(url)
         ).pack(side="left")
 
+        # Add right-click context menu
+        self._create_entry_menu()
+
     def _toggle_visibility(self):
         self.show_key = not self.show_key
         self.key_entry.configure(show="" if self.show_key else "*")
         self.toggle_btn.configure(text="Hide" if self.show_key else "Show")
+
+    def _paste_key(self):
+        """Paste API key from clipboard"""
+        try:
+            clipboard_text = self.clipboard_get()
+            if clipboard_text:
+                # Clear and paste
+                self.key_entry.delete(0, "end")
+                self.key_entry.insert(0, clipboard_text.strip())
+        except:
+            pass
+
+    def _create_entry_menu(self):
+        """Create right-click context menu for entry"""
+        self.entry_menu = tk.Menu(self, tearoff=0)
+        self.entry_menu.add_command(label="Paste", command=self._paste_key)
+        self.entry_menu.add_command(label="Clear", command=lambda: self.key_entry.delete(0, "end"))
+        self.entry_menu.add_separator()
+        self.entry_menu.add_command(label="Select All", command=self._select_all_entry)
+        self.entry_menu.add_command(label="Copy", command=self._copy_entry)
+
+        self.key_entry.bind("<Button-3>", self._show_entry_menu)
+
+    def _show_entry_menu(self, event):
+        """Show context menu"""
+        try:
+            self.entry_menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            self.entry_menu.grab_release()
+
+    def _select_all_entry(self):
+        """Select all text in entry"""
+        self.key_entry.select_range(0, "end")
+        self.key_entry.focus()
+
+    def _copy_entry(self):
+        """Copy entry content"""
+        try:
+            content = self.key_entry.get()
+            if content:
+                self.clipboard_clear()
+                self.clipboard_append(content)
+        except:
+            pass
 
     def _darken(self, hex_color: str) -> str:
         """Darken a hex color"""

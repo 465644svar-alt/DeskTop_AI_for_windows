@@ -165,6 +165,139 @@ class AppLogger:
 # Global logger instance
 app_logger = AppLogger()
 
+
+# ==================== Conversation Branch Manager ====================
+
+class ConversationBranchManager:
+    """Manager for conversation branches (save/load/switch/delete)"""
+
+    def __init__(self, save_dir: str = "branches"):
+        self.save_dir = save_dir
+        self.branches_file = os.path.join(save_dir, "branches.json")
+        self.branches: List[dict] = []
+        self.current_branch_id: Optional[str] = None
+        os.makedirs(save_dir, exist_ok=True)
+        self._load_branches_index()
+
+    def _load_branches_index(self):
+        """Load branches index from file"""
+        try:
+            if os.path.exists(self.branches_file):
+                with open(self.branches_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    self.branches = data.get("branches", [])
+                    self.current_branch_id = data.get("current_branch_id")
+        except Exception as e:
+            logging.error(f"Failed to load branches index: {e}")
+            self.branches = []
+
+    def _save_branches_index(self):
+        """Save branches index to file"""
+        try:
+            with open(self.branches_file, 'w', encoding='utf-8') as f:
+                json.dump({
+                    "branches": self.branches,
+                    "current_branch_id": self.current_branch_id
+                }, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            logging.error(f"Failed to save branches index: {e}")
+
+    def create_branch(self, name: str, providers_history: Dict[str, List[dict]],
+                      chat_content: str = "") -> str:
+        """Create a new branch from current state"""
+        branch_id = datetime.now().strftime("%Y%m%d_%H%M%S_") + str(len(self.branches))
+
+        branch = {
+            "id": branch_id,
+            "name": name,
+            "created_at": datetime.now().isoformat(),
+            "message_count": sum(len(h) for h in providers_history.values())
+        }
+
+        # Save branch data to separate file
+        branch_data = {
+            "id": branch_id,
+            "name": name,
+            "created_at": branch["created_at"],
+            "providers_history": providers_history,
+            "chat_content": chat_content
+        }
+
+        branch_file = os.path.join(self.save_dir, f"branch_{branch_id}.json")
+        try:
+            with open(branch_file, 'w', encoding='utf-8') as f:
+                json.dump(branch_data, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            logging.error(f"Failed to save branch data: {e}")
+            return ""
+
+        self.branches.append(branch)
+        self.current_branch_id = branch_id
+        self._save_branches_index()
+
+        return branch_id
+
+    def load_branch(self, branch_id: str) -> Optional[dict]:
+        """Load branch data by ID"""
+        branch_file = os.path.join(self.save_dir, f"branch_{branch_id}.json")
+        try:
+            if os.path.exists(branch_file):
+                with open(branch_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    self.current_branch_id = branch_id
+                    self._save_branches_index()
+                    return data
+        except Exception as e:
+            logging.error(f"Failed to load branch: {e}")
+        return None
+
+    def delete_branch(self, branch_id: str) -> bool:
+        """Delete a branch"""
+        branch_file = os.path.join(self.save_dir, f"branch_{branch_id}.json")
+        try:
+            if os.path.exists(branch_file):
+                os.remove(branch_file)
+
+            self.branches = [b for b in self.branches if b["id"] != branch_id]
+
+            if self.current_branch_id == branch_id:
+                self.current_branch_id = None
+
+            self._save_branches_index()
+            return True
+        except Exception as e:
+            logging.error(f"Failed to delete branch: {e}")
+            return False
+
+    def get_branches_list(self) -> List[dict]:
+        """Get list of all branches"""
+        return self.branches.copy()
+
+    def rename_branch(self, branch_id: str, new_name: str) -> bool:
+        """Rename a branch"""
+        for branch in self.branches:
+            if branch["id"] == branch_id:
+                branch["name"] = new_name
+                self._save_branches_index()
+
+                # Update branch file
+                branch_file = os.path.join(self.save_dir, f"branch_{branch_id}.json")
+                try:
+                    if os.path.exists(branch_file):
+                        with open(branch_file, 'r', encoding='utf-8') as f:
+                            data = json.load(f)
+                        data["name"] = new_name
+                        with open(branch_file, 'w', encoding='utf-8') as f:
+                            json.dump(data, f, ensure_ascii=False, indent=2)
+                except:
+                    pass
+                return True
+        return False
+
+
+# Global branch manager instance
+branch_manager = ConversationBranchManager()
+
 # Theme settings
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
@@ -1134,6 +1267,9 @@ class AIManagerApp(ctk.CTk):
         self.chat_input.grid(row=0, column=0, sticky="ew", padx=(0, 10))
 
         # Keyboard shortcuts
+        # Enter - send query, Shift+Enter - new line
+        self.chat_input.bind("<Return>", self._handle_enter_key)
+        self.chat_input.bind("<Shift-Return>", self._handle_shift_enter)
         self.chat_input.bind("<Control-Return>", lambda e: self._send_query())
         # Note: Ctrl+V works by default in CTkTextbox
 
@@ -1171,6 +1307,67 @@ class AIManagerApp(ctk.CTk):
 
         # Progress bar
         self.progress = ctk.CTkProgressBar(self.tab_chat, mode="indeterminate", height=3)
+
+        # ===== Branches Panel =====
+        branches_frame = ctk.CTkFrame(self.tab_chat, corner_radius=12)
+        branches_frame.grid(row=4, column=0, sticky="ew", pady=(10, 0))
+
+        # Branches header
+        branches_header = ctk.CTkFrame(branches_frame, fg_color="transparent")
+        branches_header.pack(fill="x", padx=10, pady=(10, 5))
+
+        ctk.CTkLabel(
+            branches_header, text="Conversation Branches",
+            font=ctk.CTkFont(size=14, weight="bold")
+        ).pack(side="left")
+
+        # Current branch indicator
+        self.current_branch_label = ctk.CTkLabel(
+            branches_header, text="Current: None",
+            font=ctk.CTkFont(size=11),
+            text_color="gray"
+        )
+        self.current_branch_label.pack(side="right")
+
+        # Branches list (combobox)
+        branches_controls = ctk.CTkFrame(branches_frame, fg_color="transparent")
+        branches_controls.pack(fill="x", padx=10, pady=(0, 10))
+
+        self.branches_combo = ctk.CTkComboBox(
+            branches_controls, width=250, height=32,
+            values=["No saved branches"],
+            state="readonly",
+            command=self._on_branch_selected
+        )
+        self.branches_combo.pack(side="left", padx=(0, 10))
+
+        # Branch buttons
+        ctk.CTkButton(
+            branches_controls, text="Save", width=70, height=32,
+            corner_radius=8, fg_color="#27ae60", hover_color="#1e8449",
+            command=self._save_branch
+        ).pack(side="left", padx=(0, 5))
+
+        ctk.CTkButton(
+            branches_controls, text="Load", width=70, height=32,
+            corner_radius=8, fg_color="#3498db", hover_color="#2980b9",
+            command=self._load_branch
+        ).pack(side="left", padx=(0, 5))
+
+        ctk.CTkButton(
+            branches_controls, text="Delete", width=70, height=32,
+            corner_radius=8, fg_color="#e74c3c", hover_color="#c0392b",
+            command=self._delete_branch
+        ).pack(side="left", padx=(0, 5))
+
+        ctk.CTkButton(
+            branches_controls, text="Refresh", width=70, height=32,
+            corner_radius=8, fg_color="gray30",
+            command=self._refresh_branches_list
+        ).pack(side="left")
+
+        # Load initial branches list
+        self._refresh_branches_list()
 
     def _create_settings_tab(self):
         """Create settings tab"""
@@ -1599,6 +1796,16 @@ class AIManagerApp(ctk.CTk):
         if key in self.api_cards:
             self.api_cards[key].set_status(status)
 
+    def _handle_enter_key(self, event):
+        """Handle Enter key - send query"""
+        self._send_query()
+        return "break"  # Prevent default newline
+
+    def _handle_shift_enter(self, event):
+        """Handle Shift+Enter - insert newline"""
+        self.chat_input.insert("insert", "\n")
+        return "break"
+
     def _send_query(self):
         """Send query to selected providers"""
         if self.is_processing:
@@ -1721,6 +1928,148 @@ class AIManagerApp(ctk.CTk):
         # Clear chat display
         self._clear_chat()
         self.status_label.configure(text="New chat started - history cleared")
+        self.current_branch_label.configure(text="Current: None")
+
+    # ==================== Branch Management ====================
+
+    def _refresh_branches_list(self):
+        """Refresh the branches dropdown list"""
+        branches = branch_manager.get_branches_list()
+        if branches:
+            values = [f"{b['name']} ({b['created_at'][:10]})" for b in branches]
+            self.branches_combo.configure(values=values)
+            if branch_manager.current_branch_id:
+                # Find and select current branch
+                for i, b in enumerate(branches):
+                    if b['id'] == branch_manager.current_branch_id:
+                        self.branches_combo.set(values[i])
+                        self.current_branch_label.configure(text=f"Current: {b['name']}")
+                        break
+        else:
+            self.branches_combo.configure(values=["No saved branches"])
+            self.branches_combo.set("No saved branches")
+
+    def _on_branch_selected(self, selection):
+        """Handle branch selection from dropdown"""
+        pass  # Selection is handled by Load button
+
+    def _save_branch(self):
+        """Save current conversation as a new branch"""
+        # Create dialog for branch name
+        dialog = ctk.CTkInputDialog(
+            text="Enter branch name:",
+            title="Save Branch"
+        )
+        name = dialog.get_input()
+
+        if not name:
+            return
+
+        # Collect conversation history from all providers
+        providers_history = {}
+        for key, provider in self.providers.items():
+            providers_history[key] = provider.conversation_history.copy()
+
+        # Get chat content
+        self.chat_display.configure(state="normal")
+        chat_content = self.chat_display.get("1.0", "end-1c")
+        self.chat_display.configure(state="disabled")
+
+        # Save branch
+        branch_id = branch_manager.create_branch(name, providers_history, chat_content)
+
+        if branch_id:
+            self._refresh_branches_list()
+            self.status_label.configure(text=f"Branch '{name}' saved")
+            self.current_branch_label.configure(text=f"Current: {name}")
+            messagebox.showinfo("Success", f"Branch '{name}' saved successfully!")
+        else:
+            messagebox.showerror("Error", "Failed to save branch")
+
+    def _load_branch(self):
+        """Load selected branch"""
+        selection = self.branches_combo.get()
+        if selection == "No saved branches":
+            messagebox.showwarning("Warning", "No branches to load")
+            return
+
+        branches = branch_manager.get_branches_list()
+        if not branches:
+            return
+
+        # Find selected branch
+        selected_idx = None
+        values = [f"{b['name']} ({b['created_at'][:10]})" for b in branches]
+        for i, v in enumerate(values):
+            if v == selection:
+                selected_idx = i
+                break
+
+        if selected_idx is None:
+            messagebox.showwarning("Warning", "Please select a branch first")
+            return
+
+        branch = branches[selected_idx]
+        branch_data = branch_manager.load_branch(branch['id'])
+
+        if not branch_data:
+            messagebox.showerror("Error", "Failed to load branch")
+            return
+
+        # Restore conversation history to providers
+        providers_history = branch_data.get("providers_history", {})
+        for key, history in providers_history.items():
+            if key in self.providers:
+                self.providers[key].conversation_history = history.copy()
+
+        # Restore chat display
+        chat_content = branch_data.get("chat_content", "")
+        self.chat_display.configure(state="normal")
+        self.chat_display.delete("1.0", "end")
+        self.chat_display.insert("1.0", chat_content)
+        self.chat_display.configure(state="disabled")
+
+        self.current_branch_label.configure(text=f"Current: {branch['name']}")
+        self.status_label.configure(text=f"Branch '{branch['name']}' loaded")
+        messagebox.showinfo("Success", f"Branch '{branch['name']}' loaded successfully!")
+
+    def _delete_branch(self):
+        """Delete selected branch"""
+        selection = self.branches_combo.get()
+        if selection == "No saved branches":
+            messagebox.showwarning("Warning", "No branches to delete")
+            return
+
+        branches = branch_manager.get_branches_list()
+        if not branches:
+            return
+
+        # Find selected branch
+        selected_idx = None
+        values = [f"{b['name']} ({b['created_at'][:10]})" for b in branches]
+        for i, v in enumerate(values):
+            if v == selection:
+                selected_idx = i
+                break
+
+        if selected_idx is None:
+            messagebox.showwarning("Warning", "Please select a branch first")
+            return
+
+        branch = branches[selected_idx]
+
+        # Confirm deletion
+        if not messagebox.askyesno("Confirm", f"Delete branch '{branch['name']}'?"):
+            return
+
+        if branch_manager.delete_branch(branch['id']):
+            self._refresh_branches_list()
+            self.status_label.configure(text=f"Branch '{branch['name']}' deleted")
+            if branch_manager.current_branch_id is None:
+                self.current_branch_label.configure(text="Current: None")
+            messagebox.showinfo("Success", f"Branch '{branch['name']}' deleted")
+        else:
+            messagebox.showerror("Error", "Failed to delete branch")
 
     def _paste_from_clipboard(self):
         """Paste text from clipboard to input field"""

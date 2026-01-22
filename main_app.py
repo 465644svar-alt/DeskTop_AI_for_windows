@@ -1,8 +1,8 @@
 """
-AI Manager Desktop Application v8.0
-Менеджер нейросетей для Windows
+AI Manager Desktop Application v10.0
+Modern Neural Network Manager for Windows
 
-Поддерживаемые нейросети:
+Supported AI:
 - OpenAI GPT (GPT-4, GPT-3.5)
 - Anthropic Claude (Claude 3)
 - Google Gemini
@@ -10,47 +10,501 @@ AI Manager Desktop Application v8.0
 - Groq (Llama, Mixtral)
 - Mistral AI
 
-Автор: DeskTop AI Team
+Features:
+- Modern UI with customtkinter
+- Parallel requests to all AI providers
+- Save responses to text file
+- Dark/Light theme support
+- Connection testing & status
+- Response logging with download
+- Error logging
 """
 
+import customtkinter as ctk
+from tkinter import filedialog, messagebox
 import tkinter as tk
-from tkinter import filedialog, messagebox, ttk, scrolledtext
 import threading
 import os
 import sys
 import json
 import requests
-import socket
 import time
+import logging
 from datetime import datetime
-from typing import Dict, Optional, Callable
+from typing import Dict, Optional, List, Tuple
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import webbrowser
+from collections import deque
+import base64
+import hashlib
 
-# Версия приложения
-APP_VERSION = "8.0"
+# Try to import keyring for secure storage
+try:
+    import keyring
+    KEYRING_AVAILABLE = True
+except ImportError:
+    KEYRING_AVAILABLE = False
+
+# App info
+APP_VERSION = "11.0"
 APP_NAME = "AI Manager"
 
 
-class AIProvider:
-    """Базовый класс для AI провайдеров"""
+# ==================== Secure Key Storage ====================
 
-    def __init__(self, name: str, api_key: str = ""):
+class SecureKeyStorage:
+    """Secure storage for API keys using system keyring or encrypted fallback"""
+
+    SERVICE_NAME = "AIManager"
+    FALLBACK_FILE = "config_secure.dat"
+
+    def __init__(self, config_dir: str = "."):
+        self.config_dir = config_dir
+        self.fallback_path = os.path.join(config_dir, self.FALLBACK_FILE)
+        self._machine_key = self._get_machine_key()
+
+    def _get_machine_key(self) -> bytes:
+        """Get a machine-specific key for fallback encryption"""
+        import platform
+        try:
+            user = os.getlogin()
+        except Exception:
+            user = os.environ.get('USER', os.environ.get('USERNAME', 'user'))
+        machine_id = f"{platform.node()}-{user}"
+        return hashlib.sha256(machine_id.encode()).digest()
+
+    def _simple_encrypt(self, data: str) -> str:
+        """Simple XOR encryption with machine key"""
+        key = self._machine_key
+        encrypted = bytearray()
+        for i, char in enumerate(data.encode('utf-8')):
+            encrypted.append(char ^ key[i % len(key)])
+        return base64.b64encode(encrypted).decode('ascii')
+
+    def _simple_decrypt(self, data: str) -> str:
+        """Simple XOR decryption with machine key"""
+        key = self._machine_key
+        encrypted = base64.b64decode(data.encode('ascii'))
+        decrypted = bytearray()
+        for i, byte in enumerate(encrypted):
+            decrypted.append(byte ^ key[i % len(key)])
+        return decrypted.decode('utf-8')
+
+    def set_key(self, provider: str, api_key: str) -> bool:
+        """Store API key securely"""
+        if not api_key:
+            return self.delete_key(provider)
+        try:
+            if KEYRING_AVAILABLE:
+                keyring.set_password(self.SERVICE_NAME, provider, api_key)
+            else:
+                self._save_to_fallback(provider, api_key)
+            return True
+        except Exception as e:
+            logging.error(f"Failed to store key for {provider}: {e}")
+            return False
+
+    def get_key(self, provider: str) -> Optional[str]:
+        """Retrieve API key"""
+        try:
+            if KEYRING_AVAILABLE:
+                key = keyring.get_password(self.SERVICE_NAME, provider)
+                if key:
+                    return key
+            return self._load_from_fallback(provider)
+        except Exception as e:
+            logging.error(f"Failed to retrieve key for {provider}: {e}")
+            return None
+
+    def delete_key(self, provider: str) -> bool:
+        """Delete stored API key"""
+        try:
+            if KEYRING_AVAILABLE:
+                try:
+                    keyring.delete_password(self.SERVICE_NAME, provider)
+                except Exception:
+                    pass
+            self._delete_from_fallback(provider)
+            return True
+        except Exception:
+            return False
+
+    def _save_to_fallback(self, provider: str, api_key: str):
+        """Save to encrypted fallback file"""
+        data = self._load_fallback_data()
+        data[provider] = self._simple_encrypt(api_key)
+        with open(self.fallback_path, 'w', encoding='utf-8') as f:
+            json.dump(data, f)
+
+    def _load_from_fallback(self, provider: str) -> Optional[str]:
+        """Load from encrypted fallback file"""
+        data = self._load_fallback_data()
+        encrypted = data.get(provider)
+        if encrypted:
+            try:
+                return self._simple_decrypt(encrypted)
+            except Exception:
+                return None
+        return None
+
+    def _delete_from_fallback(self, provider: str):
+        """Delete from fallback file"""
+        data = self._load_fallback_data()
+        if provider in data:
+            del data[provider]
+            with open(self.fallback_path, 'w', encoding='utf-8') as f:
+                json.dump(data, f)
+
+    def _load_fallback_data(self) -> Dict[str, str]:
+        """Load fallback data file"""
+        if os.path.exists(self.fallback_path):
+            try:
+                with open(self.fallback_path, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            except Exception:
+                return {}
+        return {}
+
+    def migrate_from_plain_config(self, config_path: str) -> int:
+        """Migrate keys from plain config.json to secure storage"""
+        migrated = 0
+        if not os.path.exists(config_path):
+            return migrated
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config = json.load(f)
+
+            key_mappings = {
+                "openai_key": "openai",
+                "anthropic_key": "anthropic",
+                "gemini_key": "gemini",
+                "deepseek_key": "deepseek",
+                "groq_key": "groq",
+                "mistral_key": "mistral"
+            }
+
+            for config_key, provider in key_mappings.items():
+                if config_key in config and config[config_key]:
+                    if self.set_key(provider, config[config_key]):
+                        migrated += 1
+                        config[config_key] = ""  # Remove from plain config
+
+            # Save config without keys
+            with open(config_path, 'w', encoding='utf-8') as f:
+                json.dump(config, f, indent=2)
+
+            if migrated > 0:
+                logging.info(f"Migrated {migrated} keys to secure storage")
+        except Exception as e:
+            logging.error(f"Migration failed: {e}")
+
+        return migrated
+
+
+# Global secure storage instance
+secure_storage = SecureKeyStorage()
+
+
+# ==================== Logging System ====================
+
+class AppLogger:
+    """Application logger for responses and errors"""
+
+    def __init__(self, log_dir: str = "logs"):
+        self.log_dir = log_dir
+        self.responses_log: deque = deque(maxlen=1000)  # Last 1000 responses
+        self.errors_log: deque = deque(maxlen=500)  # Last 500 errors
+        self.session_start = datetime.now()
+
+        # Create log directory
+        os.makedirs(log_dir, exist_ok=True)
+
+        # Setup file logging
+        self._setup_file_logging()
+
+    def _setup_file_logging(self):
+        """Setup file-based logging"""
+        log_file = os.path.join(
+            self.log_dir,
+            f"app_{self.session_start.strftime('%Y%m%d_%H%M%S')}.log"
+        )
+
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s | %(levelname)s | %(message)s',
+            handlers=[
+                logging.FileHandler(log_file, encoding='utf-8'),
+                logging.StreamHandler()
+            ]
+        )
+        self.logger = logging.getLogger(__name__)
+
+    def log_response(self, provider: str, question: str, response: str, elapsed: float, success: bool = True):
+        """Log AI response"""
+        entry = {
+            "timestamp": datetime.now().isoformat(),
+            "provider": provider,
+            "question": question[:500],  # Truncate for log
+            "response": response,
+            "elapsed_time": elapsed,
+            "success": success
+        }
+        self.responses_log.append(entry)
+
+        status = "SUCCESS" if success else "FAILED"
+        self.logger.info(f"[{provider}] {status} | {elapsed:.2f}s | Q: {question[:100]}...")
+
+    def log_error(self, provider: str, error: str, details: str = ""):
+        """Log error"""
+        entry = {
+            "timestamp": datetime.now().isoformat(),
+            "provider": provider,
+            "error": error,
+            "details": details
+        }
+        self.errors_log.append(entry)
+        self.logger.error(f"[{provider}] {error} | {details}")
+
+    def log_connection_test(self, provider: str, success: bool, message: str = ""):
+        """Log connection test"""
+        status = "CONNECTED" if success else "FAILED"
+        self.logger.info(f"[CONNECTION] {provider}: {status} {message}")
+
+    def get_responses_log(self) -> List[dict]:
+        """Get all response logs"""
+        return list(self.responses_log)
+
+    def get_errors_log(self) -> List[dict]:
+        """Get all error logs"""
+        return list(self.errors_log)
+
+    def export_logs(self, filepath: str, log_type: str = "all") -> bool:
+        """Export logs to file"""
+        try:
+            with open(filepath, 'w', encoding='utf-8') as f:
+                f.write("=" * 70 + "\n")
+                f.write(f"AI MANAGER LOGS EXPORT\n")
+                f.write(f"Session started: {self.session_start.strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write(f"Exported: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write("=" * 70 + "\n\n")
+
+                if log_type in ["all", "responses"]:
+                    f.write("\n" + "=" * 70 + "\n")
+                    f.write("RESPONSES LOG\n")
+                    f.write("=" * 70 + "\n\n")
+                    for entry in self.responses_log:
+                        f.write(f"[{entry['timestamp']}] {entry['provider']}\n")
+                        f.write(f"Question: {entry['question']}\n")
+                        f.write(f"Response ({entry['elapsed_time']:.2f}s):\n")
+                        f.write(f"{entry['response']}\n")
+                        f.write("-" * 50 + "\n\n")
+
+                if log_type in ["all", "errors"]:
+                    f.write("\n" + "=" * 70 + "\n")
+                    f.write("ERRORS LOG\n")
+                    f.write("=" * 70 + "\n\n")
+                    for entry in self.errors_log:
+                        f.write(f"[{entry['timestamp']}] {entry['provider']}\n")
+                        f.write(f"Error: {entry['error']}\n")
+                        if entry['details']:
+                            f.write(f"Details: {entry['details']}\n")
+                        f.write("-" * 50 + "\n\n")
+
+                f.write("\n" + "=" * 70 + "\n")
+                f.write(f"Total responses: {len(self.responses_log)}\n")
+                f.write(f"Total errors: {len(self.errors_log)}\n")
+                f.write("=" * 70 + "\n")
+
+            return True
+        except Exception as e:
+            self.logger.error(f"Failed to export logs: {e}")
+            return False
+
+    def clear_logs(self):
+        """Clear in-memory logs"""
+        self.responses_log.clear()
+        self.errors_log.clear()
+
+
+# Global logger instance
+app_logger = AppLogger()
+
+
+# ==================== Conversation Branch Manager ====================
+
+class ConversationBranchManager:
+    """Manager for conversation branches (save/load/switch/delete)"""
+
+    def __init__(self, save_dir: str = "branches"):
+        self.save_dir = save_dir
+        self.branches_file = os.path.join(save_dir, "branches.json")
+        self.branches: List[dict] = []
+        self.current_branch_id: Optional[str] = None
+        os.makedirs(save_dir, exist_ok=True)
+        self._load_branches_index()
+
+    def _load_branches_index(self):
+        """Load branches index from file"""
+        try:
+            if os.path.exists(self.branches_file):
+                with open(self.branches_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    self.branches = data.get("branches", [])
+                    self.current_branch_id = data.get("current_branch_id")
+        except Exception as e:
+            logging.error(f"Failed to load branches index: {e}")
+            self.branches = []
+
+    def _save_branches_index(self):
+        """Save branches index to file"""
+        try:
+            with open(self.branches_file, 'w', encoding='utf-8') as f:
+                json.dump({
+                    "branches": self.branches,
+                    "current_branch_id": self.current_branch_id
+                }, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            logging.error(f"Failed to save branches index: {e}")
+
+    def create_branch(self, name: str, providers_history: Dict[str, List[dict]],
+                      chat_content: str = "") -> str:
+        """Create a new branch from current state"""
+        branch_id = datetime.now().strftime("%Y%m%d_%H%M%S_") + str(len(self.branches))
+
+        branch = {
+            "id": branch_id,
+            "name": name,
+            "created_at": datetime.now().isoformat(),
+            "message_count": sum(len(h) for h in providers_history.values())
+        }
+
+        # Save branch data to separate file
+        branch_data = {
+            "id": branch_id,
+            "name": name,
+            "created_at": branch["created_at"],
+            "providers_history": providers_history,
+            "chat_content": chat_content
+        }
+
+        branch_file = os.path.join(self.save_dir, f"branch_{branch_id}.json")
+        try:
+            with open(branch_file, 'w', encoding='utf-8') as f:
+                json.dump(branch_data, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            logging.error(f"Failed to save branch data: {e}")
+            return ""
+
+        self.branches.append(branch)
+        self.current_branch_id = branch_id
+        self._save_branches_index()
+
+        return branch_id
+
+    def load_branch(self, branch_id: str) -> Optional[dict]:
+        """Load branch data by ID"""
+        branch_file = os.path.join(self.save_dir, f"branch_{branch_id}.json")
+        try:
+            if os.path.exists(branch_file):
+                with open(branch_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    self.current_branch_id = branch_id
+                    self._save_branches_index()
+                    return data
+        except Exception as e:
+            logging.error(f"Failed to load branch: {e}")
+        return None
+
+    def delete_branch(self, branch_id: str) -> bool:
+        """Delete a branch"""
+        branch_file = os.path.join(self.save_dir, f"branch_{branch_id}.json")
+        try:
+            if os.path.exists(branch_file):
+                os.remove(branch_file)
+
+            self.branches = [b for b in self.branches if b["id"] != branch_id]
+
+            if self.current_branch_id == branch_id:
+                self.current_branch_id = None
+
+            self._save_branches_index()
+            return True
+        except Exception as e:
+            logging.error(f"Failed to delete branch: {e}")
+            return False
+
+    def get_branches_list(self) -> List[dict]:
+        """Get list of all branches"""
+        return self.branches.copy()
+
+    def rename_branch(self, branch_id: str, new_name: str) -> bool:
+        """Rename a branch"""
+        for branch in self.branches:
+            if branch["id"] == branch_id:
+                branch["name"] = new_name
+                self._save_branches_index()
+
+                # Update branch file
+                branch_file = os.path.join(self.save_dir, f"branch_{branch_id}.json")
+                try:
+                    if os.path.exists(branch_file):
+                        with open(branch_file, 'r', encoding='utf-8') as f:
+                            data = json.load(f)
+                        data["name"] = new_name
+                        with open(branch_file, 'w', encoding='utf-8') as f:
+                            json.dump(data, f, ensure_ascii=False, indent=2)
+                except:
+                    pass
+                return True
+        return False
+
+
+# Global branch manager instance
+branch_manager = ConversationBranchManager()
+
+# Theme settings
+ctk.set_appearance_mode("dark")
+ctk.set_default_color_theme("blue")
+
+
+# ==================== AI Providers ====================
+
+class AIProvider:
+    """Base class for AI providers"""
+
+    def __init__(self, name: str, api_key: str = "", color: str = "#3498db"):
         self.name = name
         self.api_key = api_key
+        self.color = color
         self.is_connected = False
+        self.enabled = True
+        self.conversation_history: List[dict] = []  # Store conversation history
+        self.max_history = 20  # Max messages to keep
 
     def test_connection(self) -> bool:
         raise NotImplementedError
 
-    def query(self, question: str) -> str:
+    def query(self, question: str) -> Tuple[str, float]:
+        """Returns (response, time_taken)"""
         raise NotImplementedError
+
+    def clear_history(self):
+        """Clear conversation history"""
+        self.conversation_history = []
+
+    def add_to_history(self, role: str, content: str):
+        """Add message to history"""
+        self.conversation_history.append({"role": role, "content": content})
+        # Keep only last N messages
+        if len(self.conversation_history) > self.max_history:
+            self.conversation_history = self.conversation_history[-self.max_history:]
 
 
 class OpenAIProvider(AIProvider):
-    """OpenAI GPT провайдер"""
+    """OpenAI GPT provider"""
 
     def __init__(self, api_key: str = ""):
-        super().__init__("OpenAI GPT", api_key)
+        super().__init__("OpenAI GPT", api_key, "#10a37f")
         self.base_url = "https://api.openai.com/v1"
         self.model = "gpt-4o-mini"
 
@@ -66,50 +520,60 @@ class OpenAIProvider(AIProvider):
             self.is_connected = False
             return False
 
-    def query(self, question: str) -> str:
+    def query(self, question: str) -> Tuple[str, float]:
         if not self.api_key:
-            return "Ошибка: Введите API ключ OpenAI"
+            return "Error: Enter OpenAI API key", 0
 
+        # Add user message to history
+        self.add_to_history("user", question)
+
+        start_time = time.time()
         try:
             headers = {
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json"
             }
+
+            # Build messages with history
+            messages = [{"role": "system", "content": "You are a helpful assistant."}]
+            messages.extend(self.conversation_history)
+
             data = {
                 "model": self.model,
-                "messages": [
-                    {"role": "system", "content": "Вы - полезный ассистент. Отвечайте на русском языке."},
-                    {"role": "user", "content": question}
-                ],
-                "max_tokens": 2000,
+                "messages": messages,
+                "max_tokens": 4000,
                 "temperature": 0.7
             }
             response = requests.post(
                 f"{self.base_url}/chat/completions",
                 headers=headers,
                 json=data,
-                timeout=60
+                timeout=120
             )
+            elapsed = time.time() - start_time
 
             if response.status_code == 200:
-                return response.json()["choices"][0]["message"]["content"]
+                assistant_response = response.json()["choices"][0]["message"]["content"]
+                # Add assistant response to history
+                self.add_to_history("assistant", assistant_response)
+                return assistant_response, elapsed
             elif response.status_code == 401:
-                return "Ошибка: Неверный API ключ OpenAI"
+                return "Error: Invalid OpenAI API key", elapsed
             elif response.status_code == 429:
-                return "Ошибка: Превышен лимит запросов OpenAI"
+                return "Error: OpenAI rate limit exceeded", elapsed
             else:
-                return f"Ошибка OpenAI: {response.status_code} - {response.text}"
+                return f"Error OpenAI: {response.status_code}", elapsed
         except requests.exceptions.Timeout:
-            return "Ошибка: Таймаут запроса к OpenAI"
+            return "Error: OpenAI request timeout", time.time() - start_time
         except Exception as e:
-            return f"Ошибка OpenAI: {str(e)}"
+            return f"Error OpenAI: {str(e)}", time.time() - start_time
 
 
 class AnthropicProvider(AIProvider):
-    """Anthropic Claude провайдер"""
+    """Anthropic Claude provider"""
 
     def __init__(self, api_key: str = ""):
-        super().__init__("Anthropic Claude", api_key)
+        super().__init__("Anthropic Claude", api_key, "#cc785c")
         self.base_url = "https://api.anthropic.com/v1"
         self.model = "claude-3-haiku-20240307"
 
@@ -121,7 +585,6 @@ class AnthropicProvider(AIProvider):
                 "x-api-key": self.api_key,
                 "anthropic-version": "2023-06-01"
             }
-            # Простой тест - отправляем минимальный запрос
             data = {
                 "model": self.model,
                 "max_tokens": 10,
@@ -139,10 +602,14 @@ class AnthropicProvider(AIProvider):
             self.is_connected = False
             return False
 
-    def query(self, question: str) -> str:
+    def query(self, question: str) -> Tuple[str, float]:
         if not self.api_key:
-            return "Ошибка: Введите API ключ Anthropic"
+            return "Error: Enter Anthropic API key", 0
 
+        # Add user message to history
+        self.add_to_history("user", question)
+
+        start_time = time.time()
         try:
             headers = {
                 "x-api-key": self.api_key,
@@ -151,35 +618,38 @@ class AnthropicProvider(AIProvider):
             }
             data = {
                 "model": self.model,
-                "max_tokens": 2000,
-                "messages": [{"role": "user", "content": question}]
+                "max_tokens": 4000,
+                "messages": self.conversation_history.copy()
             }
             response = requests.post(
                 f"{self.base_url}/messages",
                 headers=headers,
                 json=data,
-                timeout=60
+                timeout=120
             )
+            elapsed = time.time() - start_time
 
             if response.status_code == 200:
-                return response.json()["content"][0]["text"]
+                assistant_response = response.json()["content"][0]["text"]
+                self.add_to_history("assistant", assistant_response)
+                return assistant_response, elapsed
             elif response.status_code == 401:
-                return "Ошибка: Неверный API ключ Anthropic"
+                return "Error: Invalid Anthropic API key", elapsed
             elif response.status_code == 429:
-                return "Ошибка: Превышен лимит запросов Anthropic"
+                return "Error: Anthropic rate limit exceeded", elapsed
             else:
-                return f"Ошибка Anthropic: {response.status_code} - {response.text}"
+                return f"Error Anthropic: {response.status_code}", elapsed
         except requests.exceptions.Timeout:
-            return "Ошибка: Таймаут запроса к Anthropic"
+            return "Error: Anthropic request timeout", time.time() - start_time
         except Exception as e:
-            return f"Ошибка Anthropic: {str(e)}"
+            return f"Error Anthropic: {str(e)}", time.time() - start_time
 
 
 class GeminiProvider(AIProvider):
-    """Google Gemini провайдер"""
+    """Google Gemini provider"""
 
     def __init__(self, api_key: str = ""):
-        super().__init__("Gemini", api_key)
+        super().__init__("Gemini", api_key, "#4285f4")
         self.base_url = "https://generativelanguage.googleapis.com/v1beta"
         self.model = "gemini-1.5-flash"
 
@@ -195,52 +665,55 @@ class GeminiProvider(AIProvider):
             self.is_connected = False
             return False
 
-    def query(self, question: str) -> str:
+    def query(self, question: str) -> Tuple[str, float]:
         if not self.api_key:
-            return "Ошибка: Введите API ключ Gemini"
+            return "Error: Enter Gemini API key", 0
 
+        # Add user message to history
+        self.add_to_history("user", question)
+
+        start_time = time.time()
         try:
             url = f"{self.base_url}/models/{self.model}:generateContent?key={self.api_key}"
             headers = {"Content-Type": "application/json"}
+
+            # Build contents from history for Gemini format
+            contents = []
+            for msg in self.conversation_history:
+                role = "user" if msg["role"] == "user" else "model"
+                contents.append({"role": role, "parts": [{"text": msg["content"]}]})
+
             data = {
-                "contents": [
-                    {
-                        "parts": [
-                            {"text": question}
-                        ]
-                    }
-                ],
-                "generationConfig": {
-                    "temperature": 0.7,
-                    "maxOutputTokens": 2000
-                }
+                "contents": contents,
+                "generationConfig": {"temperature": 0.7, "maxOutputTokens": 4000}
             }
-            response = requests.post(url, headers=headers, json=data, timeout=60)
+            response = requests.post(url, headers=headers, json=data, timeout=120)
+            elapsed = time.time() - start_time
 
             if response.status_code == 200:
                 result = response.json()
                 if "candidates" in result and len(result["candidates"]) > 0:
-                    return result["candidates"][0]["content"]["parts"][0]["text"]
-                return "Ошибка: Пустой ответ от Gemini"
-            elif response.status_code == 400:
-                return "Ошибка: Неверный запрос к Gemini"
+                    assistant_response = result["candidates"][0]["content"]["parts"][0]["text"]
+                    self.add_to_history("assistant", assistant_response)
+                    return assistant_response, elapsed
+                return "Error: Empty response from Gemini", elapsed
             elif response.status_code == 403:
-                return "Ошибка: Неверный API ключ Gemini или недостаточно прав"
+                return "Error: Invalid Gemini API key", elapsed
             elif response.status_code == 429:
-                return "Ошибка: Превышен лимит запросов Gemini"
+                return "Error: Gemini rate limit exceeded", elapsed
             else:
-                return f"Ошибка Gemini: {response.status_code} - {response.text}"
+                return f"Error Gemini: {response.status_code}", elapsed
         except requests.exceptions.Timeout:
-            return "Ошибка: Таймаут запроса к Gemini"
+            return "Error: Gemini request timeout", time.time() - start_time
         except Exception as e:
-            return f"Ошибка Gemini: {str(e)}"
+            return f"Error Gemini: {str(e)}", time.time() - start_time
 
 
 class DeepSeekProvider(AIProvider):
-    """DeepSeek провайдер"""
+    """DeepSeek provider"""
 
     def __init__(self, api_key: str = ""):
-        super().__init__("DeepSeek", api_key)
+        super().__init__("DeepSeek", api_key, "#5436da")
         self.base_url = "https://api.deepseek.com/v1"
         self.model = "deepseek-chat"
 
@@ -256,58 +729,63 @@ class DeepSeekProvider(AIProvider):
             self.is_connected = False
             return False
 
-    def query(self, question: str) -> str:
+    def query(self, question: str) -> Tuple[str, float]:
         if not self.api_key:
-            return "Ошибка: Введите API ключ DeepSeek"
+            return "Error: Enter DeepSeek API key", 0
 
+        # Add user message to history
+        self.add_to_history("user", question)
+
+        start_time = time.time()
         try:
             headers = {
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json"
             }
+
+            # Build messages with history
+            messages = [{"role": "system", "content": "You are a helpful assistant."}]
+            messages.extend(self.conversation_history)
+
             data = {
                 "model": self.model,
-                "messages": [
-                    {"role": "system", "content": "Вы - полезный ассистент. Отвечайте на русском языке."},
-                    {"role": "user", "content": question}
-                ],
-                "max_tokens": 2000,
+                "messages": messages,
+                "max_tokens": 4000,
                 "temperature": 0.7
             }
             response = requests.post(
                 f"{self.base_url}/chat/completions",
                 headers=headers,
                 json=data,
-                timeout=60
+                timeout=120
             )
+            elapsed = time.time() - start_time
 
             if response.status_code == 200:
-                return response.json()["choices"][0]["message"]["content"]
+                assistant_response = response.json()["choices"][0]["message"]["content"]
+                self.add_to_history("assistant", assistant_response)
+                return assistant_response, elapsed
             elif response.status_code == 401:
-                return "Ошибка: Неверный API ключ DeepSeek"
+                return "Error: Invalid DeepSeek API key", elapsed
             elif response.status_code == 402:
-                return "Ошибка: Недостаточно средств на балансе DeepSeek"
+                return "Error: Insufficient DeepSeek balance", elapsed
             elif response.status_code == 429:
-                return "Ошибка: Превышен лимит запросов DeepSeek"
+                return "Error: DeepSeek rate limit exceeded", elapsed
             else:
-                return f"Ошибка DeepSeek: {response.status_code} - {response.text}"
+                return f"Error DeepSeek: {response.status_code}", elapsed
         except requests.exceptions.Timeout:
-            return "Ошибка: Таймаут запроса к DeepSeek"
+            return "Error: DeepSeek request timeout", time.time() - start_time
         except Exception as e:
-            return f"Ошибка DeepSeek: {str(e)}"
+            return f"Error DeepSeek: {str(e)}", time.time() - start_time
 
 
 class GroqProvider(AIProvider):
-    """Groq провайдер"""
+    """Groq provider"""
 
     def __init__(self, api_key: str = ""):
-        super().__init__("Groq", api_key)
+        super().__init__("Groq", api_key, "#f55036")
         self.base_url = "https://api.groq.com/openai/v1"
-        self.models = [
-            "llama-3.3-70b-versatile",
-            "llama-3.1-8b-instant",
-            "mixtral-8x7b-32768"
-        ]
+        self.model = "llama-3.3-70b-versatile"
 
     def test_connection(self) -> bool:
         if not self.api_key:
@@ -321,61 +799,59 @@ class GroqProvider(AIProvider):
             self.is_connected = False
             return False
 
-    def query(self, question: str) -> str:
+    def query(self, question: str) -> Tuple[str, float]:
         if not self.api_key:
-            return "Ошибка: Введите API ключ Groq"
+            return "Error: Enter Groq API key", 0
 
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json"
-        }
+        # Add user message to history
+        self.add_to_history("user", question)
 
-        last_error = ""
-        for model in self.models:
-            try:
-                data = {
-                    "model": model,
-                    "messages": [
-                        {"role": "system", "content": "Вы - полезный ассистент. Отвечайте на русском языке."},
-                        {"role": "user", "content": question}
-                    ],
-                    "max_tokens": 2000,
-                    "temperature": 0.7
-                }
-                response = requests.post(
-                    f"{self.base_url}/chat/completions",
-                    headers=headers,
-                    json=data,
-                    timeout=60
-                )
+        start_time = time.time()
+        try:
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json"
+            }
 
-                if response.status_code == 200:
-                    return response.json()["choices"][0]["message"]["content"]
-                elif response.status_code == 401:
-                    return "Ошибка: Неверный API ключ Groq"
-                elif response.status_code == 429:
-                    return "Ошибка: Превышен лимит запросов Groq"
-                elif response.status_code == 400:
-                    last_error = f"Модель {model} недоступна"
-                    continue
-                else:
-                    last_error = f"{response.status_code} - {response.text}"
-                    continue
-            except requests.exceptions.Timeout:
-                last_error = "Таймаут"
-                continue
-            except Exception as e:
-                last_error = str(e)
-                continue
+            # Build messages with history
+            messages = [{"role": "system", "content": "You are a helpful assistant."}]
+            messages.extend(self.conversation_history)
 
-        return f"Ошибка Groq: {last_error}"
+            data = {
+                "model": self.model,
+                "messages": messages,
+                "max_tokens": 4000,
+                "temperature": 0.7
+            }
+            response = requests.post(
+                f"{self.base_url}/chat/completions",
+                headers=headers,
+                json=data,
+                timeout=120
+            )
+            elapsed = time.time() - start_time
+
+            if response.status_code == 200:
+                assistant_response = response.json()["choices"][0]["message"]["content"]
+                self.add_to_history("assistant", assistant_response)
+                return assistant_response, elapsed
+            elif response.status_code == 401:
+                return "Error: Invalid Groq API key", elapsed
+            elif response.status_code == 429:
+                return "Error: Groq rate limit exceeded", elapsed
+            else:
+                return f"Error Groq: {response.status_code}", elapsed
+        except requests.exceptions.Timeout:
+            return "Error: Groq request timeout", time.time() - start_time
+        except Exception as e:
+            return f"Error Groq: {str(e)}", time.time() - start_time
 
 
 class MistralProvider(AIProvider):
-    """Mistral AI провайдер"""
+    """Mistral AI provider"""
 
     def __init__(self, api_key: str = ""):
-        super().__init__("Mistral AI", api_key)
+        super().__init__("Mistral AI", api_key, "#ff7000")
         self.base_url = "https://api.mistral.ai/v1"
         self.model = "mistral-small-latest"
 
@@ -391,154 +867,382 @@ class MistralProvider(AIProvider):
             self.is_connected = False
             return False
 
-    def query(self, question: str) -> str:
+    def query(self, question: str) -> Tuple[str, float]:
         if not self.api_key:
-            return "Ошибка: Введите API ключ Mistral AI"
+            return "Error: Enter Mistral AI API key", 0
 
+        # Add user message to history
+        self.add_to_history("user", question)
+
+        start_time = time.time()
         try:
             headers = {
                 "Authorization": f"Bearer {self.api_key}",
                 "Content-Type": "application/json"
             }
+
+            # Build messages with history
+            messages = self.conversation_history.copy()
+
             data = {
                 "model": self.model,
-                "messages": [
-                    {"role": "user", "content": question}
-                ],
-                "max_tokens": 2000,
+                "messages": messages,
+                "max_tokens": 4000,
                 "temperature": 0.7
             }
             response = requests.post(
                 f"{self.base_url}/chat/completions",
                 headers=headers,
                 json=data,
-                timeout=60
+                timeout=120
             )
+            elapsed = time.time() - start_time
 
             if response.status_code == 200:
-                return response.json()["choices"][0]["message"]["content"]
+                assistant_response = response.json()["choices"][0]["message"]["content"]
+                self.add_to_history("assistant", assistant_response)
+                return assistant_response, elapsed
             elif response.status_code == 401:
-                return "Ошибка: Неверный API ключ Mistral AI"
+                return "Error: Invalid Mistral AI API key", elapsed
             elif response.status_code == 429:
-                return "Ошибка: Превышен лимит запросов Mistral AI"
+                return "Error: Mistral AI rate limit exceeded", elapsed
             else:
-                return f"Ошибка Mistral AI: {response.status_code} - {response.text}"
+                return f"Error Mistral AI: {response.status_code}", elapsed
         except requests.exceptions.Timeout:
-            return "Ошибка: Таймаут запроса к Mistral AI"
+            return "Error: Mistral AI request timeout", time.time() - start_time
         except Exception as e:
-            return f"Ошибка Mistral AI: {str(e)}"
+            return f"Error Mistral AI: {str(e)}", time.time() - start_time
 
 
-class AIManagerApp:
-    """Главное окно приложения"""
+# ==================== UI Components ====================
 
-    # Список поддерживаемых нейросетей
-    SUPPORTED_NETWORKS = [
-        "OpenAI GPT",
-        "Anthropic Claude",
-        "Gemini",
-        "DeepSeek",
-        "Groq",
-        "Mistral AI"
-    ]
+class ModernSwitch(ctk.CTkFrame):
+    """Modern toggle switch with label"""
 
-    def __init__(self, root):
-        self.root = root
-        self.root.title(f"{APP_NAME} v{APP_VERSION}")
-        self.root.geometry("1100x800")
-        self.root.minsize(900, 700)
+    def __init__(self, master, text: str, color: str = "#3498db", command=None, **kwargs):
+        super().__init__(master, fg_color="transparent", **kwargs)
 
-        # Устанавливаем иконку (если есть)
-        self._set_icon()
+        self.color = color
+        self.command = command
 
-        # Конфигурация
-        self.config_file = "config.json"
-        self.config = self._load_config()
+        # Status indicator
+        self.indicator = ctk.CTkLabel(
+            self, text="", width=12, height=12,
+            fg_color="gray", corner_radius=6
+        )
+        self.indicator.pack(side="left", padx=(0, 8))
 
-        # Инициализация провайдеров
-        self.providers: Dict[str, AIProvider] = {}
-        self._init_providers()
+        # Label
+        self.label = ctk.CTkLabel(self, text=text, font=ctk.CTkFont(size=13))
+        self.label.pack(side="left", fill="x", expand=True)
 
-        # Статусы подключений
-        self.connection_status = {name: False for name in self.SUPPORTED_NETWORKS}
+        # Switch
+        self.switch_var = ctk.BooleanVar(value=True)
+        self.switch = ctk.CTkSwitch(
+            self, text="", variable=self.switch_var,
+            command=self._on_toggle, width=40,
+            progress_color=color
+        )
+        self.switch.pack(side="right")
 
-        # Переменные UI
-        self.api_key_vars = {}
-        self.network_vars = {}
-        self.status_labels = {}
-        self.status_text_vars = {}
+    def _on_toggle(self):
+        if self.command:
+            self.command()
 
-        # Создаем интерфейс
-        self._setup_styles()
-        self._create_ui()
+    def get(self) -> bool:
+        return self.switch_var.get()
 
-        # Загружаем конфигурацию в UI
-        self._load_config_to_ui()
+    def set(self, value: bool):
+        self.switch_var.set(value)
 
-        # Проверяем соединения в фоне
-        self.root.after(1000, self._check_connections_background)
+    def set_status(self, connected: bool):
+        color = "#2ecc71" if connected else "#e74c3c"
+        self.indicator.configure(fg_color=color)
 
-    def _set_icon(self):
-        """Установка иконки приложения"""
+
+class APIKeyCard(ctk.CTkFrame):
+    """Modern card for API key input"""
+
+    def __init__(self, master, name: str, color: str, url: str, description: str, **kwargs):
+        super().__init__(master, corner_radius=12, **kwargs)
+
+        self.name = name
+        self.url = url
+        self.show_key = False
+
+        # Header with color accent
+        header = ctk.CTkFrame(self, fg_color=color, corner_radius=10, height=4)
+        header.pack(fill="x", padx=10, pady=(10, 0))
+
+        # Content frame
+        content = ctk.CTkFrame(self, fg_color="transparent")
+        content.pack(fill="x", padx=15, pady=10)
+
+        # Title row
+        title_row = ctk.CTkFrame(content, fg_color="transparent")
+        title_row.pack(fill="x")
+
+        ctk.CTkLabel(
+            title_row, text=name,
+            font=ctk.CTkFont(size=16, weight="bold")
+        ).pack(side="left")
+
+        # Status indicator
+        self.status_indicator = ctk.CTkLabel(
+            title_row, text="", width=10, height=10,
+            fg_color="gray", corner_radius=5
+        )
+        self.status_indicator.pack(side="right", padx=5)
+
+        # Description
+        ctk.CTkLabel(
+            content, text=description,
+            font=ctk.CTkFont(size=11),
+            text_color="gray"
+        ).pack(anchor="w", pady=(2, 8))
+
+        # Key input row
+        key_row = ctk.CTkFrame(content, fg_color="transparent")
+        key_row.pack(fill="x")
+
+        self.key_entry = ctk.CTkEntry(
+            key_row, placeholder_text="Enter API key...",
+            show="*", height=36, corner_radius=8
+        )
+        self.key_entry.pack(side="left", fill="x", expand=True, padx=(0, 8))
+
+        # Paste button
+        ctk.CTkButton(
+            key_row, text="Paste", width=60, height=36,
+            corner_radius=8, fg_color="#2980b9", hover_color="#1f618d",
+            command=self._paste_key
+        ).pack(side="left", padx=(0, 8))
+
+        # Toggle visibility button
+        self.toggle_btn = ctk.CTkButton(
+            key_row, text="Show", width=60, height=36,
+            corner_radius=8, command=self._toggle_visibility
+        )
+        self.toggle_btn.pack(side="left", padx=(0, 8))
+
+        # Get key button
+        ctk.CTkButton(
+            key_row, text="Get Key", width=80, height=36,
+            corner_radius=8, fg_color=color, hover_color=self._darken(color),
+            command=lambda: webbrowser.open(url)
+        ).pack(side="left")
+
+        # Add right-click context menu
+        self._create_entry_menu()
+
+    def _toggle_visibility(self):
+        self.show_key = not self.show_key
+        self.key_entry.configure(show="" if self.show_key else "*")
+        self.toggle_btn.configure(text="Hide" if self.show_key else "Show")
+
+    def _paste_key(self):
+        """Paste API key from clipboard"""
         try:
-            # Для Windows .ico файл
-            if sys.platform == 'win32':
-                icon_path = os.path.join(os.path.dirname(__file__), 'icon.ico')
-                if os.path.exists(icon_path):
-                    self.root.iconbitmap(icon_path)
+            clipboard_text = self.clipboard_get()
+            if clipboard_text:
+                # Clear and paste
+                self.key_entry.delete(0, "end")
+                self.key_entry.insert(0, clipboard_text.strip())
         except:
             pass
 
+    def _create_entry_menu(self):
+        """Create right-click context menu for entry"""
+        self.entry_menu = tk.Menu(self, tearoff=0)
+        self.entry_menu.add_command(label="Cut", command=self._cut_entry, accelerator="Ctrl+X")
+        self.entry_menu.add_command(label="Copy", command=self._copy_entry, accelerator="Ctrl+C")
+        self.entry_menu.add_command(label="Paste", command=self._paste_key, accelerator="Ctrl+V")
+        self.entry_menu.add_separator()
+        self.entry_menu.add_command(label="Select All", command=self._select_all_entry, accelerator="Ctrl+A")
+        self.entry_menu.add_command(label="Clear", command=lambda: self.key_entry.delete(0, "end"))
+
+        # Right-click menu
+        self.key_entry.bind("<Button-3>", self._show_entry_menu)
+
+        # Keyboard shortcuts for entry
+        self.key_entry.bind("<Control-a>", lambda e: self._select_all_entry() or "break")
+        self.key_entry.bind("<Control-A>", lambda e: self._select_all_entry() or "break")
+        self.key_entry.bind("<Control-c>", lambda e: self._copy_entry() or "break")
+        self.key_entry.bind("<Control-C>", lambda e: self._copy_entry() or "break")
+        self.key_entry.bind("<Control-v>", lambda e: self._paste_key() or "break")
+        self.key_entry.bind("<Control-V>", lambda e: self._paste_key() or "break")
+        self.key_entry.bind("<Control-x>", lambda e: self._cut_entry() or "break")
+        self.key_entry.bind("<Control-X>", lambda e: self._cut_entry() or "break")
+
+    def _show_entry_menu(self, event):
+        """Show context menu"""
+        try:
+            self.entry_menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            self.entry_menu.grab_release()
+
+    def _select_all_entry(self):
+        """Select all text in entry"""
+        self.key_entry.select_range(0, "end")
+        self.key_entry.focus()
+
+    def _copy_entry(self):
+        """Copy entry content or selection"""
+        try:
+            # Try to get selection first
+            try:
+                selected = self.key_entry.selection_get()
+                if selected:
+                    self.clipboard_clear()
+                    self.clipboard_append(selected)
+                    return
+            except:
+                pass
+            # If no selection, copy all
+            content = self.key_entry.get()
+            if content:
+                self.clipboard_clear()
+                self.clipboard_append(content)
+        except:
+            pass
+
+    def _cut_entry(self):
+        """Cut selected text from entry"""
+        try:
+            # Get selection indices
+            if self.key_entry.selection_present():
+                selected = self.key_entry.selection_get()
+                if selected:
+                    self.clipboard_clear()
+                    self.clipboard_append(selected)
+                    # Delete selection
+                    self.key_entry.delete("sel.first", "sel.last")
+        except:
+            pass
+
+    def _darken(self, hex_color: str) -> str:
+        """Darken a hex color"""
+        hex_color = hex_color.lstrip('#')
+        rgb = tuple(int(hex_color[i:i + 2], 16) for i in (0, 2, 4))
+        darker = tuple(max(0, int(c * 0.8)) for c in rgb)
+        return f"#{darker[0]:02x}{darker[1]:02x}{darker[2]:02x}"
+
+    def get_key(self) -> str:
+        return self.key_entry.get()
+
+    def set_key(self, key: str):
+        self.key_entry.delete(0, "end")
+        self.key_entry.insert(0, key)
+
+    def set_status(self, connected: bool):
+        color = "#2ecc71" if connected else "#e74c3c"
+        self.status_indicator.configure(fg_color=color)
+
+
+# ==================== Main Application ====================
+
+class AIManagerApp(ctk.CTk):
+    """Main application window"""
+
+    PROVIDER_INFO = [
+        ("OpenAI GPT", "openai", "#10a37f", "https://platform.openai.com/api-keys",
+         "GPT-4o, GPT-4, GPT-3.5 Turbo"),
+        ("Anthropic Claude", "anthropic", "#cc785c", "https://console.anthropic.com/",
+         "Claude 3.5 Sonnet, Claude 3 Haiku"),
+        ("Gemini", "gemini", "#4285f4", "https://aistudio.google.com/apikey",
+         "Gemini 1.5 Flash, Gemini 1.5 Pro"),
+        ("DeepSeek", "deepseek", "#5436da", "https://platform.deepseek.com/",
+         "DeepSeek Chat, DeepSeek Coder"),
+        ("Groq", "groq", "#f55036", "https://console.groq.com/keys",
+         "Llama 3.3, Mixtral (Ultra fast!)"),
+        ("Mistral AI", "mistral", "#ff7000", "https://console.mistral.ai/api-keys/",
+         "Mistral Small, Mistral Large")
+    ]
+
+    def __init__(self):
+        super().__init__()
+
+        self.title(f"{APP_NAME} v{APP_VERSION}")
+        self.geometry("1200x800")
+        self.minsize(1000, 700)
+
+        # Config
+        self.config_file = "config.json"
+        self.config = self._load_config()
+        self.output_dir = self.config.get("output_dir", os.path.expanduser("~/Documents"))
+
+        # Initialize providers
+        self.providers: Dict[str, AIProvider] = {}
+        self._init_providers()
+
+        # UI variables
+        self.api_cards: Dict[str, APIKeyCard] = {}
+        self.provider_switches: Dict[str, ModernSwitch] = {}
+        self.is_processing = False
+
+        # Create UI
+        self._create_ui()
+
+        # Load config to UI
+        self._load_config_to_ui()
+
+        # Check connections in background
+        self.after(500, self._check_connections_background)
+
     def _load_config(self) -> dict:
-        """Загрузка конфигурации"""
+        """Load configuration (keys from secure storage)"""
         default_config = {
             "api_keys": {
-                "openai": "",
-                "anthropic": "",
-                "gemini": "",
-                "deepseek": "",
-                "groq": "",
-                "mistral": ""
+                "openai": "", "anthropic": "", "gemini": "",
+                "deepseek": "", "groq": "", "mistral": ""
             },
-            "telegram": {
-                "bot_token": "",
-                "chat_id": ""
-            },
-            "settings": {
-                "last_directory": "",
-                "theme": "default",
-                "language": "ru"
-            }
+            "output_dir": os.path.expanduser("~/Documents"),
+            "theme": "dark"
         }
 
+        # Migrate old plain config if exists
+        if os.path.exists(self.config_file):
+            secure_storage.migrate_from_plain_config(self.config_file)
+
+        # Load non-sensitive config
         if os.path.exists(self.config_file):
             try:
                 with open(self.config_file, 'r', encoding='utf-8') as f:
                     loaded = json.load(f)
-                    # Мержим с дефолтными значениями
                     for key in default_config:
-                        if key in loaded:
-                            if isinstance(default_config[key], dict):
-                                default_config[key].update(loaded[key])
-                            else:
-                                default_config[key] = loaded[key]
-                    return default_config
+                        if key in loaded and key != "api_keys":
+                            default_config[key] = loaded[key]
             except:
                 pass
 
+        # Load keys from secure storage
+        for provider in default_config["api_keys"]:
+            key = secure_storage.get_key(provider)
+            if key:
+                default_config["api_keys"][provider] = key
+
         return default_config
 
-    def _save_config(self) -> bool:
-        """Сохранение конфигурации"""
+    def _save_config(self):
+        """Save configuration (keys to secure storage)"""
+        # Save keys to secure storage
+        for provider, api_key in self.config["api_keys"].items():
+            secure_storage.set_key(provider, api_key)
+
+        # Save non-sensitive config (without keys)
+        safe_config = {
+            "output_dir": self.config.get("output_dir", ""),
+            "theme": self.config.get("theme", "dark"),
+            "api_keys": {}  # Empty - keys are in secure storage
+        }
         try:
             with open(self.config_file, 'w', encoding='utf-8') as f:
-                json.dump(self.config, f, ensure_ascii=False, indent=2)
-            return True
+                json.dump(safe_config, f, ensure_ascii=False, indent=2)
         except:
-            return False
+            pass
 
     def _init_providers(self):
-        """Инициализация провайдеров AI"""
+        """Initialize AI providers"""
         self.providers = {
             "OpenAI GPT": OpenAIProvider(self.config["api_keys"].get("openai", "")),
             "Anthropic Claude": AnthropicProvider(self.config["api_keys"].get("anthropic", "")),
@@ -548,804 +1252,1338 @@ class AIManagerApp:
             "Mistral AI": MistralProvider(self.config["api_keys"].get("mistral", ""))
         }
 
-    def _setup_styles(self):
-        """Настройка стилей"""
-        style = ttk.Style()
-
-        # Пробуем установить тему
-        available_themes = style.theme_names()
-        if 'clam' in available_themes:
-            style.theme_use('clam')
-
-        # Настройка стилей
-        style.configure("Title.TLabel", font=('Segoe UI', 14, 'bold'))
-        style.configure("Header.TLabel", font=('Segoe UI', 11, 'bold'))
-        style.configure("Status.TLabel", font=('Segoe UI', 9))
-        style.configure("Success.TLabel", foreground='green')
-        style.configure("Error.TLabel", foreground='red')
-        style.configure("Accent.TButton", font=('Segoe UI', 10, 'bold'))
-
     def _create_ui(self):
-        """Создание пользовательского интерфейса"""
-        # Создаем notebook (вкладки)
-        self.notebook = ttk.Notebook(self.root)
-        self.notebook.pack(fill='both', expand=True, padx=10, pady=10)
+        """Create main UI"""
+        # Configure grid
+        self.grid_columnconfigure(1, weight=1)
+        self.grid_rowconfigure(0, weight=1)
 
-        # Вкладка 1: Чат
+        # Left sidebar
+        self._create_sidebar()
+
+        # Main content
+        self._create_main_content()
+
+    def _create_sidebar(self):
+        """Create left sidebar"""
+        sidebar = ctk.CTkFrame(self, width=280, corner_radius=0)
+        sidebar.grid(row=0, column=0, sticky="nsew")
+        sidebar.grid_propagate(False)
+
+        # Logo/Title
+        logo_frame = ctk.CTkFrame(sidebar, fg_color="transparent")
+        logo_frame.pack(fill="x", padx=20, pady=20)
+
+        ctk.CTkLabel(
+            logo_frame, text=APP_NAME,
+            font=ctk.CTkFont(size=24, weight="bold")
+        ).pack(anchor="w")
+
+        ctk.CTkLabel(
+            logo_frame, text=f"v{APP_VERSION}",
+            font=ctk.CTkFont(size=12),
+            text_color="gray"
+        ).pack(anchor="w")
+
+        # Divider
+        ctk.CTkFrame(sidebar, height=2, fg_color="gray30").pack(fill="x", padx=20, pady=10)
+
+        # AI Selection section
+        ctk.CTkLabel(
+            sidebar, text="Active AI Providers",
+            font=ctk.CTkFont(size=14, weight="bold")
+        ).pack(anchor="w", padx=20, pady=(10, 15))
+
+        # Provider switches
+        switches_frame = ctk.CTkFrame(sidebar, fg_color="transparent")
+        switches_frame.pack(fill="x", padx=20)
+
+        for name, key, color, url, desc in self.PROVIDER_INFO:
+            switch = ModernSwitch(switches_frame, text=name, color=color)
+            switch.pack(fill="x", pady=4)
+            self.provider_switches[name] = switch
+
+        # Select/Deselect all buttons
+        btn_frame = ctk.CTkFrame(sidebar, fg_color="transparent")
+        btn_frame.pack(fill="x", padx=20, pady=15)
+
+        ctk.CTkButton(
+            btn_frame, text="Select All", height=32,
+            corner_radius=8, fg_color="gray30",
+            command=self._select_all_providers
+        ).pack(side="left", fill="x", expand=True, padx=(0, 5))
+
+        ctk.CTkButton(
+            btn_frame, text="Deselect All", height=32,
+            corner_radius=8, fg_color="gray30",
+            command=self._deselect_all_providers
+        ).pack(side="left", fill="x", expand=True, padx=(5, 0))
+
+        # Connection test buttons
+        test_frame = ctk.CTkFrame(sidebar, fg_color="transparent")
+        test_frame.pack(fill="x", padx=20, pady=(10, 0))
+
+        ctk.CTkButton(
+            test_frame, text="Test Connections",
+            height=36, corner_radius=8,
+            fg_color="#27ae60", hover_color="#1e8449",
+            command=self._test_all_connections
+        ).pack(fill="x", pady=(0, 5))
+
+        ctk.CTkButton(
+            test_frame, text="Send Test Query",
+            height=36, corner_radius=8,
+            fg_color="#3498db", hover_color="#2980b9",
+            command=self._send_test_query
+        ).pack(fill="x")
+
+        # Connection status display
+        self.connection_status_label = ctk.CTkLabel(
+            sidebar, text="Status: Not tested",
+            font=ctk.CTkFont(size=11),
+            text_color="gray"
+        )
+        self.connection_status_label.pack(anchor="w", padx=20, pady=(5, 0))
+
+        # Divider
+        ctk.CTkFrame(sidebar, height=2, fg_color="gray30").pack(fill="x", padx=20, pady=10)
+
+        # Output directory
+        ctk.CTkLabel(
+            sidebar, text="Output Directory",
+            font=ctk.CTkFont(size=14, weight="bold")
+        ).pack(anchor="w", padx=20, pady=(10, 10))
+
+        dir_frame = ctk.CTkFrame(sidebar, fg_color="transparent")
+        dir_frame.pack(fill="x", padx=20)
+
+        self.output_dir_label = ctk.CTkLabel(
+            dir_frame, text=self._truncate_path(self.output_dir),
+            font=ctk.CTkFont(size=11),
+            text_color="gray",
+            anchor="w"
+        )
+        self.output_dir_label.pack(fill="x")
+
+        ctk.CTkButton(
+            dir_frame, text="Change Directory",
+            height=32, corner_radius=8, fg_color="gray30",
+            command=self._select_output_dir
+        ).pack(fill="x", pady=(8, 0))
+
+        # Theme toggle at bottom
+        theme_frame = ctk.CTkFrame(sidebar, fg_color="transparent")
+        theme_frame.pack(side="bottom", fill="x", padx=20, pady=20)
+
+        ctk.CTkLabel(
+            theme_frame, text="Dark Mode",
+            font=ctk.CTkFont(size=12)
+        ).pack(side="left")
+
+        self.theme_switch = ctk.CTkSwitch(
+            theme_frame, text="",
+            command=self._toggle_theme
+        )
+        self.theme_switch.pack(side="right")
+        self.theme_switch.select()
+
+    def _create_main_content(self):
+        """Create main content area"""
+        main = ctk.CTkFrame(self, fg_color="transparent")
+        main.grid(row=0, column=1, sticky="nsew", padx=20, pady=20)
+        main.grid_rowconfigure(1, weight=1)
+        main.grid_columnconfigure(0, weight=1)
+
+        # Tabs
+        self.tabview = ctk.CTkTabview(main, corner_radius=12)
+        self.tabview.grid(row=0, column=0, sticky="nsew", rowspan=2)
+
+        # Create tabs
+        self.tab_chat = self.tabview.add("Chat")
+        self.tab_settings = self.tabview.add("API Settings")
+        self.tab_logs = self.tabview.add("Logs")
+
         self._create_chat_tab()
-
-        # Вкладка 2: Настройки API
-        self._create_api_tab()
-
-        # Вкладка 3: Пакетная обработка
-        self._create_batch_tab()
-
-        # Вкладка 4: Статус соединений
-        self._create_status_tab()
-
-        # Вкладка 5: История
-        self._create_history_tab()
-
-        # Вкладка 6: О программе
-        self._create_about_tab()
+        self._create_settings_tab()
+        self._create_logs_tab()
 
     def _create_chat_tab(self):
-        """Создание вкладки чата"""
-        self.chat_tab = ttk.Frame(self.notebook)
-        self.notebook.add(self.chat_tab, text="Чат")
+        """Create chat tab"""
+        self.tab_chat.grid_rowconfigure(1, weight=1)
+        self.tab_chat.grid_columnconfigure(0, weight=1)
 
-        # Верхняя панель - выбор нейросети
-        top_frame = ttk.Frame(self.chat_tab)
-        top_frame.pack(fill='x', padx=10, pady=5)
+        # Header
+        header = ctk.CTkFrame(self.tab_chat, fg_color="transparent")
+        header.grid(row=0, column=0, sticky="ew", pady=(0, 10))
 
-        ttk.Label(top_frame, text="Нейросеть:", style="Header.TLabel").pack(side='left', padx=(0, 10))
+        ctk.CTkLabel(
+            header, text="Ask AI",
+            font=ctk.CTkFont(size=20, weight="bold")
+        ).pack(side="left")
 
-        self.chat_network_var = tk.StringVar(value=self.SUPPORTED_NETWORKS[0])
-        network_combo = ttk.Combobox(
-            top_frame,
-            textvariable=self.chat_network_var,
-            values=self.SUPPORTED_NETWORKS,
-            state='readonly',
-            width=25
+        # Status label
+        self.status_label = ctk.CTkLabel(
+            header, text="Ready",
+            font=ctk.CTkFont(size=12),
+            text_color="gray"
         )
-        network_combo.pack(side='left', padx=(0, 20))
+        self.status_label.pack(side="right")
 
-        # Индикатор статуса
-        self.chat_status_label = ttk.Label(top_frame, text="", style="Status.TLabel")
-        self.chat_status_label.pack(side='left')
-
-        # Область чата
-        chat_frame = ttk.LabelFrame(self.chat_tab, text="Диалог", padding=10)
-        chat_frame.pack(fill='both', expand=True, padx=10, pady=5)
-
-        # Текстовое поле для чата
-        self.chat_display = scrolledtext.ScrolledText(
-            chat_frame,
-            wrap='word',
-            font=('Consolas', 10),
-            state='disabled'
+        # Chat display
+        self.chat_display = ctk.CTkTextbox(
+            self.tab_chat, corner_radius=12,
+            font=ctk.CTkFont(family="Consolas", size=12),
+            state="disabled"
         )
-        self.chat_display.pack(fill='both', expand=True)
+        self.chat_display.grid(row=1, column=0, sticky="nsew", pady=(0, 10))
 
-        # Настройка тегов для форматирования
-        self.chat_display.tag_configure('user', foreground='blue', font=('Consolas', 10, 'bold'))
-        self.chat_display.tag_configure('assistant', foreground='green')
-        self.chat_display.tag_configure('error', foreground='red')
-        self.chat_display.tag_configure('system', foreground='gray', font=('Consolas', 9, 'italic'))
+        # Input area
+        input_frame = ctk.CTkFrame(self.tab_chat, fg_color="transparent")
+        input_frame.grid(row=2, column=0, sticky="ew")
+        input_frame.grid_columnconfigure(0, weight=1)
 
-        # Поле ввода
-        input_frame = ttk.Frame(self.chat_tab)
-        input_frame.pack(fill='x', padx=10, pady=5)
-
-        self.chat_input = scrolledtext.ScrolledText(
-            input_frame,
-            wrap='word',
-            font=('Consolas', 10),
-            height=4
+        self.chat_input = ctk.CTkTextbox(
+            input_frame, height=100, corner_radius=12,
+            font=ctk.CTkFont(size=13)
         )
-        self.chat_input.pack(side='left', fill='x', expand=True, padx=(0, 10))
-        self.chat_input.bind('<Control-Return>', lambda e: self._send_chat_message())
+        self.chat_input.grid(row=0, column=0, sticky="ew", padx=(0, 10))
 
-        # Кнопки
-        btn_frame = ttk.Frame(input_frame)
-        btn_frame.pack(side='right', fill='y')
+        # Keyboard shortcuts
+        # Enter - send query, Shift+Enter - new line
+        self.chat_input.bind("<Return>", self._handle_enter_key)
+        self.chat_input.bind("<Shift-Return>", self._handle_shift_enter)
+        self.chat_input.bind("<Control-Return>", lambda e: self._send_query())
+        # Note: Ctrl+V works by default in CTkTextbox
 
-        ttk.Button(btn_frame, text="Отправить\n(Ctrl+Enter)",
-                   command=self._send_chat_message, style="Accent.TButton").pack(fill='x', pady=2)
-        ttk.Button(btn_frame, text="Очистить",
-                   command=self._clear_chat).pack(fill='x', pady=2)
+        # Context menu for input
+        self._create_context_menu()
 
-    def _create_api_tab(self):
-        """Создание вкладки настроек API"""
-        self.api_tab = ttk.Frame(self.notebook)
-        self.notebook.add(self.api_tab, text="Настройки API")
+        # Buttons
+        btn_frame = ctk.CTkFrame(input_frame, fg_color="transparent")
+        btn_frame.grid(row=0, column=1)
 
-        # Scrollable frame
-        canvas = tk.Canvas(self.api_tab)
-        scrollbar = ttk.Scrollbar(self.api_tab, orient="vertical", command=canvas.yview)
-        scrollable_frame = ttk.Frame(canvas)
+        self.send_btn = ctk.CTkButton(
+            btn_frame, text="Send", width=100, height=40,
+            corner_radius=10, font=ctk.CTkFont(size=14, weight="bold"),
+            command=self._send_query
+        )
+        self.send_btn.pack(pady=(0, 4))
 
-        scrollable_frame.bind(
-            "<Configure>",
-            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        ctk.CTkButton(
+            btn_frame, text="Paste", width=100, height=30,
+            corner_radius=10, fg_color="#2980b9", hover_color="#1f618d",
+            command=self._paste_from_clipboard
+        ).pack(pady=(0, 4))
+
+        ctk.CTkButton(
+            btn_frame, text="Clear", width=100, height=30,
+            corner_radius=10, fg_color="gray30",
+            command=self._clear_chat
+        ).pack(pady=(0, 4))
+
+        ctk.CTkButton(
+            btn_frame, text="New Chat", width=100, height=30,
+            corner_radius=10, fg_color="#e74c3c", hover_color="#c0392b",
+            command=self._new_chat
+        ).pack(pady=(0, 4))
+
+        ctk.CTkButton(
+            btn_frame, text="Save Chat", width=100, height=30,
+            corner_radius=10, fg_color="#9b59b6", hover_color="#8e44ad",
+            command=self._save_chat_to_file
+        ).pack()
+
+        # Progress bar
+        self.progress = ctk.CTkProgressBar(self.tab_chat, mode="indeterminate", height=3)
+
+        # ===== Branches Panel =====
+        branches_frame = ctk.CTkFrame(self.tab_chat, corner_radius=12)
+        branches_frame.grid(row=4, column=0, sticky="ew", pady=(10, 0))
+
+        # Branches header
+        branches_header = ctk.CTkFrame(branches_frame, fg_color="transparent")
+        branches_header.pack(fill="x", padx=10, pady=(10, 5))
+
+        ctk.CTkLabel(
+            branches_header, text="Conversation Branches",
+            font=ctk.CTkFont(size=14, weight="bold")
+        ).pack(side="left")
+
+        # Current branch indicator
+        self.current_branch_label = ctk.CTkLabel(
+            branches_header, text="Current: None",
+            font=ctk.CTkFont(size=11),
+            text_color="gray"
+        )
+        self.current_branch_label.pack(side="right")
+
+        # Branches list (combobox)
+        branches_controls = ctk.CTkFrame(branches_frame, fg_color="transparent")
+        branches_controls.pack(fill="x", padx=10, pady=(0, 10))
+
+        self.branches_combo = ctk.CTkComboBox(
+            branches_controls, width=250, height=32,
+            values=["No saved branches"],
+            state="readonly",
+            command=self._on_branch_selected
+        )
+        self.branches_combo.pack(side="left", padx=(0, 10))
+
+        # Branch buttons
+        ctk.CTkButton(
+            branches_controls, text="Save", width=70, height=32,
+            corner_radius=8, fg_color="#27ae60", hover_color="#1e8449",
+            command=self._save_branch
+        ).pack(side="left", padx=(0, 5))
+
+        ctk.CTkButton(
+            branches_controls, text="Load", width=70, height=32,
+            corner_radius=8, fg_color="#3498db", hover_color="#2980b9",
+            command=self._load_branch
+        ).pack(side="left", padx=(0, 5))
+
+        ctk.CTkButton(
+            branches_controls, text="Delete", width=70, height=32,
+            corner_radius=8, fg_color="#e74c3c", hover_color="#c0392b",
+            command=self._delete_branch
+        ).pack(side="left", padx=(0, 5))
+
+        ctk.CTkButton(
+            branches_controls, text="Refresh", width=70, height=32,
+            corner_radius=8, fg_color="gray30",
+            command=self._refresh_branches_list
+        ).pack(side="left")
+
+        # Load initial branches list
+        self._refresh_branches_list()
+
+    def _create_settings_tab(self):
+        """Create settings tab"""
+        # Scrollable frame for API cards
+        scroll = ctk.CTkScrollableFrame(self.tab_settings, corner_radius=0)
+        scroll.pack(fill="both", expand=True)
+
+        ctk.CTkLabel(
+            scroll, text="API Keys Configuration",
+            font=ctk.CTkFont(size=20, weight="bold")
+        ).pack(anchor="w", pady=(0, 15))
+
+        # API cards grid
+        cards_frame = ctk.CTkFrame(scroll, fg_color="transparent")
+        cards_frame.pack(fill="x")
+
+        for i, (name, key, color, url, desc) in enumerate(self.PROVIDER_INFO):
+            card = APIKeyCard(cards_frame, name, color, url, desc)
+            card.pack(fill="x", pady=8)
+            self.api_cards[key] = card
+
+        # Save button
+        btn_frame = ctk.CTkFrame(scroll, fg_color="transparent")
+        btn_frame.pack(fill="x", pady=20)
+
+        ctk.CTkButton(
+            btn_frame, text="Save Settings", height=45,
+            corner_radius=10, font=ctk.CTkFont(size=14, weight="bold"),
+            command=self._save_settings
+        ).pack(side="left", padx=(0, 10))
+
+        ctk.CTkButton(
+            btn_frame, text="Test Connections", height=45,
+            corner_radius=10, fg_color="gray30",
+            command=self._check_all_connections
+        ).pack(side="left")
+
+    def _create_logs_tab(self):
+        """Create logs tab"""
+        self.tab_logs.grid_rowconfigure(1, weight=1)
+        self.tab_logs.grid_columnconfigure(0, weight=1)
+
+        # Header
+        header = ctk.CTkFrame(self.tab_logs, fg_color="transparent")
+        header.grid(row=0, column=0, sticky="ew", pady=(0, 10))
+
+        ctk.CTkLabel(
+            header, text="Logs & History",
+            font=ctk.CTkFont(size=20, weight="bold")
+        ).pack(side="left")
+
+        # Stats label
+        self.logs_stats_label = ctk.CTkLabel(
+            header, text="Responses: 0 | Errors: 0",
+            font=ctk.CTkFont(size=12),
+            text_color="gray"
+        )
+        self.logs_stats_label.pack(side="right")
+
+        # Log type selector
+        selector_frame = ctk.CTkFrame(self.tab_logs, fg_color="transparent")
+        selector_frame.grid(row=1, column=0, sticky="ew", pady=(0, 10))
+
+        self.log_type_var = ctk.StringVar(value="responses")
+
+        ctk.CTkRadioButton(
+            selector_frame, text="Responses",
+            variable=self.log_type_var, value="responses",
+            command=self._refresh_logs_display
+        ).pack(side="left", padx=(0, 20))
+
+        ctk.CTkRadioButton(
+            selector_frame, text="Errors",
+            variable=self.log_type_var, value="errors",
+            command=self._refresh_logs_display
+        ).pack(side="left", padx=(0, 20))
+
+        ctk.CTkRadioButton(
+            selector_frame, text="All",
+            variable=self.log_type_var, value="all",
+            command=self._refresh_logs_display
+        ).pack(side="left")
+
+        # Logs display
+        self.logs_display = ctk.CTkTextbox(
+            self.tab_logs, corner_radius=12,
+            font=ctk.CTkFont(family="Consolas", size=11),
+            state="disabled"
+        )
+        self.logs_display.grid(row=2, column=0, sticky="nsew", pady=(0, 10))
+
+        # Context menu for logs
+        self.logs_menu = tk.Menu(self, tearoff=0)
+        self.logs_menu.add_command(label="Copy", command=self._copy_logs_selection, accelerator="Ctrl+C")
+        self.logs_menu.add_command(label="Copy All", command=self._copy_all_logs)
+        self.logs_menu.add_separator()
+        self.logs_menu.add_command(label="Select All", command=self._select_all_logs, accelerator="Ctrl+A")
+
+        # Bind right-click and keyboard shortcuts for logs
+        self.logs_display.bind("<Button-3>", self._show_logs_menu)
+        self._bind_clipboard_shortcuts(self.logs_display, readonly=True)
+
+        # Buttons
+        btn_frame = ctk.CTkFrame(self.tab_logs, fg_color="transparent")
+        btn_frame.grid(row=3, column=0, sticky="ew")
+
+        ctk.CTkButton(
+            btn_frame, text="Refresh", height=36,
+            corner_radius=8, fg_color="gray30",
+            command=self._refresh_logs_display
+        ).pack(side="left", padx=(0, 10))
+
+        ctk.CTkButton(
+            btn_frame, text="Export Logs", height=36,
+            corner_radius=8, fg_color="#27ae60", hover_color="#1e8449",
+            command=self._export_logs
+        ).pack(side="left", padx=(0, 10))
+
+        ctk.CTkButton(
+            btn_frame, text="Export Responses", height=36,
+            corner_radius=8, fg_color="#3498db", hover_color="#2980b9",
+            command=lambda: self._export_logs("responses")
+        ).pack(side="left", padx=(0, 10))
+
+        ctk.CTkButton(
+            btn_frame, text="Export Errors", height=36,
+            corner_radius=8, fg_color="#e74c3c", hover_color="#c0392b",
+            command=lambda: self._export_logs("errors")
+        ).pack(side="left", padx=(0, 10))
+
+        ctk.CTkButton(
+            btn_frame, text="Clear Logs", height=36,
+            corner_radius=8, fg_color="gray30",
+            command=self._clear_logs
+        ).pack(side="right")
+
+    def _refresh_logs_display(self):
+        """Refresh logs display"""
+        log_type = self.log_type_var.get()
+
+        self.logs_display.configure(state="normal")
+        self.logs_display.delete("1.0", "end")
+
+        responses = app_logger.get_responses_log()
+        errors = app_logger.get_errors_log()
+
+        # Update stats
+        self.logs_stats_label.configure(
+            text=f"Responses: {len(responses)} | Errors: {len(errors)}"
         )
 
-        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
-        canvas.configure(yscrollcommand=scrollbar.set)
+        if log_type in ["all", "responses"]:
+            self.logs_display.insert("end", "=" * 50 + "\n")
+            self.logs_display.insert("end", "RESPONSES LOG\n")
+            self.logs_display.insert("end", "=" * 50 + "\n\n")
 
-        canvas.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
+            for entry in reversed(responses):  # Newest first
+                self.logs_display.insert("end", f"[{entry['timestamp'][:19]}] {entry['provider']}\n")
+                self.logs_display.insert("end", f"Q: {entry['question'][:100]}...\n")
+                status = "OK" if entry['success'] else "FAIL"
+                self.logs_display.insert("end", f"Status: {status} | Time: {entry['elapsed_time']:.2f}s\n")
+                self.logs_display.insert("end", f"Response: {entry['response'][:200]}...\n")
+                self.logs_display.insert("end", "-" * 40 + "\n\n")
 
-        # Привязка прокрутки колесом мыши
-        def _on_mousewheel(event):
-            canvas.yview_scroll(int(-1*(event.delta/120)), "units")
-        canvas.bind_all("<MouseWheel>", _on_mousewheel)
+        if log_type in ["all", "errors"]:
+            self.logs_display.insert("end", "\n" + "=" * 50 + "\n")
+            self.logs_display.insert("end", "ERRORS LOG\n")
+            self.logs_display.insert("end", "=" * 50 + "\n\n")
 
-        # API настройки для каждой нейросети
-        api_configs = [
-            ("OpenAI GPT", "openai", "https://platform.openai.com/api-keys",
-             "Модели: GPT-4o, GPT-4, GPT-3.5-turbo"),
-            ("Anthropic Claude", "anthropic", "https://console.anthropic.com/",
-             "Модели: Claude 3.5 Sonnet, Claude 3 Haiku"),
-            ("Gemini", "gemini", "https://aistudio.google.com/apikey",
-             "Модели: Gemini 1.5 Flash, Gemini 1.5 Pro"),
-            ("DeepSeek", "deepseek", "https://platform.deepseek.com/",
-             "Модели: DeepSeek-Chat, DeepSeek-Coder"),
-            ("Groq", "groq", "https://console.groq.com/keys",
-             "Модели: Llama 3.3, Mixtral (быстрые!)"),
-            ("Mistral AI", "mistral", "https://console.mistral.ai/api-keys/",
-             "Модели: Mistral Small, Mistral Large")
-        ]
+            for entry in reversed(errors):  # Newest first
+                self.logs_display.insert("end", f"[{entry['timestamp'][:19]}] {entry['provider']}\n")
+                self.logs_display.insert("end", f"Error: {entry['error']}\n")
+                if entry['details']:
+                    self.logs_display.insert("end", f"Details: {entry['details']}\n")
+                self.logs_display.insert("end", "-" * 40 + "\n\n")
 
-        for name, key_name, url, description in api_configs:
-            frame = ttk.LabelFrame(scrollable_frame, text=name, padding=10)
-            frame.pack(fill='x', padx=10, pady=5)
+        self.logs_display.configure(state="disabled")
 
-            # Описание
-            ttk.Label(frame, text=description, font=('Segoe UI', 8, 'italic'),
-                      foreground='gray').grid(row=0, column=0, columnspan=3, sticky='w', pady=(0, 5))
+    def _export_logs(self, log_type: str = "all"):
+        """Export logs to file"""
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        default_name = f"ai_manager_logs_{log_type}_{timestamp}.txt"
 
-            # API ключ
-            ttk.Label(frame, text="API ключ:").grid(row=1, column=0, sticky='w')
+        filepath = filedialog.asksaveasfilename(
+            title="Export Logs",
+            defaultextension=".txt",
+            initialfile=default_name,
+            filetypes=[("Text files", "*.txt"), ("All files", "*.*")]
+        )
 
-            key_var = tk.StringVar()
-            self.api_key_vars[key_name] = key_var
+        if filepath:
+            if app_logger.export_logs(filepath, log_type):
+                messagebox.showinfo("Success", f"Logs exported to:\n{filepath}")
+                self.status_label.configure(text=f"Logs exported")
+            else:
+                messagebox.showerror("Error", "Failed to export logs")
 
-            entry = ttk.Entry(frame, textvariable=key_var, width=60, show="*")
-            entry.grid(row=1, column=1, padx=5, pady=2)
+    def _clear_logs(self):
+        """Clear in-memory logs"""
+        if messagebox.askyesno("Confirm", "Clear all in-memory logs?"):
+            app_logger.clear_logs()
+            self._refresh_logs_display()
+            self.status_label.configure(text="Logs cleared")
 
-            # Кнопки
-            btn_frame = ttk.Frame(frame)
-            btn_frame.grid(row=1, column=2, padx=5)
+    def _test_all_connections(self):
+        """Test all connections with detailed status"""
+        self.connection_status_label.configure(text="Testing connections...")
 
-            ttk.Button(btn_frame, text="Показать", width=10,
-                       command=lambda e=entry: self._toggle_password(e)).pack(side='left', padx=2)
-            ttk.Button(btn_frame, text="Получить ключ", width=12,
-                       command=lambda u=url: webbrowser.open(u)).pack(side='left', padx=2)
+        thread = threading.Thread(target=self._test_connections_thread, daemon=True)
+        thread.start()
 
-        # Telegram настройки
-        telegram_frame = ttk.LabelFrame(scrollable_frame, text="Telegram (опционально)", padding=10)
-        telegram_frame.pack(fill='x', padx=10, pady=5)
-
-        ttk.Label(telegram_frame, text="Токен бота:").grid(row=0, column=0, sticky='w')
-        self.telegram_token_var = tk.StringVar()
-        ttk.Entry(telegram_frame, textvariable=self.telegram_token_var, width=60).grid(
-            row=0, column=1, padx=5, pady=2)
-
-        ttk.Label(telegram_frame, text="Chat ID:").grid(row=1, column=0, sticky='w')
-        self.telegram_chat_id_var = tk.StringVar()
-        ttk.Entry(telegram_frame, textvariable=self.telegram_chat_id_var, width=60).grid(
-            row=1, column=1, padx=5, pady=2)
-
-        # Кнопка сохранения
-        save_frame = ttk.Frame(scrollable_frame)
-        save_frame.pack(fill='x', padx=10, pady=20)
-
-        ttk.Button(save_frame, text="Сохранить настройки",
-                   command=self._save_api_settings, style="Accent.TButton").pack(side='left', padx=5)
-        ttk.Button(save_frame, text="Проверить все соединения",
-                   command=self._check_all_connections).pack(side='left', padx=5)
-
-    def _create_batch_tab(self):
-        """Создание вкладки пакетной обработки"""
-        self.batch_tab = ttk.Frame(self.notebook)
-        self.notebook.add(self.batch_tab, text="Пакетная обработка")
-
-        # Выбор файла
-        file_frame = ttk.LabelFrame(self.batch_tab, text="Файл с вопросом", padding=10)
-        file_frame.pack(fill='x', padx=10, pady=5)
-
-        self.file_path_var = tk.StringVar()
-        ttk.Entry(file_frame, textvariable=self.file_path_var, width=80).pack(side='left', fill='x', expand=True, padx=(0, 10))
-        ttk.Button(file_frame, text="Выбрать...", command=self._select_file).pack(side='left')
-
-        # Директория сохранения
-        save_frame = ttk.LabelFrame(self.batch_tab, text="Директория сохранения", padding=10)
-        save_frame.pack(fill='x', padx=10, pady=5)
-
-        self.save_path_var = tk.StringVar()
-        ttk.Entry(save_frame, textvariable=self.save_path_var, width=80).pack(side='left', fill='x', expand=True, padx=(0, 10))
-        ttk.Button(save_frame, text="Выбрать...", command=self._select_save_dir).pack(side='left')
-
-        # Выбор нейросетей
-        networks_frame = ttk.LabelFrame(self.batch_tab, text="Нейросети для запроса", padding=10)
-        networks_frame.pack(fill='x', padx=10, pady=5)
-
-        for i, name in enumerate(self.SUPPORTED_NETWORKS):
-            var = tk.BooleanVar(value=True)
-            self.network_vars[name] = var
-            cb = ttk.Checkbutton(networks_frame, text=name, variable=var)
-            cb.grid(row=i // 3, column=i % 3, sticky='w', padx=20, pady=2)
-
-        # Кнопки управления
-        button_frame = ttk.Frame(self.batch_tab)
-        button_frame.pack(fill='x', padx=10, pady=10)
-
-        ttk.Button(button_frame, text="Отправить запросы",
-                   command=self._send_batch_requests, style="Accent.TButton").pack(side='left', padx=5)
-        ttk.Button(button_frame, text="Очистить лог",
-                   command=self._clear_batch_log).pack(side='left', padx=5)
-
-        # Прогресс
-        self.batch_progress = ttk.Progressbar(self.batch_tab, mode='indeterminate')
-        self.batch_progress.pack(fill='x', padx=10, pady=5)
-
-        # Лог
-        log_frame = ttk.LabelFrame(self.batch_tab, text="Лог выполнения", padding=10)
-        log_frame.pack(fill='both', expand=True, padx=10, pady=5)
-
-        self.batch_log = scrolledtext.ScrolledText(log_frame, wrap='word', height=15)
-        self.batch_log.pack(fill='both', expand=True)
-
-    def _create_status_tab(self):
-        """Создание вкладки статуса соединений"""
-        self.status_tab = ttk.Frame(self.notebook)
-        self.notebook.add(self.status_tab, text="Статус")
-
-        # Заголовок
-        ttk.Label(self.status_tab, text="Статус подключения к API",
-                  style="Title.TLabel").pack(pady=20)
-
-        # Статусы
-        status_frame = ttk.Frame(self.status_tab)
-        status_frame.pack(fill='both', expand=True, padx=20)
-
-        for i, name in enumerate(self.SUPPORTED_NETWORKS):
-            row_frame = ttk.Frame(status_frame)
-            row_frame.pack(fill='x', pady=10)
-
-            # Название
-            ttk.Label(row_frame, text=name, width=20, anchor='w',
-                      font=('Segoe UI', 11)).pack(side='left', padx=10)
-
-            # Индикатор (Canvas)
-            canvas = tk.Canvas(row_frame, width=24, height=24, highlightthickness=0)
-            canvas.pack(side='left', padx=10)
-            canvas.create_oval(2, 2, 22, 22, fill='gray', outline='')
-            self.status_labels[name] = canvas
-
-            # Текст статуса
-            status_var = tk.StringVar(value="Не проверено")
-            self.status_text_vars[name] = status_var
-            ttk.Label(row_frame, textvariable=status_var, width=20).pack(side='left', padx=10)
-
-            # Кнопка проверки
-            ttk.Button(row_frame, text="Проверить", width=12,
-                       command=lambda n=name: self._check_single_connection(n)).pack(side='left', padx=10)
-
-        # Кнопка проверки всех
-        ttk.Button(self.status_tab, text="Проверить все соединения",
-                   command=self._check_all_connections, style="Accent.TButton").pack(pady=30)
-
-    def _create_history_tab(self):
-        """Создание вкладки истории"""
-        self.history_tab = ttk.Frame(self.notebook)
-        self.notebook.add(self.history_tab, text="История")
-
-        # Панель управления
-        control_frame = ttk.Frame(self.history_tab)
-        control_frame.pack(fill='x', padx=10, pady=5)
-
-        ttk.Button(control_frame, text="Обновить", command=self._load_history).pack(side='left', padx=5)
-        ttk.Button(control_frame, text="Отправить в Telegram",
-                   command=self._send_to_telegram).pack(side='left', padx=5)
-
-        # Список файлов
-        list_frame = ttk.Frame(self.history_tab)
-        list_frame.pack(fill='both', expand=True, padx=10, pady=5)
-
-        # Левая панель - список
-        left_frame = ttk.LabelFrame(list_frame, text="Файлы", padding=5)
-        left_frame.pack(side='left', fill='y', padx=(0, 5))
-
-        self.history_listbox = tk.Listbox(left_frame, width=40, height=20)
-        scrollbar = ttk.Scrollbar(left_frame, command=self.history_listbox.yview)
-        self.history_listbox.configure(yscrollcommand=scrollbar.set)
-        self.history_listbox.pack(side='left', fill='y')
-        scrollbar.pack(side='right', fill='y')
-        self.history_listbox.bind('<<ListboxSelect>>', self._on_history_select)
-
-        # Правая панель - содержимое
-        right_frame = ttk.LabelFrame(list_frame, text="Содержимое", padding=5)
-        right_frame.pack(side='left', fill='both', expand=True)
-
-        self.history_text = scrolledtext.ScrolledText(right_frame, wrap='word')
-        self.history_text.pack(fill='both', expand=True)
-
-    def _create_about_tab(self):
-        """Создание вкладки 'О программе'"""
-        self.about_tab = ttk.Frame(self.notebook)
-        self.notebook.add(self.about_tab, text="О программе")
-
-        # Центрированный контент
-        center_frame = ttk.Frame(self.about_tab)
-        center_frame.place(relx=0.5, rely=0.5, anchor='center')
-
-        ttk.Label(center_frame, text=f"{APP_NAME}",
-                  font=('Segoe UI', 24, 'bold')).pack(pady=10)
-        ttk.Label(center_frame, text=f"Версия {APP_VERSION}",
-                  font=('Segoe UI', 14)).pack(pady=5)
-
-        ttk.Label(center_frame, text="Менеджер нейросетей для Windows",
-                  font=('Segoe UI', 11)).pack(pady=20)
-
-        # Поддерживаемые нейросети
-        networks_text = "Поддерживаемые нейросети:\n" + "\n".join(f"  - {n}" for n in self.SUPPORTED_NETWORKS)
-        ttk.Label(center_frame, text=networks_text,
-                  font=('Segoe UI', 10), justify='left').pack(pady=20)
-
-        ttk.Label(center_frame, text="2024-2025 DeskTop AI Team",
-                  font=('Segoe UI', 9, 'italic'), foreground='gray').pack(pady=20)
-
-    # ==================== Методы работы ====================
-
-    def _toggle_password(self, entry):
-        """Переключение видимости пароля"""
-        current = entry.cget('show')
-        entry.config(show='' if current == '*' else '*')
-
-    def _load_config_to_ui(self):
-        """Загрузка конфигурации в UI"""
-        # API ключи
-        key_mapping = {
-            "openai": "openai",
-            "anthropic": "anthropic",
-            "gemini": "gemini",
-            "deepseek": "deepseek",
-            "groq": "groq",
-            "mistral": "mistral"
-        }
-
-        for ui_key, config_key in key_mapping.items():
-            if ui_key in self.api_key_vars:
-                self.api_key_vars[ui_key].set(self.config["api_keys"].get(config_key, ""))
-
-        # Telegram
-        self.telegram_token_var.set(self.config["telegram"].get("bot_token", ""))
-        self.telegram_chat_id_var.set(self.config["telegram"].get("chat_id", ""))
-
-        # Последняя директория
-        if self.config["settings"].get("last_directory"):
-            self.save_path_var.set(self.config["settings"]["last_directory"])
-
-    def _save_api_settings(self):
-        """Сохранение настроек API"""
-        # API ключи
-        key_mapping = {
-            "openai": "openai",
-            "anthropic": "anthropic",
-            "gemini": "gemini",
-            "deepseek": "deepseek",
-            "groq": "groq",
-            "mistral": "mistral"
-        }
-
-        for ui_key, config_key in key_mapping.items():
-            if ui_key in self.api_key_vars:
-                self.config["api_keys"][config_key] = self.api_key_vars[ui_key].get()
-
-        # Telegram
-        self.config["telegram"]["bot_token"] = self.telegram_token_var.get()
-        self.config["telegram"]["chat_id"] = self.telegram_chat_id_var.get()
-
-        # Обновляем провайдеры
+    def _test_connections_thread(self):
+        """Thread for testing connections"""
         self._update_providers()
 
-        # Сохраняем
-        if self._save_config():
-            messagebox.showinfo("Успех", "Настройки сохранены!")
-        else:
-            messagebox.showerror("Ошибка", "Не удалось сохранить настройки")
+        results = {}
+        connected = 0
+        total = 0
 
-    def _update_providers(self):
-        """Обновление API ключей в провайдерах"""
-        provider_keys = {
-            "OpenAI GPT": self.api_key_vars.get("openai", tk.StringVar()).get(),
-            "Anthropic Claude": self.api_key_vars.get("anthropic", tk.StringVar()).get(),
-            "Gemini": self.api_key_vars.get("gemini", tk.StringVar()).get(),
-            "DeepSeek": self.api_key_vars.get("deepseek", tk.StringVar()).get(),
-            "Groq": self.api_key_vars.get("groq", tk.StringVar()).get(),
-            "Mistral AI": self.api_key_vars.get("mistral", tk.StringVar()).get()
+        key_map = {
+            "openai": "OpenAI GPT",
+            "anthropic": "Anthropic Claude",
+            "gemini": "Gemini",
+            "deepseek": "DeepSeek",
+            "groq": "Groq",
+            "mistral": "Mistral AI"
         }
 
-        for name, key in provider_keys.items():
+        for key, name in key_map.items():
+            if name in self.providers and self.provider_switches[name].get():
+                total += 1
+                status = self.providers[name].test_connection()
+                results[name] = status
+
+                if status:
+                    connected += 1
+
+                # Log the test
+                app_logger.log_connection_test(name, status)
+
+                # Update UI
+                self.after(0, lambda n=name, s=status: self._update_connection_status(n, s))
+                self.after(0, lambda k=key, s=status: self._update_card_status(k, s))
+
+        # Update status label
+        status_text = f"Connected: {connected}/{total}"
+        self.after(0, lambda: self.connection_status_label.configure(
+            text=status_text,
+            text_color="#2ecc71" if connected == total else "#e74c3c"
+        ))
+
+    def _send_test_query(self):
+        """Send a simple test query to all selected providers"""
+        selected = [name for name, switch in self.provider_switches.items() if switch.get()]
+
+        if not selected:
+            messagebox.showwarning("Warning", "Please select at least one AI provider!")
+            return
+
+        # Simple test question
+        test_question = "Hello! Please respond with 'OK' if you can receive this message."
+
+        self.connection_status_label.configure(text="Sending test query...")
+        self._add_to_chat(f"[TEST] Sending test query to {len(selected)} providers...\n", "system")
+
+        self._update_providers()
+
+        thread = threading.Thread(
+            target=self._process_test_query,
+            args=(test_question, selected),
+            daemon=True
+        )
+        thread.start()
+
+    def _process_test_query(self, question: str, providers: List[str]):
+        """Process test query"""
+        results = {}
+
+        with ThreadPoolExecutor(max_workers=len(providers)) as executor:
+            futures = {}
+            for name in providers:
+                if name in self.providers:
+                    future = executor.submit(self.providers[name].query, question)
+                    futures[future] = name
+
+            for future in as_completed(futures):
+                name = futures[future]
+                try:
+                    response, elapsed = future.result()
+                    success = not response.startswith("Error")
+                    results[name] = (success, elapsed)
+
+                    # Log response
+                    app_logger.log_response(name, question, response, elapsed, success)
+
+                    # Show result
+                    status = "OK" if success else "FAIL"
+                    self.after(0, lambda n=name, s=status, t=elapsed:
+                        self._add_to_chat(f"[TEST] {n}: {s} ({t:.2f}s)\n", "response"))
+
+                except Exception as e:
+                    results[name] = (False, 0)
+                    app_logger.log_error(name, str(e), "Test query failed")
+                    self.after(0, lambda n=name, e=str(e):
+                        self._add_to_chat(f"[TEST] {n}: ERROR - {e}\n", "error"))
+
+        # Summary
+        success_count = sum(1 for v in results.values() if v[0])
+        total = len(results)
+
+        self.after(0, lambda: self._add_to_chat(
+            f"\n[TEST COMPLETE] {success_count}/{total} providers responded successfully\n\n",
+            "system"
+        ))
+        self.after(0, lambda: self.connection_status_label.configure(
+            text=f"Test: {success_count}/{total} OK",
+            text_color="#2ecc71" if success_count == total else "#e74c3c"
+        ))
+
+    # ==================== Actions ====================
+
+    def _select_all_providers(self):
+        for switch in self.provider_switches.values():
+            switch.set(True)
+
+    def _deselect_all_providers(self):
+        for switch in self.provider_switches.values():
+            switch.set(False)
+
+    def _select_output_dir(self):
+        directory = filedialog.askdirectory(
+            title="Select Output Directory",
+            initialdir=self.output_dir
+        )
+        if directory:
+            self.output_dir = directory
+            self.config["output_dir"] = directory
+            self._save_config()
+            self.output_dir_label.configure(text=self._truncate_path(directory))
+
+    def _truncate_path(self, path: str, max_len: int = 35) -> str:
+        if len(path) <= max_len:
+            return path
+        return "..." + path[-(max_len - 3):]
+
+    def _toggle_theme(self):
+        mode = "dark" if self.theme_switch.get() else "light"
+        ctk.set_appearance_mode(mode)
+        self.config["theme"] = mode
+        self._save_config()
+
+    def _load_config_to_ui(self):
+        """Load config to UI"""
+        for key, card in self.api_cards.items():
+            card.set_key(self.config["api_keys"].get(key, ""))
+
+        # Theme
+        if self.config.get("theme") == "light":
+            self.theme_switch.deselect()
+            ctk.set_appearance_mode("light")
+
+    def _save_settings(self):
+        """Save API settings securely"""
+        for key, card in self.api_cards.items():
+            api_key = card.get_key()
+            self.config["api_keys"][key] = api_key
+            # Save directly to secure storage
+            secure_storage.set_key(key, api_key)
+
+        self._update_providers()
+        self._save_config()
+
+        storage_type = "system keyring" if KEYRING_AVAILABLE else "encrypted file"
+        messagebox.showinfo("Success", f"Settings saved securely!\n(Keys stored in {storage_type})")
+        self._check_all_connections()
+
+    def _update_providers(self):
+        """Update provider API keys"""
+        key_map = {
+            "OpenAI GPT": "openai",
+            "Anthropic Claude": "anthropic",
+            "Gemini": "gemini",
+            "DeepSeek": "deepseek",
+            "Groq": "groq",
+            "Mistral AI": "mistral"
+        }
+        for name, key in key_map.items():
             if name in self.providers:
-                self.providers[name].api_key = key
+                self.providers[name].api_key = self.config["api_keys"].get(key, "")
 
     def _check_connections_background(self):
-        """Фоновая проверка соединений"""
+        """Check connections in background"""
+        thread = threading.Thread(target=self._check_all_connections_thread, daemon=True)
+        thread.start()
+
+    def _check_all_connections(self):
+        """Check all connections"""
         thread = threading.Thread(target=self._check_all_connections_thread, daemon=True)
         thread.start()
 
     def _check_all_connections_thread(self):
-        """Поток проверки всех соединений"""
+        """Thread for checking connections"""
         self._update_providers()
-        for name in self.SUPPORTED_NETWORKS:
-            self._check_single_connection_internal(name)
-            time.sleep(0.5)
 
-    def _check_all_connections(self):
-        """Проверка всех соединений с UI"""
-        self._add_batch_log("Проверяем соединения...")
-        thread = threading.Thread(target=self._check_all_connections_thread, daemon=True)
-        thread.start()
-
-    def _check_single_connection(self, name: str):
-        """Проверка одного соединения"""
-        thread = threading.Thread(
-            target=self._check_single_connection_internal,
-            args=(name,),
-            daemon=True
-        )
-        thread.start()
-
-    def _check_single_connection_internal(self, name: str):
-        """Внутренняя проверка соединения"""
-        if name not in self.providers:
-            return
-
-        # Обновляем ключ
-        key_mapping = {
-            "OpenAI GPT": "openai",
-            "Anthropic Claude": "anthropic",
-            "Gemini": "gemini",
-            "DeepSeek": "deepseek",
-            "Groq": "groq",
-            "Mistral AI": "mistral"
+        key_map = {
+            "openai": "OpenAI GPT",
+            "anthropic": "Anthropic Claude",
+            "gemini": "Gemini",
+            "deepseek": "DeepSeek",
+            "groq": "Groq",
+            "mistral": "Mistral AI"
         }
 
-        if key_mapping[name] in self.api_key_vars:
-            self.providers[name].api_key = self.api_key_vars[key_mapping[name]].get()
+        for key, name in key_map.items():
+            if name in self.providers:
+                status = self.providers[name].test_connection()
 
-        # Проверяем
-        status = self.providers[name].test_connection()
-        self.connection_status[name] = status
+                # Update UI
+                self.after(0, lambda n=name, s=status: self._update_connection_status(n, s))
+                self.after(0, lambda k=key, s=status: self._update_card_status(k, s))
 
-        # Обновляем UI
-        self.root.after(0, lambda: self._update_status_ui(name, status))
+    def _update_connection_status(self, name: str, status: bool):
+        if name in self.provider_switches:
+            self.provider_switches[name].set_status(status)
 
-    def _update_status_ui(self, name: str, status: bool):
-        """Обновление UI статуса"""
-        if name in self.status_labels:
-            canvas = self.status_labels[name]
-            canvas.delete("all")
+    def _update_card_status(self, key: str, status: bool):
+        if key in self.api_cards:
+            self.api_cards[key].set_status(status)
 
-            if status:
-                canvas.create_oval(2, 2, 22, 22, fill='green', outline='')
-                self.status_text_vars[name].set("Подключено")
-            else:
-                canvas.create_oval(2, 2, 22, 22, fill='red', outline='')
-                self.status_text_vars[name].set("Ошибка")
+    def _handle_enter_key(self, event):
+        """Handle Enter key - send query"""
+        self._send_query()
+        return "break"  # Prevent default newline
 
-    # ==================== Чат ====================
+    def _handle_shift_enter(self, event):
+        """Handle Shift+Enter - insert newline"""
+        self.chat_input.insert("insert", "\n")
+        return "break"
 
-    def _send_chat_message(self):
-        """Отправка сообщения в чат"""
-        message = self.chat_input.get("1.0", "end-1c").strip()
-        if not message:
+    def _send_query(self):
+        """Send query to selected providers"""
+        if self.is_processing:
             return
 
-        network = self.chat_network_var.get()
-        if network not in self.providers:
-            self._add_chat_message("Ошибка: Выбрана неизвестная нейросеть", "error")
+        question = self.chat_input.get("1.0", "end-1c").strip()
+        if not question:
             return
 
-        # Обновляем ключ
-        key_mapping = {
-            "OpenAI GPT": "openai",
-            "Anthropic Claude": "anthropic",
-            "Gemini": "gemini",
-            "DeepSeek": "deepseek",
-            "Groq": "groq",
-            "Mistral AI": "mistral"
-        }
+        # Get selected providers
+        selected = [name for name, switch in self.provider_switches.items() if switch.get()]
+        if not selected:
+            messagebox.showwarning("Warning", "Please select at least one AI provider!")
+            return
 
-        if key_mapping[network] in self.api_key_vars:
-            self.providers[network].api_key = self.api_key_vars[key_mapping[network]].get()
+        # Update UI
+        self.is_processing = True
+        self.send_btn.configure(state="disabled")
+        self.progress.grid(row=3, column=0, sticky="ew", pady=(10, 0))
+        self.progress.start()
+        self.status_label.configure(text=f"Querying {len(selected)} AI providers...")
 
-        # Очищаем поле ввода
+        # Add user message to chat
+        self._add_to_chat(f"You: {question}\n", "user")
+        self._add_to_chat("-" * 60 + "\n", "divider")
+
+        # Clear input
         self.chat_input.delete("1.0", "end")
 
-        # Добавляем сообщение пользователя
-        self._add_chat_message(f"Вы: {message}", "user")
-        self._add_chat_message(f"[{network}] Думает...", "system")
-
-        # Отправляем в отдельном потоке
-        thread = threading.Thread(
-            target=self._process_chat_message,
-            args=(network, message),
-            daemon=True
-        )
-        thread.start()
-
-    def _process_chat_message(self, network: str, message: str):
-        """Обработка сообщения чата"""
-        try:
-            response = self.providers[network].query(message)
-            self.root.after(0, lambda: self._show_chat_response(network, response))
-        except Exception as e:
-            self.root.after(0, lambda: self._show_chat_response(network, f"Ошибка: {str(e)}", True))
-
-    def _show_chat_response(self, network: str, response: str, is_error: bool = False):
-        """Показ ответа в чате"""
-        # Удаляем "Думает..."
-        self.chat_display.config(state='normal')
-        content = self.chat_display.get("1.0", "end")
-        lines = content.split('\n')
-        new_lines = [l for l in lines if "Думает..." not in l]
-        self.chat_display.delete("1.0", "end")
-        self.chat_display.insert("1.0", '\n'.join(new_lines))
-        self.chat_display.config(state='disabled')
-
-        # Добавляем ответ
-        tag = "error" if is_error or response.startswith("Ошибка") else "assistant"
-        self._add_chat_message(f"{network}: {response}", tag)
-
-    def _add_chat_message(self, message: str, tag: str = None):
-        """Добавление сообщения в чат"""
-        self.chat_display.config(state='normal')
-        timestamp = datetime.now().strftime("%H:%M:%S")
-        self.chat_display.insert("end", f"[{timestamp}] {message}\n\n", tag)
-        self.chat_display.see("end")
-        self.chat_display.config(state='disabled')
-
-    def _clear_chat(self):
-        """Очистка чата"""
-        self.chat_display.config(state='normal')
-        self.chat_display.delete("1.0", "end")
-        self.chat_display.config(state='disabled')
-
-    # ==================== Пакетная обработка ====================
-
-    def _select_file(self):
-        """Выбор файла"""
-        filename = filedialog.askopenfilename(
-            title="Выберите файл с вопросом",
-            filetypes=[("Текстовые файлы", "*.txt"), ("Все файлы", "*.*")]
-        )
-        if filename:
-            self.file_path_var.set(filename)
-
-    def _select_save_dir(self):
-        """Выбор директории сохранения"""
-        directory = filedialog.askdirectory(title="Выберите папку для сохранения")
-        if directory:
-            self.save_path_var.set(directory)
-            self.config["settings"]["last_directory"] = directory
-            self._save_config()
-
-    def _send_batch_requests(self):
-        """Отправка пакетных запросов"""
-        question_file = self.file_path_var.get()
-        save_dir = self.save_path_var.get()
-
-        if not question_file or not os.path.exists(question_file):
-            messagebox.showerror("Ошибка", "Выберите файл с вопросом")
-            return
-
-        if not save_dir or not os.path.exists(save_dir):
-            messagebox.showerror("Ошибка", "Выберите папку для сохранения")
-            return
-
-        # Читаем вопрос
-        try:
-            with open(question_file, 'r', encoding='utf-8') as f:
-                question = f.read().strip()
-        except Exception as e:
-            messagebox.showerror("Ошибка", f"Не удалось прочитать файл: {e}")
-            return
-
-        if not question:
-            messagebox.showerror("Ошибка", "Файл пустой")
-            return
-
-        # Выбранные сети
-        selected = [name for name, var in self.network_vars.items() if var.get()]
-        if not selected:
-            messagebox.showerror("Ошибка", "Выберите хотя бы одну нейросеть")
-            return
-
-        # Обновляем провайдеры
+        # Update providers
         self._update_providers()
 
-        # Запуск в потоке
-        self.batch_progress.start()
+        # Start query thread
         thread = threading.Thread(
-            target=self._process_batch_requests,
-            args=(question, selected, save_dir, question_file),
+            target=self._process_query,
+            args=(question, selected),
             daemon=True
         )
         thread.start()
 
-    def _process_batch_requests(self, question: str, networks: list, save_dir: str, original_file: str):
-        """Обработка пакетных запросов"""
-        self._add_batch_log(f"Начинаем обработку для {len(networks)} нейросетей...")
-
+    def _process_query(self, question: str, providers: List[str]):
+        """Process query in parallel"""
         responses = {}
-        for network in networks:
-            self._add_batch_log(f"Запрос к {network}...")
+        total_time = 0
 
-            if network not in self.providers:
-                self._add_batch_log(f"  Ошибка: провайдер {network} не найден")
-                continue
+        # Use ThreadPoolExecutor for parallel requests
+        with ThreadPoolExecutor(max_workers=len(providers)) as executor:
+            futures = {}
+            for name in providers:
+                if name in self.providers:
+                    future = executor.submit(self.providers[name].query, question)
+                    futures[future] = name
 
-            try:
-                response = self.providers[network].query(question)
-                if response.startswith("Ошибка"):
-                    self._add_batch_log(f"  {response}")
-                else:
-                    responses[network] = response
-                    self._add_batch_log(f"  Получен ответ ({len(response)} символов)")
-            except Exception as e:
-                self._add_batch_log(f"  Ошибка: {str(e)}")
+            for future in as_completed(futures):
+                name = futures[future]
+                try:
+                    response, elapsed = future.result()
+                    responses[name] = (response, elapsed)
+                    total_time = max(total_time, elapsed)
 
-        # Сохраняем результаты
-        if responses:
-            filepath = self._save_responses(responses, save_dir, original_file)
-            if filepath:
-                self._add_batch_log(f"Результаты сохранены: {filepath}")
+                    # Log response
+                    success = not response.startswith("Error")
+                    app_logger.log_response(name, question, response, elapsed, success)
 
-                # Отправляем в Telegram
-                bot_token = self.telegram_token_var.get()
-                chat_id = self.telegram_chat_id_var.get()
-                if bot_token and chat_id:
-                    self._send_file_to_telegram(filepath, bot_token, chat_id)
-        else:
-            self._add_batch_log("Не получено ни одного ответа")
+                    if not success:
+                        app_logger.log_error(name, response, f"Query: {question[:100]}")
 
-        self.root.after(0, self.batch_progress.stop)
-        self._add_batch_log("Готово!")
+                    # Update UI immediately
+                    self.after(0, lambda n=name, r=response, t=elapsed: self._show_response(n, r, t))
+                except Exception as e:
+                    responses[name] = (f"Error: {str(e)}", 0)
+                    # Log error
+                    app_logger.log_error(name, str(e), f"Exception during query: {question[:100]}")
+                    self.after(0, lambda n=name, e=str(e): self._show_response(n, f"Error: {e}", 0))
 
-    def _save_responses(self, responses: dict, save_dir: str, original_file: str) -> Optional[str]:
-        """Сохранение ответов"""
+        # Save to file
+        filepath = self._save_responses(question, responses)
+
+        # Finish
+        self.after(0, lambda: self._finish_query(len(responses), total_time, filepath))
+
+    def _show_response(self, name: str, response: str, elapsed: float):
+        """Show response in chat"""
+        color = self.providers[name].color if name in self.providers else "#3498db"
+        header = f"\n[{name}] ({elapsed:.1f}s)\n"
+        self._add_to_chat(header, "header")
+        self._add_to_chat(response + "\n", "response")
+        self._add_to_chat("-" * 60 + "\n", "divider")
+
+    def _finish_query(self, count: int, total_time: float, filepath: str):
+        """Finish query processing"""
+        self.is_processing = False
+        self.send_btn.configure(state="normal")
+        self.progress.stop()
+        self.progress.grid_forget()
+        self.status_label.configure(text=f"Completed: {count} responses in {total_time:.1f}s")
+
+        if filepath:
+            self._add_to_chat(f"\nSaved to: {filepath}\n\n", "info")
+
+    def _add_to_chat(self, text: str, tag: str = None):
+        """Add text to chat display"""
+        self.chat_display.configure(state="normal")
+        self.chat_display.insert("end", text)
+        self.chat_display.see("end")
+        self.chat_display.configure(state="disabled")
+
+    def _clear_chat(self):
+        """Clear chat display"""
+        self.chat_display.configure(state="normal")
+        self.chat_display.delete("1.0", "end")
+        self.chat_display.configure(state="disabled")
+        self.status_label.configure(text="Ready")
+
+    def _new_chat(self):
+        """Clear conversation history and start new chat"""
+        # Clear history for all providers
+        for provider in self.providers.values():
+            provider.clear_history()
+        # Clear chat display
+        self._clear_chat()
+        self.status_label.configure(text="New chat started - history cleared")
+        self.current_branch_label.configure(text="Current: None")
+
+    def _save_chat_to_file(self):
+        """Save chat content to a file with directory selection"""
+        # Get chat content
+        self.chat_display.configure(state="normal")
+        content = self.chat_display.get("1.0", "end-1c")
+        self.chat_display.configure(state="disabled")
+
+        if not content.strip():
+            messagebox.showwarning("Warning", "Chat is empty. Nothing to save.")
+            return
+
+        # Generate default filename
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        default_name = f"chat_log_{timestamp}.txt"
+
+        # Ask user for save location
+        filepath = filedialog.asksaveasfilename(
+            defaultextension=".txt",
+            filetypes=[
+                ("Text files", "*.txt"),
+                ("Markdown files", "*.md"),
+                ("All files", "*.*")
+            ],
+            initialfile=default_name,
+            title="Save Chat Log"
+        )
+
+        if not filepath:
+            return  # User cancelled
+
         try:
-            base_name = os.path.splitext(os.path.basename(original_file))[0]
+            with open(filepath, 'w', encoding='utf-8') as f:
+                f.write("=" * 70 + "\n")
+                f.write(f"AI Manager Chat Log\n")
+                f.write(f"Saved: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write("=" * 70 + "\n\n")
+                f.write(content)
+                f.write("\n\n" + "=" * 70 + "\n")
+                f.write("End of chat log\n")
+                f.write("=" * 70 + "\n")
+
+            self.status_label.configure(text=f"Chat saved to {os.path.basename(filepath)}")
+            messagebox.showinfo("Success", f"Chat saved to:\n{filepath}")
+
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to save chat:\n{str(e)}")
+
+    # ==================== Branch Management ====================
+
+    def _refresh_branches_list(self):
+        """Refresh the branches dropdown list"""
+        branches = branch_manager.get_branches_list()
+        if branches:
+            values = [f"{b['name']} ({b['created_at'][:10]})" for b in branches]
+            self.branches_combo.configure(values=values)
+            if branch_manager.current_branch_id:
+                # Find and select current branch
+                for i, b in enumerate(branches):
+                    if b['id'] == branch_manager.current_branch_id:
+                        self.branches_combo.set(values[i])
+                        self.current_branch_label.configure(text=f"Current: {b['name']}")
+                        break
+        else:
+            self.branches_combo.configure(values=["No saved branches"])
+            self.branches_combo.set("No saved branches")
+
+    def _on_branch_selected(self, selection):
+        """Handle branch selection from dropdown"""
+        pass  # Selection is handled by Load button
+
+    def _save_branch(self):
+        """Save current conversation as a new branch"""
+        # Create dialog for branch name
+        dialog = ctk.CTkInputDialog(
+            text="Enter branch name:",
+            title="Save Branch"
+        )
+        name = dialog.get_input()
+
+        if not name:
+            return
+
+        # Collect conversation history from all providers
+        providers_history = {}
+        for key, provider in self.providers.items():
+            providers_history[key] = provider.conversation_history.copy()
+
+        # Get chat content
+        self.chat_display.configure(state="normal")
+        chat_content = self.chat_display.get("1.0", "end-1c")
+        self.chat_display.configure(state="disabled")
+
+        # Save branch
+        branch_id = branch_manager.create_branch(name, providers_history, chat_content)
+
+        if branch_id:
+            self._refresh_branches_list()
+            self.status_label.configure(text=f"Branch '{name}' saved")
+            self.current_branch_label.configure(text=f"Current: {name}")
+            messagebox.showinfo("Success", f"Branch '{name}' saved successfully!")
+        else:
+            messagebox.showerror("Error", "Failed to save branch")
+
+    def _load_branch(self):
+        """Load selected branch"""
+        selection = self.branches_combo.get()
+        if selection == "No saved branches":
+            messagebox.showwarning("Warning", "No branches to load")
+            return
+
+        branches = branch_manager.get_branches_list()
+        if not branches:
+            return
+
+        # Find selected branch
+        selected_idx = None
+        values = [f"{b['name']} ({b['created_at'][:10]})" for b in branches]
+        for i, v in enumerate(values):
+            if v == selection:
+                selected_idx = i
+                break
+
+        if selected_idx is None:
+            messagebox.showwarning("Warning", "Please select a branch first")
+            return
+
+        branch = branches[selected_idx]
+        branch_data = branch_manager.load_branch(branch['id'])
+
+        if not branch_data:
+            messagebox.showerror("Error", "Failed to load branch")
+            return
+
+        # Restore conversation history to providers
+        providers_history = branch_data.get("providers_history", {})
+        for key, history in providers_history.items():
+            if key in self.providers:
+                self.providers[key].conversation_history = history.copy()
+
+        # Restore chat display
+        chat_content = branch_data.get("chat_content", "")
+        self.chat_display.configure(state="normal")
+        self.chat_display.delete("1.0", "end")
+        self.chat_display.insert("1.0", chat_content)
+        self.chat_display.configure(state="disabled")
+
+        self.current_branch_label.configure(text=f"Current: {branch['name']}")
+        self.status_label.configure(text=f"Branch '{branch['name']}' loaded")
+        messagebox.showinfo("Success", f"Branch '{branch['name']}' loaded successfully!")
+
+    def _delete_branch(self):
+        """Delete selected branch"""
+        selection = self.branches_combo.get()
+        if selection == "No saved branches":
+            messagebox.showwarning("Warning", "No branches to delete")
+            return
+
+        branches = branch_manager.get_branches_list()
+        if not branches:
+            return
+
+        # Find selected branch
+        selected_idx = None
+        values = [f"{b['name']} ({b['created_at'][:10]})" for b in branches]
+        for i, v in enumerate(values):
+            if v == selection:
+                selected_idx = i
+                break
+
+        if selected_idx is None:
+            messagebox.showwarning("Warning", "Please select a branch first")
+            return
+
+        branch = branches[selected_idx]
+
+        # Confirm deletion
+        if not messagebox.askyesno("Confirm", f"Delete branch '{branch['name']}'?"):
+            return
+
+        if branch_manager.delete_branch(branch['id']):
+            self._refresh_branches_list()
+            self.status_label.configure(text=f"Branch '{branch['name']}' deleted")
+            if branch_manager.current_branch_id is None:
+                self.current_branch_label.configure(text="Current: None")
+            messagebox.showinfo("Success", f"Branch '{branch['name']}' deleted")
+        else:
+            messagebox.showerror("Error", "Failed to delete branch")
+
+    def _paste_from_clipboard(self):
+        """Paste text from clipboard to input field"""
+        try:
+            # Get clipboard content
+            clipboard_text = self.clipboard_get()
+            if clipboard_text:
+                # Delete selected text if any
+                try:
+                    self.chat_input.delete("sel.first", "sel.last")
+                except:
+                    pass
+                # Insert at cursor position (INSERT = current cursor position)
+                self.chat_input.insert("insert", clipboard_text)
+                self.chat_input.see("insert")
+                self.status_label.configure(text=f"Pasted {len(clipboard_text)} characters")
+        except tk.TclError:
+            # Clipboard is empty or contains non-text data
+            self.status_label.configure(text="Clipboard is empty or contains non-text")
+        except Exception as e:
+            self.status_label.configure(text=f"Paste error: {str(e)[:30]}")
+
+    def _copy_to_clipboard(self, text: str):
+        """Copy text to clipboard"""
+        try:
+            self.clipboard_clear()
+            self.clipboard_append(text)
+            self.status_label.configure(text="Copied to clipboard")
+        except Exception:
+            pass
+
+    def _create_context_menu(self):
+        """Create right-click context menu for text widgets"""
+        import tkinter as tk
+
+        # Context menu for input
+        self.input_menu = tk.Menu(self, tearoff=0)
+        self.input_menu.add_command(label="Cut", command=self._cut_input, accelerator="Ctrl+X")
+        self.input_menu.add_command(label="Copy", command=self._copy_input, accelerator="Ctrl+C")
+        self.input_menu.add_command(label="Paste", command=self._paste_from_clipboard, accelerator="Ctrl+V")
+        self.input_menu.add_separator()
+        self.input_menu.add_command(label="Select All", command=self._select_all_input, accelerator="Ctrl+A")
+        self.input_menu.add_command(label="Clear", command=lambda: self.chat_input.delete("1.0", "end"))
+
+        # Context menu for chat display
+        self.chat_menu = tk.Menu(self, tearoff=0)
+        self.chat_menu.add_command(label="Copy", command=self._copy_chat_selection, accelerator="Ctrl+C")
+        self.chat_menu.add_command(label="Copy All", command=self._copy_all_chat)
+        self.chat_menu.add_separator()
+        self.chat_menu.add_command(label="Select All", command=self._select_all_chat, accelerator="Ctrl+A")
+        self.chat_menu.add_command(label="Clear Chat", command=self._clear_chat)
+
+        # Bind right-click
+        self.chat_input.bind("<Button-3>", self._show_input_menu)
+        self.chat_display.bind("<Button-3>", self._show_chat_menu)
+
+        # ===== Keyboard shortcuts for all text widgets =====
+        # IMPORTANT: For disabled widgets (readonly), need to temporarily enable for copy
+        self._bind_clipboard_shortcuts(self.chat_input, readonly=False)
+        self._bind_clipboard_shortcuts(self.chat_display, readonly=True)
+
+    def _bind_clipboard_shortcuts(self, widget, readonly=False):
+        """Bind clipboard shortcuts to a text widget
+
+        Args:
+            widget: CTkTextbox widget
+            readonly: If True, widget is normally disabled (state='disabled')
+                      and needs to be temporarily enabled for clipboard operations
+        """
+        def select_all(e):
+            # For readonly widgets, temporarily enable
+            if readonly:
+                widget.configure(state="normal")
+            widget.tag_add("sel", "1.0", "end-1c")
+            widget.focus_set()  # Ensure widget has focus
+            if readonly:
+                widget.configure(state="disabled")
+            return "break"
+
+        def copy_text(e):
+            try:
+                # For readonly widgets, temporarily enable to access selection
+                if readonly:
+                    widget.configure(state="normal")
+                try:
+                    sel = widget.get("sel.first", "sel.last")
+                    if sel:
+                        self.clipboard_clear()
+                        self.clipboard_append(sel)
+                except tk.TclError:
+                    pass  # No selection
+            finally:
+                if readonly:
+                    widget.configure(state="disabled")
+            return "break"
+
+        def paste_text(e):
+            try:
+                text = self.clipboard_get()
+                if text:
+                    # Delete selection if any
+                    try:
+                        widget.delete("sel.first", "sel.last")
+                    except tk.TclError:
+                        pass
+                    widget.insert("insert", text)
+            except tk.TclError:
+                pass  # Clipboard empty or error
+            return "break"
+
+        def cut_text(e):
+            try:
+                sel = widget.get("sel.first", "sel.last")
+                if sel:
+                    self.clipboard_clear()
+                    self.clipboard_append(sel)
+                    widget.delete("sel.first", "sel.last")
+            except tk.TclError:
+                pass
+            return "break"
+
+        # Bind Ctrl+A (Select All) - works for all widgets
+        widget.bind("<Control-a>", select_all)
+        widget.bind("<Control-A>", select_all)
+
+        # Bind Ctrl+C (Copy) - works for all widgets
+        widget.bind("<Control-c>", copy_text)
+        widget.bind("<Control-C>", copy_text)
+
+        # Bind Ctrl+V (Paste) and Ctrl+X (Cut) - only for editable widgets
+        if not readonly:
+            widget.bind("<Control-v>", paste_text)
+            widget.bind("<Control-V>", paste_text)
+            widget.bind("<Control-x>", cut_text)
+            widget.bind("<Control-X>", cut_text)
+
+    def _show_input_menu(self, event):
+        """Show context menu for input"""
+        try:
+            self.input_menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            self.input_menu.grab_release()
+
+    def _show_chat_menu(self, event):
+        """Show context menu for chat"""
+        try:
+            self.chat_menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            self.chat_menu.grab_release()
+
+    def _cut_input(self):
+        """Cut selected text from input"""
+        try:
+            selected = self.chat_input.get("sel.first", "sel.last")
+            if selected:
+                self._copy_to_clipboard(selected)
+                self.chat_input.delete("sel.first", "sel.last")
+        except Exception:
+            pass
+
+    def _copy_input(self):
+        """Copy selected text from input"""
+        try:
+            selected = self.chat_input.get("sel.first", "sel.last")
+            if selected:
+                self._copy_to_clipboard(selected)
+        except Exception:
+            pass
+
+    def _select_all_input(self):
+        """Select all text in input"""
+        self.chat_input.tag_add("sel", "1.0", "end-1c")
+        return "break"
+
+    def _copy_chat_selection(self):
+        """Copy selected text from chat"""
+        try:
+            self.chat_display.configure(state="normal")
+            selected = self.chat_display.get("sel.first", "sel.last")
+            self.chat_display.configure(state="disabled")
+            if selected:
+                self._copy_to_clipboard(selected)
+        except Exception:
+            pass
+
+    def _copy_all_chat(self):
+        """Copy all chat content"""
+        self.chat_display.configure(state="normal")
+        content = self.chat_display.get("1.0", "end-1c")
+        self.chat_display.configure(state="disabled")
+        if content.strip():
+            self._copy_to_clipboard(content)
+
+    def _select_all_chat(self):
+        """Select all text in chat"""
+        self.chat_display.configure(state="normal")
+        self.chat_display.tag_add("sel", "1.0", "end-1c")
+        self.chat_display.configure(state="disabled")
+
+    # ==================== Logs Keyboard Shortcuts ====================
+
+    def _show_logs_menu(self, event):
+        """Show context menu for logs"""
+        try:
+            self.logs_menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            self.logs_menu.grab_release()
+
+    def _copy_logs_selection(self):
+        """Copy selected text from logs"""
+        try:
+            self.logs_display.configure(state="normal")
+            selected = self.logs_display.get("sel.first", "sel.last")
+            self.logs_display.configure(state="disabled")
+            if selected:
+                self._copy_to_clipboard(selected)
+        except Exception:
+            pass
+
+    def _copy_all_logs(self):
+        """Copy all logs content"""
+        self.logs_display.configure(state="normal")
+        content = self.logs_display.get("1.0", "end-1c")
+        self.logs_display.configure(state="disabled")
+        if content.strip():
+            self._copy_to_clipboard(content)
+
+    def _select_all_logs(self):
+        """Select all text in logs"""
+        self.logs_display.configure(state="normal")
+        self.logs_display.tag_add("sel", "1.0", "end-1c")
+        self.logs_display.configure(state="disabled")
+
+    def _save_responses(self, question: str, responses: Dict[str, Tuple[str, float]]) -> Optional[str]:
+        """Save responses to file"""
+        try:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"{base_name}_answers_{timestamp}.txt"
-            filepath = os.path.join(save_dir, filename)
+            filename = f"ai_responses_{timestamp}.txt"
+            filepath = os.path.join(self.output_dir, filename)
 
             with open(filepath, 'w', encoding='utf-8') as f:
-                f.write("=" * 60 + "\n")
-                f.write(f"Дата: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-                f.write(f"Исходный файл: {original_file}\n")
-                f.write("=" * 60 + "\n\n")
+                f.write("=" * 70 + "\n")
+                f.write(f"AI MANAGER RESPONSES\n")
+                f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write("=" * 70 + "\n\n")
 
-                for network, response in responses.items():
-                    f.write(f"--- {network} ---\n")
+                f.write("QUESTION:\n")
+                f.write("-" * 70 + "\n")
+                f.write(question + "\n")
+                f.write("-" * 70 + "\n\n")
+
+                for name, (response, elapsed) in responses.items():
+                    f.write(f"\n{'='*70}\n")
+                    f.write(f"[{name}] - Response time: {elapsed:.2f}s\n")
+                    f.write(f"{'='*70}\n\n")
                     f.write(response + "\n")
-                    f.write("=" * 60 + "\n\n")
+
+                f.write("\n" + "=" * 70 + "\n")
+                f.write(f"Total providers: {len(responses)}\n")
+                f.write("=" * 70 + "\n")
 
             return filepath
         except Exception as e:
-            self._add_batch_log(f"Ошибка сохранения: {e}")
+            print(f"Error saving file: {e}")
             return None
-
-    def _add_batch_log(self, message: str):
-        """Добавление в лог пакетной обработки"""
-        def _add():
-            timestamp = datetime.now().strftime("%H:%M:%S")
-            self.batch_log.insert("end", f"[{timestamp}] {message}\n")
-            self.batch_log.see("end")
-        self.root.after(0, _add)
-
-    def _clear_batch_log(self):
-        """Очистка лога"""
-        self.batch_log.delete("1.0", "end")
-
-    # ==================== История ====================
-
-    def _load_history(self):
-        """Загрузка истории"""
-        save_dir = self.save_path_var.get()
-        if not save_dir or not os.path.exists(save_dir):
-            return
-
-        self.history_listbox.delete(0, "end")
-
-        try:
-            files = [f for f in os.listdir(save_dir)
-                     if f.endswith('.txt') and ('_answer' in f or '_answers_' in f)]
-            files.sort(reverse=True)
-
-            for f in files:
-                self.history_listbox.insert("end", f)
-        except:
-            pass
-
-    def _on_history_select(self, event):
-        """Обработка выбора файла истории"""
-        selection = self.history_listbox.curselection()
-        if not selection:
-            return
-
-        filename = self.history_listbox.get(selection[0])
-        save_dir = self.save_path_var.get()
-        filepath = os.path.join(save_dir, filename)
-
-        try:
-            with open(filepath, 'r', encoding='utf-8') as f:
-                content = f.read()
-
-            self.history_text.delete("1.0", "end")
-            self.history_text.insert("1.0", content)
-        except Exception as e:
-            self.history_text.delete("1.0", "end")
-            self.history_text.insert("1.0", f"Ошибка чтения: {e}")
-
-    # ==================== Telegram ====================
-
-    def _send_to_telegram(self):
-        """Отправка выбранного файла в Telegram"""
-        selection = self.history_listbox.curselection()
-        if not selection:
-            messagebox.showwarning("Внимание", "Выберите файл")
-            return
-
-        bot_token = self.telegram_token_var.get()
-        chat_id = self.telegram_chat_id_var.get()
-
-        if not bot_token or not chat_id:
-            messagebox.showerror("Ошибка", "Настройте Telegram API")
-            return
-
-        filename = self.history_listbox.get(selection[0])
-        save_dir = self.save_path_var.get()
-        filepath = os.path.join(save_dir, filename)
-
-        if self._send_file_to_telegram(filepath, bot_token, chat_id):
-            messagebox.showinfo("Успех", "Файл отправлен в Telegram")
-        else:
-            messagebox.showerror("Ошибка", "Не удалось отправить файл")
-
-    def _send_file_to_telegram(self, filepath: str, bot_token: str, chat_id: str) -> bool:
-        """Отправка файла в Telegram"""
-        try:
-            url = f"https://api.telegram.org/bot{bot_token}/sendDocument"
-            with open(filepath, 'rb') as f:
-                response = requests.post(
-                    url,
-                    files={'document': f},
-                    data={'chat_id': chat_id},
-                    timeout=30
-                )
-            return response.status_code == 200
-        except:
-            return False
 
 
 def main():
-    """Точка входа"""
-    root = tk.Tk()
-
-    # Устанавливаем DPI awareness для Windows
+    """Entry point"""
+    # Windows DPI awareness
     try:
         from ctypes import windll
         windll.shcore.SetProcessDpiAwareness(1)
     except:
         pass
 
-    app = AIManagerApp(root)
-    root.mainloop()
+    app = AIManagerApp()
+    app.mainloop()
 
 
 if __name__ == "__main__":

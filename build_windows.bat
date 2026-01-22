@@ -1,10 +1,10 @@
 @echo off
 REM ============================================
-REM AI Manager - Windows Build Script
+REM AI Manager v9.0 - Windows Build Script
 REM ============================================
 
 echo ============================================
-echo AI Manager - Build for Windows
+echo AI Manager v9.0 - Build for Windows
 echo ============================================
 echo.
 
@@ -38,7 +38,8 @@ echo [3/4] Building executable...
 pyinstaller --onefile ^
     --windowed ^
     --name "AI_Manager" ^
-    --add-data "config.json;." ^
+    --hidden-import customtkinter ^
+    --collect-all customtkinter ^
     --icon "icon.ico" ^
     --clean ^
     main_app.py
@@ -49,6 +50,8 @@ if errorlevel 1 (
     pyinstaller --onefile ^
         --windowed ^
         --name "AI_Manager" ^
+        --hidden-import customtkinter ^
+        --collect-all customtkinter ^
         --clean ^
         main_app.py
 )

@@ -54,11 +54,24 @@ def clean_build():
     for d in dirs_to_clean:
         if os.path.exists(d):
             print(f"Cleaning {d}/...")
-            shutil.rmtree(d)
+            try:
+                shutil.rmtree(d)
+            except PermissionError as e:
+                print(f"WARNING: Cannot delete {d}/ - file may be in use")
+                print(f"  Error: {e}")
+                print(f"  Please close AI_Manager.exe if it's running")
+                if "dist" in d:
+                    response = input("Continue anyway? (y/n): ").strip().lower()
+                    if response != 'y':
+                        print("Build aborted.")
+                        sys.exit(1)
 
     for f in glob.glob("*.spec"):
         print(f"Removing {f}...")
-        os.remove(f)
+        try:
+            os.remove(f)
+        except PermissionError:
+            print(f"WARNING: Cannot delete {f}")
 
 
 def get_customtkinter_path():

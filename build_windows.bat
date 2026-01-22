@@ -1,10 +1,10 @@
 @echo off
 REM ============================================
-REM AI Manager v9.0 - Windows Build Script
+REM AI Manager v11.0 - Windows Build Script
 REM ============================================
 
 echo ============================================
-echo AI Manager v9.0 - Build for Windows
+echo AI Manager v11.0 - Build for Windows
 echo ============================================
 echo.
 
@@ -12,9 +12,14 @@ REM Check Python
 python --version >nul 2>&1
 if errorlevel 1 (
     echo ERROR: Python not found! Please install Python 3.8+
+    echo Download from: https://www.python.org/downloads/
     pause
     exit /b 1
 )
+
+echo Python found:
+python --version
+echo.
 
 echo [1/4] Installing dependencies...
 pip install -r requirements.txt
@@ -39,21 +44,25 @@ pyinstaller --onefile ^
     --windowed ^
     --name "AI_Manager" ^
     --hidden-import customtkinter ^
+    --hidden-import requests ^
+    --hidden-import keyring ^
+    --hidden-import keyring.backends ^
     --collect-all customtkinter ^
-    --icon "icon.ico" ^
     --clean ^
-    main_app.py
+    --noconfirm ^
+    main.py
 
 if errorlevel 1 (
     echo.
-    echo Trying build without icon...
+    echo Build failed. Trying without optional imports...
     pyinstaller --onefile ^
         --windowed ^
         --name "AI_Manager" ^
         --hidden-import customtkinter ^
         --collect-all customtkinter ^
         --clean ^
-        main_app.py
+        --noconfirm ^
+        main.py
 )
 
 if errorlevel 1 (
@@ -75,5 +84,8 @@ echo.
 echo Executable location: dist\AI_Manager.exe
 echo.
 echo To run: double-click AI_Manager.exe in the dist folder
+echo.
+echo Optional: Run "python build_windows.py --installer" to create
+echo           Inno Setup installer script
 echo.
 pause

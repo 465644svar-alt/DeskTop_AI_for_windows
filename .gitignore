@@ -10,3 +10,5 @@ branches/
 responses/
 config_secure.dat
 config.json
+installer/
+installer.iss

@@ -8,5 +8,6 @@ from .unified import (
     GroqProvider,
     MistralProvider,
     PROVIDER_REGISTRY,
+    PROVIDER_INFO,
     create_provider
 )

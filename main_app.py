@@ -1656,7 +1656,7 @@ class AIManagerApp(ctk.CTk):
 
         # Bind right-click and keyboard shortcuts for logs
         self.logs_display.bind("<Button-3>", self._show_logs_menu)
-        self._bind_clipboard_shortcuts(self.logs_display, editable=False)
+        self._bind_clipboard_shortcuts(self.logs_display, readonly=True)
 
         # Buttons
         btn_frame = ctk.CTkFrame(self.tab_logs, fg_color="transparent")
@@ -2363,68 +2363,82 @@ class AIManagerApp(ctk.CTk):
         self.chat_display.bind("<Button-3>", self._show_chat_menu)
 
         # ===== Keyboard shortcuts for all text widgets =====
-        # CTkTextbox needs explicit bindings for clipboard operations
-        self._bind_clipboard_shortcuts(self.chat_input, editable=True)
-        self._bind_clipboard_shortcuts(self.chat_display, editable=False)
+        # IMPORTANT: For disabled widgets (readonly), need to temporarily enable for copy
+        self._bind_clipboard_shortcuts(self.chat_input, readonly=False)
+        self._bind_clipboard_shortcuts(self.chat_display, readonly=True)
 
-    def _bind_clipboard_shortcuts(self, widget, editable=True):
-        """Bind clipboard shortcuts to a text widget"""
-        # Ctrl+A - Select All
+    def _bind_clipboard_shortcuts(self, widget, readonly=False):
+        """Bind clipboard shortcuts to a text widget
+
+        Args:
+            widget: CTkTextbox widget
+            readonly: If True, widget is normally disabled (state='disabled')
+                      and needs to be temporarily enabled for clipboard operations
+        """
         def select_all(e):
+            # For readonly widgets, temporarily enable
+            if readonly:
+                widget.configure(state="normal")
             widget.tag_add("sel", "1.0", "end-1c")
+            widget.focus_set()  # Ensure widget has focus
+            if readonly:
+                widget.configure(state="disabled")
             return "break"
-        widget.bind("<Control-a>", select_all)
-        widget.bind("<Control-A>", select_all)
 
-        # Ctrl+C - Copy
         def copy_text(e):
             try:
-                # Get the underlying tkinter widget
-                text_widget = widget._textbox if hasattr(widget, '_textbox') else widget
-                text_widget.event_generate("<<Copy>>")
-            except:
+                # For readonly widgets, temporarily enable to access selection
+                if readonly:
+                    widget.configure(state="normal")
                 try:
                     sel = widget.get("sel.first", "sel.last")
                     if sel:
                         self.clipboard_clear()
                         self.clipboard_append(sel)
-                except:
-                    pass
+                except tk.TclError:
+                    pass  # No selection
+            finally:
+                if readonly:
+                    widget.configure(state="disabled")
             return "break"
+
+        def paste_text(e):
+            try:
+                text = self.clipboard_get()
+                if text:
+                    # Delete selection if any
+                    try:
+                        widget.delete("sel.first", "sel.last")
+                    except tk.TclError:
+                        pass
+                    widget.insert("insert", text)
+            except tk.TclError:
+                pass  # Clipboard empty or error
+            return "break"
+
+        def cut_text(e):
+            try:
+                sel = widget.get("sel.first", "sel.last")
+                if sel:
+                    self.clipboard_clear()
+                    self.clipboard_append(sel)
+                    widget.delete("sel.first", "sel.last")
+            except tk.TclError:
+                pass
+            return "break"
+
+        # Bind Ctrl+A (Select All) - works for all widgets
+        widget.bind("<Control-a>", select_all)
+        widget.bind("<Control-A>", select_all)
+
+        # Bind Ctrl+C (Copy) - works for all widgets
         widget.bind("<Control-c>", copy_text)
         widget.bind("<Control-C>", copy_text)
 
-        if editable:
-            # Ctrl+V - Paste
-            def paste_text(e):
-                try:
-                    text_widget = widget._textbox if hasattr(widget, '_textbox') else widget
-                    text_widget.event_generate("<<Paste>>")
-                except:
-                    try:
-                        text = self.clipboard_get()
-                        widget.insert("insert", text)
-                    except:
-                        pass
-                return "break"
+        # Bind Ctrl+V (Paste) and Ctrl+X (Cut) - only for editable widgets
+        if not readonly:
             widget.bind("<Control-v>", paste_text)
             widget.bind("<Control-V>", paste_text)
-
-            # Ctrl+X - Cut
-            def cut_text(e):
-                try:
-                    text_widget = widget._textbox if hasattr(widget, '_textbox') else widget
-                    text_widget.event_generate("<<Cut>>")
-                except:
-                    try:
-                        sel = widget.get("sel.first", "sel.last")
-                        if sel:
-                            self.clipboard_clear()
-                            self.clipboard_append(sel)
-                            widget.delete("sel.first", "sel.last")
-                    except:
-                        pass
-                return "break"
             widget.bind("<Control-x>", cut_text)
             widget.bind("<Control-X>", cut_text)
 

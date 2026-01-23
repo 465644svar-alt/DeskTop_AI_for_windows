@@ -286,6 +286,12 @@ class AIManagerApp(ctk.CTk):
             btn_frame, text="Test All Connections", height=40,
             corner_radius=10, fg_color="#3498db", hover_color="#2980b9",
             command=self._test_all_connections
+        ).pack(side="left", padx=(0, 10))
+
+        ctk.CTkButton(
+            btn_frame, text="Send Test Query", height=40,
+            corner_radius=10, fg_color="#9b59b6", hover_color="#8e44ad",
+            command=self._send_test_query
         ).pack(side="left")
 
     def _create_logs_tab(self):
@@ -911,6 +917,68 @@ class AIManagerApp(ctk.CTk):
         self.status_label.configure(text="Testing connections...")
 
         thread = threading.Thread(target=test_all, daemon=True)
+        thread.start()
+
+    def _send_test_query(self):
+        """Send a test query to all providers with API keys"""
+        self._update_providers()
+
+        test_question = "Hello! Please respond with a short greeting in one sentence."
+
+        # Get providers with API keys
+        providers_to_test = []
+        for key, info in PROVIDER_INFO.items():
+            provider = self.providers.get(key)
+            if provider and provider.api_key:
+                providers_to_test.append((key, info["name"], provider))
+
+        if not providers_to_test:
+            messagebox.showwarning("Warning", "No providers have API keys configured!")
+            return
+
+        # Show in chat
+        self.chat_display.configure(state="normal")
+        self.chat_display.insert("end", "\n" + "=" * 50 + "\n")
+        self.chat_display.insert("end", f"Test Query: \"{test_question}\"\n")
+        self.chat_display.insert("end", f"Sending to {len(providers_to_test)} providers...\n")
+        self.chat_display.insert("end", "=" * 50 + "\n\n")
+        self.chat_display.configure(state="disabled")
+        self.chat_display.see("end")
+
+        def process_test():
+            import time
+            results = []
+
+            for key, name, provider in providers_to_test:
+                self.ui_queue.put(UIMessage.status(f"Testing {name}..."))
+                start_time = time.time()
+
+                try:
+                    response = provider.send_message(test_question, [])
+                    elapsed = time.time() - start_time
+                    results.append((name, True, response[:200], elapsed))
+                except Exception as e:
+                    elapsed = time.time() - start_time
+                    results.append((name, False, str(e)[:100], elapsed))
+
+            # Show results
+            def show_results():
+                self.chat_display.configure(state="normal")
+
+                for name, success, text, elapsed in results:
+                    status = "OK" if success else "FAIL"
+                    self.chat_display.insert("end", f"[{status}] {name} ({elapsed:.2f}s):\n")
+                    self.chat_display.insert("end", f"  {text}\n\n")
+
+                self.chat_display.insert("end", "=" * 50 + "\n\n")
+                self.chat_display.configure(state="disabled")
+                self.chat_display.see("end")
+
+            self.after(0, show_results)
+            self.ui_queue.put(UIMessage.status("Test queries completed"))
+
+        self.status_label.configure(text="Sending test queries...")
+        thread = threading.Thread(target=process_test, daemon=True)
         thread.start()
 
     # ==================== Logs ====================

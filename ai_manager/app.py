@@ -121,12 +121,21 @@ class AIManagerApp(ctk.CTk):
             font=ctk.CTkFont(size=20, weight="bold")
         ).pack(side="left")
 
-        # Status label
+        # Status frame with label and model info
+        status_frame = ctk.CTkFrame(header, fg_color="transparent")
+        status_frame.pack(side="right")
+
+        self.model_label = ctk.CTkLabel(
+            status_frame, text="",
+            font=ctk.CTkFont(size=10), text_color="#3498db"
+        )
+        self.model_label.pack(side="top")
+
         self.status_label = ctk.CTkLabel(
-            header, text="Ready",
+            status_frame, text="Ready",
             font=ctk.CTkFont(size=12), text_color="gray"
         )
-        self.status_label.pack(side="right")
+        self.status_label.pack(side="top")
 
         # Provider toggles
         toggles_frame = ctk.CTkFrame(self.tab_chat, fg_color="transparent")
@@ -145,11 +154,19 @@ class AIManagerApp(ctk.CTk):
             font=ctk.CTkFont(family="Consolas", size=12),
             state="disabled"
         )
-        self.chat_display.grid(row=1, column=0, sticky="nsew", pady=(0, 10))
+        self.chat_display.grid(row=1, column=0, sticky="nsew", pady=(0, 5))
+
+        # Progress bar
+        self.progress_bar = ctk.CTkProgressBar(
+            self.tab_chat, height=4, corner_radius=2,
+            progress_color="#3498db"
+        )
+        self.progress_bar.grid(row=2, column=0, sticky="ew", pady=(0, 10))
+        self.progress_bar.set(0)
 
         # Input area
         input_frame = ctk.CTkFrame(self.tab_chat, fg_color="transparent")
-        input_frame.grid(row=2, column=0, sticky="ew")
+        input_frame.grid(row=3, column=0, sticky="ew")
         input_frame.grid_columnconfigure(0, weight=1)
 
         self.chat_input = ctk.CTkTextbox(
@@ -191,15 +208,6 @@ class AIManagerApp(ctk.CTk):
             corner_radius=10, fg_color="#9b59b6", hover_color="#8e44ad",
             command=self._save_chat_to_file
         ).pack()
-
-        # Progress bar
-        self.progress = ctk.CTkProgressBar(self.tab_chat, mode="indeterminate", height=3)
-
-        # Streaming indicator
-        self.streaming_label = ctk.CTkLabel(
-            self.tab_chat, text="",
-            font=ctk.CTkFont(size=11), text_color="#27ae60"
-        )
 
         # Branches panel
         self._create_branches_panel()
@@ -283,7 +291,13 @@ class AIManagerApp(ctk.CTk):
         ).pack(side="left", padx=(0, 10))
 
         ctk.CTkButton(
-            btn_frame, text="Test All Connections", height=40,
+            btn_frame, text="Validate Keys", height=40,
+            corner_radius=10, fg_color="#f39c12", hover_color="#d68910",
+            command=self._validate_api_keys
+        ).pack(side="left", padx=(0, 10))
+
+        ctk.CTkButton(
+            btn_frame, text="Test Connection", height=40,
             corner_radius=10, fg_color="#3498db", hover_color="#2980b9",
             command=self._test_all_connections
         ).pack(side="left", padx=(0, 10))
@@ -536,8 +550,16 @@ class AIManagerApp(ctk.CTk):
         # Update UI
         self.is_processing = True
         self.send_btn.configure(state="disabled")
-        self.progress.grid(row=3, column=0, sticky="ew", pady=(10, 0))
-        self.progress.start()
+        self.progress_bar.configure(mode="indeterminate")
+        self.progress_bar.start()
+
+        # Show selected models
+        model_info = []
+        for key in selected:
+            if key in self.api_cards:
+                model = self.api_cards[key].get_model()
+                model_info.append(f"{PROVIDER_INFO[key]['name'][:3]}:{model[:15]}")
+        self.model_label.configure(text=" | ".join(model_info[:3]))
         self.status_label.configure(text=f"Querying {len(selected)} AI providers...")
 
         # Add user message to chat
@@ -621,13 +643,18 @@ class AIManagerApp(ctk.CTk):
         """Finish query processing"""
         self.is_processing = False
         self.send_btn.configure(state="normal")
-        self.progress.stop()
-        self.progress.grid_forget()
+        self.progress_bar.stop()
+        self.progress_bar.configure(mode="determinate")
+        self.progress_bar.set(1)  # Show completed
 
         status = f"Completed: {count} responses in {total_time:.1f}s"
         if filepath:
             status += f" | Saved to {os.path.basename(filepath)}"
         self.status_label.configure(text=status)
+
+        # Clear model label after completion
+        self.after(3000, lambda: self.model_label.configure(text=""))
+        self.after(3000, lambda: self.progress_bar.set(0))
 
         # Update metrics
         self._refresh_metrics()
@@ -846,6 +873,42 @@ class AIManagerApp(ctk.CTk):
 
             except Exception as e:
                 self.logger.log_error("Config", f"Failed to load config: {e}")
+
+    def _validate_api_keys(self):
+        """Validate API key formats without making API calls"""
+        results = []
+
+        for key, info in PROVIDER_INFO.items():
+            if key in self.api_cards:
+                api_key = self.api_cards[key].get_key()
+                provider_name = info["name"]
+
+                if not api_key:
+                    results.append((provider_name, "EMPTY", "No key entered", "#95a5a6"))
+                elif len(api_key) < 20:
+                    results.append((provider_name, "INVALID", "Key too short", "#e74c3c"))
+                elif key == "openai" and not api_key.startswith("sk-"):
+                    results.append((provider_name, "WARN", "Should start with 'sk-'", "#f39c12"))
+                elif key == "anthropic" and not api_key.startswith("sk-ant-"):
+                    results.append((provider_name, "WARN", "Should start with 'sk-ant-'", "#f39c12"))
+                else:
+                    results.append((provider_name, "OK", f"Format valid ({len(api_key)} chars)", "#27ae60"))
+
+        # Show in popup
+        result_text = "API Key Validation Results:\n\n"
+        for name, status, msg, _ in results:
+            result_text += f"[{status:^7}] {name}: {msg}\n"
+
+        messagebox.showinfo("Key Validation", result_text)
+
+        # Update status indicators
+        for key, info in PROVIDER_INFO.items():
+            if key in self.api_cards:
+                for name, status, _, color in results:
+                    if name == info["name"]:
+                        self.api_cards[key].status_indicator.configure(
+                            fg_color=color if status == "OK" else "#e74c3c" if status in ["INVALID", "EMPTY"] else "#f39c12"
+                        )
 
     def _test_all_connections(self):
         """Test connections to all providers"""

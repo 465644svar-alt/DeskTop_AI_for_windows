@@ -209,13 +209,37 @@ class AIManagerApp(ctk.CTk):
             command=self._save_chat_to_file
         ).pack()
 
+        # Test buttons row
+        test_frame = ctk.CTkFrame(self.tab_chat, fg_color="transparent")
+        test_frame.grid(row=4, column=0, sticky="ew", pady=(10, 0))
+
+        ctk.CTkButton(
+            test_frame, text="Test Connection", height=32,
+            corner_radius=8, fg_color="#3498db", hover_color="#2980b9",
+            command=self._test_all_connections
+        ).pack(side="left", padx=(0, 10))
+
+        ctk.CTkButton(
+            test_frame, text="Send Test Query", height=32,
+            corner_radius=8, fg_color="#9b59b6", hover_color="#8e44ad",
+            command=self._send_test_query
+        ).pack(side="left", padx=(0, 10))
+
+        # Theme toggle
+        self.theme_btn = ctk.CTkButton(
+            test_frame, text="Light Theme", height=32, width=100,
+            corner_radius=8, fg_color="#34495e", hover_color="#2c3e50",
+            command=self._toggle_theme
+        )
+        self.theme_btn.pack(side="right")
+
         # Branches panel
         self._create_branches_panel()
 
     def _create_branches_panel(self):
         """Create conversation branches management panel"""
         branches_frame = ctk.CTkFrame(self.tab_chat, corner_radius=12)
-        branches_frame.grid(row=4, column=0, sticky="ew", pady=(10, 0))
+        branches_frame.grid(row=5, column=0, sticky="ew", pady=(10, 0))
 
         # Header
         branches_header = ctk.CTkFrame(branches_frame, fg_color="transparent")
@@ -294,18 +318,6 @@ class AIManagerApp(ctk.CTk):
             btn_frame, text="Validate Keys", height=40,
             corner_radius=10, fg_color="#f39c12", hover_color="#d68910",
             command=self._validate_api_keys
-        ).pack(side="left", padx=(0, 10))
-
-        ctk.CTkButton(
-            btn_frame, text="Test Connection", height=40,
-            corner_radius=10, fg_color="#3498db", hover_color="#2980b9",
-            command=self._test_all_connections
-        ).pack(side="left", padx=(0, 10))
-
-        ctk.CTkButton(
-            btn_frame, text="Send Test Query", height=40,
-            corner_radius=10, fg_color="#9b59b6", hover_color="#8e44ad",
-            command=self._send_test_query
         ).pack(side="left")
 
     def _create_logs_tab(self):
@@ -688,6 +700,16 @@ class AIManagerApp(ctk.CTk):
         self.status_label.configure(text="New chat started - history cleared")
         self.current_branch_label.configure(text="Current: None")
 
+    def _toggle_theme(self):
+        """Toggle between dark and light themes"""
+        current = ctk.get_appearance_mode()
+        if current == "Dark":
+            ctk.set_appearance_mode("light")
+            self.theme_btn.configure(text="Dark Theme")
+        else:
+            ctk.set_appearance_mode("dark")
+            self.theme_btn.configure(text="Light Theme")
+
     def _save_chat_to_file(self):
         """Save chat content to a file with directory selection"""
         # Get chat content
@@ -1014,15 +1036,12 @@ class AIManagerApp(ctk.CTk):
 
             for key, name, provider in providers_to_test:
                 self.ui_queue.put(UIMessage.status(f"Testing {name}..."))
-                start_time = time.time()
 
                 try:
-                    response = provider.send_message(test_question, [])
-                    elapsed = time.time() - start_time
+                    response, elapsed = provider.query(test_question)
                     results.append((name, True, response[:200], elapsed))
                 except Exception as e:
-                    elapsed = time.time() - start_time
-                    results.append((name, False, str(e)[:100], elapsed))
+                    results.append((name, False, str(e)[:100], 0.0))
 
             # Show results
             def show_results():

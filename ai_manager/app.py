@@ -845,20 +845,72 @@ class AIManagerApp(ctk.CTk):
         """Test connections to all providers"""
         self._update_providers()
 
-        def test_provider(key):
-            provider = self.providers.get(key)
-            if provider and provider.api_key:
-                success = provider.test_connection()
-                self.ui_queue.put(UIMessage.connection_status(key, success))
-                return key, success
-            return key, False
+        # Show in chat that testing has started
+        self.chat_display.configure(state="normal")
+        self.chat_display.insert("end", "\n" + "=" * 50 + "\n")
+        self.chat_display.insert("end", "Testing All Connections...\n")
+        self.chat_display.insert("end", "=" * 50 + "\n\n")
+        self.chat_display.configure(state="disabled")
+        self.chat_display.see("end")
+
+        def test_all():
+            results = []
+            for key, info in PROVIDER_INFO.items():
+                provider = self.providers.get(key)
+                provider_name = info["name"]
+
+                if provider and provider.api_key:
+                    self.ui_queue.put(UIMessage.status(f"Testing {provider_name}..."))
+                    try:
+                        success = provider.test_connection()
+                        status = "OK" if success else "FAILED"
+                        results.append((provider_name, success, None))
+                    except Exception as e:
+                        results.append((provider_name, False, str(e)))
+                        status = "ERROR"
+                    self.ui_queue.put(UIMessage.connection_status(key, success if 'success' in dir() else False))
+                else:
+                    results.append((provider_name, None, "No API key"))
+
+            # Send results to UI
+            self.ui_queue.put(UIMessage.status("Connection tests completed"))
+
+            # Format results for display
+            result_text = ""
+            ok_count = 0
+            fail_count = 0
+            skip_count = 0
+
+            for name, success, error in results:
+                if success is None:
+                    result_text += f"  [ SKIP ] {name} - {error}\n"
+                    skip_count += 1
+                elif success:
+                    result_text += f"  [  OK  ] {name}\n"
+                    ok_count += 1
+                else:
+                    result_text += f"  [ FAIL ] {name}"
+                    if error:
+                        result_text += f" - {error}"
+                    result_text += "\n"
+                    fail_count += 1
+
+            summary = f"\nResults: {ok_count} OK, {fail_count} Failed, {skip_count} Skipped\n"
+
+            # Update chat display with results (via queue for thread safety)
+            def show_results():
+                self.chat_display.configure(state="normal")
+                self.chat_display.insert("end", result_text)
+                self.chat_display.insert("end", summary)
+                self.chat_display.insert("end", "=" * 50 + "\n\n")
+                self.chat_display.configure(state="disabled")
+                self.chat_display.see("end")
+
+            self.after(0, show_results)
 
         self.status_label.configure(text="Testing connections...")
 
-        thread = threading.Thread(
-            target=lambda: [test_provider(k) for k in self.providers.keys()],
-            daemon=True
-        )
+        thread = threading.Thread(target=test_all, daemon=True)
         thread.start()
 
     # ==================== Logs ====================

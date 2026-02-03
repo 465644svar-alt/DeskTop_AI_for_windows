@@ -1,0 +1,30 @@
+Обновите код и проверьте:
+
+python build_windows.py --installer
+
+Remove-Item -Recurse -Force dist -ErrorAction SilentlyContinue
+
+python build_windows.py
+Вариант 1 — Простой:
+
+Double-click build_windows.bat
+
+Вариант 2 - Python:
+
+python build_windows.py
+
+Вариант 3 — С установщиком:
+
+python build_windows.py --installer
+
+Затем откройте файл installer.iss в Inno Setup Compiler и выполните сборку.
+
+Выход:
+Исполняемый файл: dist/AI_Manager.exe
+Установщик (если собран): installer/AI_Manager_Setup_v11.0.exe
+Inno Setup (PRO):
+Скачать Inno Setup: https://jrsoftware.org/isinfo.php
+Запустите команду `python build_windows.py --installer` , чтобы сгенерировать файл `installer.iss`.
+Откройте файл installer.iss в Inno Setup Compiler.
+Сборка > Компиляция
+Результат: Профессиональный установщик Windows с меню «Пуск», значками на рабочем столе и деинсталлятором.

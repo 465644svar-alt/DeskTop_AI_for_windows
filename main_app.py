@@ -1558,14 +1558,16 @@ Expected output:
 
         # Create tabs
         self.tab_chat = self.tabview.add("Chat")
+        self.tab_admin_chat = self.tabview.add("Admin_Chat")
         self.tab_settings = self.tabview.add("API Settings")
-        self.tab_arbitrator = self.tabview.add("Арбитр")
-        self.tab_role = self.tabview.add("Роль")
-        self.tab_prohibitions = self.tabview.add("Запреты")
-        self.tab_tasks = self.tabview.add("Задачи")
+        self.tab_arbitrator = self.tabview.add("Arbitrator")
+        self.tab_role = self.tabview.add("Role")
+        self.tab_prohibitions = self.tabview.add("Prohibitions")
+        self.tab_tasks = self.tabview.add("Tasks")
         self.tab_logs = self.tabview.add("Logs")
 
         self._create_chat_tab()
+        self._create_admin_chat_tab()
         self._create_settings_tab()
         self._create_arbitrator_tab()
         self._create_role_tab()
@@ -1722,6 +1724,52 @@ Expected output:
 
         # Load initial branches list
         self._refresh_branches_list()
+
+    def _create_admin_chat_tab(self):
+        """Create Admin Chat tab with interaction log"""
+        self.tab_admin_chat.grid_rowconfigure(1, weight=1)
+        self.tab_admin_chat.grid_columnconfigure(0, weight=1)
+
+        header = ctk.CTkFrame(self.tab_admin_chat, fg_color="transparent")
+        header.grid(row=0, column=0, sticky="ew", pady=(0, 10))
+
+        ctk.CTkLabel(
+            header, text="Admin Chat Log",
+            font=ctk.CTkFont(size=20, weight="bold")
+        ).pack(side="left")
+
+        self.admin_log_status = ctk.CTkLabel(
+            header, text="Ready",
+            font=ctk.CTkFont(size=12),
+            text_color="gray"
+        )
+        self.admin_log_status.pack(side="right")
+
+        self.admin_log_display = ctk.CTkTextbox(
+            self.tab_admin_chat, corner_radius=12,
+            font=ctk.CTkFont(family="Consolas", size=11),
+            state="disabled"
+        )
+        self.admin_log_display.grid(row=1, column=0, sticky="nsew", pady=(0, 10))
+
+        controls = ctk.CTkFrame(self.tab_admin_chat, fg_color="transparent")
+        controls.grid(row=2, column=0, sticky="ew")
+
+        self.admin_log_dir = None
+
+        ctk.CTkButton(
+            controls, text="Choose Folder", height=36,
+            corner_radius=8, fg_color="gray30",
+            command=self._choose_admin_log_dir
+        ).pack(side="left", padx=(0, 10))
+
+        ctk.CTkButton(
+            controls, text="Save Log", height=36,
+            corner_radius=8, fg_color="#2980b9", hover_color="#1f618d",
+            command=self._save_admin_log
+        ).pack(side="left")
+
+        self._bind_clipboard_shortcuts(self.admin_log_display, readonly=True)
 
     def _create_settings_tab(self):
         """Create settings tab"""
@@ -2469,6 +2517,8 @@ Expected output:
         self.progress.grid(row=3, column=0, sticky="ew", pady=(10, 0))
         self.progress.start()
         self.status_label.configure(text=f"Querying {len(selected)} AI providers...")
+        self._append_admin_log(f"Request sent. Providers: {', '.join(selected)}")
+        self._append_admin_log(f"User input: {question}")
 
         # Add user message to chat
         self._add_to_chat(f"You: {question}\n", "user")
@@ -2498,6 +2548,7 @@ Expected output:
             futures = {}
             for name in providers:
                 if name in self.providers:
+                    self._append_admin_log(f"Processing started for provider: {name}")
                     future = executor.submit(self.providers[name].query, question)
                     futures[future] = name
 
@@ -2517,11 +2568,13 @@ Expected output:
 
                     # Update UI immediately
                     self.after(0, lambda n=name, r=response, t=elapsed: self._show_response(n, r, t))
+                    self._append_admin_log(f"Response received from {name} in {elapsed:.1f}s")
                 except Exception as e:
                     responses[name] = (f"Error: {str(e)}", 0)
                     # Log error
                     app_logger.log_error(name, str(e), f"Exception during query: {question[:100]}")
                     self.after(0, lambda n=name, e=str(e): self._show_response(n, f"Error: {e}", 0))
+                    self._append_admin_log(f"Error from {name}: {e}")
 
         # Save to file
         filepath = self._save_responses(question, responses)
@@ -2536,6 +2589,7 @@ Expected output:
         self._add_to_chat(header, "header")
         self._add_to_chat(response + "\n", "response")
         self._add_to_chat("-" * 60 + "\n", "divider")
+        self._append_admin_log(f"Rendered response from {name}")
 
     def _finish_query(self, count: int, total_time: float, filepath: str):
         """Finish query processing"""
@@ -2544,6 +2598,7 @@ Expected output:
         self.progress.stop()
         self.progress.grid_forget()
         self.status_label.configure(text=f"Completed: {count} responses in {total_time:.1f}s")
+        self._append_admin_log(f"Processing completed. Responses: {count}, total time: {total_time:.1f}s")
 
         if filepath:
             self._add_to_chat(f"\nSaved to: {filepath}\n\n", "info")
@@ -2554,6 +2609,63 @@ Expected output:
         self.chat_display.insert("end", text)
         self.chat_display.see("end")
         self.chat_display.configure(state="disabled")
+
+    def _append_admin_log(self, message: str):
+        """Append a message to the admin chat log with timestamp."""
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        line = f"[{timestamp}] {message}\n"
+
+        def write_log():
+            self.admin_log_display.configure(state="normal")
+            self.admin_log_display.insert("end", line)
+            self.admin_log_display.see("end")
+            self.admin_log_display.configure(state="disabled")
+            self.admin_log_status.configure(text=message)
+
+        self.after(0, write_log)
+
+    def _choose_admin_log_dir(self):
+        """Choose directory for saving admin logs."""
+        directory = filedialog.askdirectory(title="Select log folder")
+        if directory:
+            self.admin_log_dir = directory
+            self.admin_log_status.configure(text=f"Folder: {os.path.basename(directory)}")
+
+    def _save_admin_log(self):
+        """Save admin chat log to a file in the selected directory."""
+        self.admin_log_display.configure(state="normal")
+        content = self.admin_log_display.get("1.0", "end-1c")
+        self.admin_log_display.configure(state="disabled")
+
+        if not content.strip():
+            messagebox.showwarning("Warning", "Admin log is empty. Nothing to save.")
+            return
+
+        if not self.admin_log_dir:
+            self._choose_admin_log_dir()
+            if not self.admin_log_dir:
+                return
+
+        os.makedirs(self.admin_log_dir, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"admin_chat_log_{timestamp}.txt"
+        filepath = os.path.join(self.admin_log_dir, filename)
+
+        try:
+            with open(filepath, "w", encoding="utf-8") as f:
+                f.write("=" * 70 + "\n")
+                f.write("AI Manager Admin Chat Log\n")
+                f.write(f"Saved: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write("=" * 70 + "\n\n")
+                f.write(content)
+                f.write("\n\n" + "=" * 70 + "\n")
+                f.write("End of admin log\n")
+                f.write("=" * 70 + "\n")
+
+            self.admin_log_status.configure(text=f"Saved: {filename}")
+            messagebox.showinfo("Success", f"Admin log saved to:\n{filepath}")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to save admin log:\n{str(e)}")
 
     def _clear_chat(self):
         """Clear chat display"""

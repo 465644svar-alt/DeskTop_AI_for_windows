@@ -1401,10 +1401,18 @@ class AIManagerApp(ctk.CTk):
         # Create tabs
         self.tab_chat = self.tabview.add("Chat")
         self.tab_settings = self.tabview.add("API Settings")
+        self.tab_arbitrator = self.tabview.add("Арбитр")
+        self.tab_role = self.tabview.add("Роль")
+        self.tab_prohibitions = self.tabview.add("Запреты")
+        self.tab_tasks = self.tabview.add("Задачи")
         self.tab_logs = self.tabview.add("Logs")
 
         self._create_chat_tab()
         self._create_settings_tab()
+        self._create_arbitrator_tab()
+        self._create_role_tab()
+        self._create_prohibitions_tab()
+        self._create_tasks_tab()
         self._create_logs_tab()
 
     def _create_chat_tab(self):
@@ -1691,6 +1699,280 @@ class AIManagerApp(ctk.CTk):
             corner_radius=8, fg_color="gray30",
             command=self._clear_logs
         ).pack(side="right")
+
+    def _create_arbitrator_tab(self):
+        """Create Arbitrator tab - Select Chairman neural network"""
+        self.tab_arbitrator.grid_rowconfigure(1, weight=1)
+        self.tab_arbitrator.grid_columnconfigure(0, weight=1)
+
+        # Header
+        header = ctk.CTkFrame(self.tab_arbitrator, fg_color="transparent")
+        header.grid(row=0, column=0, sticky="ew", pady=(0, 10))
+
+        ctk.CTkLabel(
+            header, text="Арбитр - Главный председатель",
+            font=ctk.CTkFont(size=20, weight="bold")
+        ).pack(side="left")
+
+        # Main content frame
+        content = ctk.CTkFrame(self.tab_arbitrator, fg_color="transparent")
+        content.grid(row=1, column=0, sticky="nsew", pady=(0, 10))
+
+        # Chairman selection
+        ctk.CTkLabel(
+            content, text="Выберите председателя (главную нейросеть):",
+            font=ctk.CTkFont(size=14, weight="bold")
+        ).pack(anchor="w", pady=(10, 10))
+
+        # Dropdown for selecting chairman
+        self.chairman_var = ctk.StringVar(value="Не выбран")
+        chairman_options = ["Не выбран"] + [name for name, _, _, _, _ in self.PROVIDER_INFO]
+
+        self.chairman_combo = ctk.CTkComboBox(
+            content, width=300, height=36,
+            values=chairman_options,
+            variable=self.chairman_var,
+            state="readonly",
+            font=ctk.CTkFont(size=13)
+        )
+        self.chairman_combo.pack(anchor="w", pady=(0, 20))
+
+        # Description
+        desc_frame = ctk.CTkFrame(content, corner_radius=12)
+        desc_frame.pack(fill="both", expand=True, pady=(10, 10))
+
+        ctk.CTkLabel(
+            desc_frame,
+            text="Председатель будет главной нейросетью,\nкоторая принимает финальные решения.",
+            font=ctk.CTkFont(size=12),
+            justify="left",
+            text_color="gray"
+        ).pack(padx=20, pady=20)
+
+        # Save button
+        btn_frame = ctk.CTkFrame(self.tab_arbitrator, fg_color="transparent")
+        btn_frame.grid(row=2, column=0, sticky="ew")
+
+        ctk.CTkButton(
+            btn_frame, text="Сохранить", height=40,
+            corner_radius=10, font=ctk.CTkFont(size=14, weight="bold"),
+            fg_color="#27ae60", hover_color="#1e8449",
+            command=self._save_arbitrator_settings
+        ).pack(side="left", padx=(0, 10))
+
+        # Load saved chairman if exists
+        self._load_arbitrator_settings()
+
+    def _create_role_tab(self):
+        """Create Role tab - Custom prompts for each neural network"""
+        # Scrollable frame
+        scroll = ctk.CTkScrollableFrame(self.tab_role, corner_radius=0)
+        scroll.pack(fill="both", expand=True)
+
+        ctk.CTkLabel(
+            scroll, text="Роль - Настройка промптов для каждой нейросети",
+            font=ctk.CTkFont(size=20, weight="bold")
+        ).pack(anchor="w", pady=(0, 15))
+
+        # Store textboxes for each provider
+        self.role_prompts = {}
+        self.role_models = {}
+
+        # Create card for each provider
+        for name, key, color, url, desc in self.PROVIDER_INFO:
+            card_frame = ctk.CTkFrame(scroll, corner_radius=12, fg_color=("gray85", "gray20"))
+            card_frame.pack(fill="x", pady=10)
+
+            # Provider name header
+            header = ctk.CTkFrame(card_frame, fg_color="transparent")
+            header.pack(fill="x", padx=15, pady=(15, 10))
+
+            ctk.CTkLabel(
+                header, text=name,
+                font=ctk.CTkFont(size=16, weight="bold"),
+                text_color=color
+            ).pack(side="left")
+
+            ctk.CTkLabel(
+                header, text=desc,
+                font=ctk.CTkFont(size=11),
+                text_color="gray"
+            ).pack(side="right")
+
+            # Model selection
+            model_frame = ctk.CTkFrame(card_frame, fg_color="transparent")
+            model_frame.pack(fill="x", padx=15, pady=(0, 10))
+
+            ctk.CTkLabel(
+                model_frame, text="Модель:",
+                font=ctk.CTkFont(size=12, weight="bold")
+            ).pack(side="left", padx=(0, 10))
+
+            model_var = ctk.StringVar(value="default")
+            model_combo = ctk.CTkComboBox(
+                model_frame, width=200, height=28,
+                values=["default", "custom"],
+                variable=model_var,
+                state="readonly"
+            )
+            model_combo.pack(side="left")
+            self.role_models[key] = model_var
+
+            # Prompt label
+            ctk.CTkLabel(
+                card_frame, text="Системный промпт:",
+                font=ctk.CTkFont(size=12, weight="bold")
+            ).pack(anchor="w", padx=15, pady=(0, 5))
+
+            # Prompt textbox
+            prompt_box = ctk.CTkTextbox(
+                card_frame, height=120, corner_radius=8,
+                font=ctk.CTkFont(size=11)
+            )
+            prompt_box.pack(fill="x", padx=15, pady=(0, 15))
+            self.role_prompts[key] = prompt_box
+
+        # Save button
+        btn_frame = ctk.CTkFrame(scroll, fg_color="transparent")
+        btn_frame.pack(fill="x", pady=20)
+
+        ctk.CTkButton(
+            btn_frame, text="Сохранить все промпты", height=40,
+            corner_radius=10, font=ctk.CTkFont(size=14, weight="bold"),
+            fg_color="#27ae60", hover_color="#1e8449",
+            command=self._save_role_settings
+        ).pack(side="left")
+
+        # Load saved prompts
+        self._load_role_settings()
+
+    def _create_prohibitions_tab(self):
+        """Create Prohibitions tab - List of prohibited prompts/topics"""
+        self.tab_prohibitions.grid_rowconfigure(1, weight=1)
+        self.tab_prohibitions.grid_columnconfigure(0, weight=1)
+
+        # Header
+        header = ctk.CTkFrame(self.tab_prohibitions, fg_color="transparent")
+        header.grid(row=0, column=0, sticky="ew", pady=(0, 10))
+
+        ctk.CTkLabel(
+            header, text="Запреты - Список запрещенных тем",
+            font=ctk.CTkFont(size=20, weight="bold")
+        ).pack(side="left")
+
+        # Description
+        ctk.CTkLabel(
+            self.tab_prohibitions,
+            text="Добавьте запреты для нейросетей (по одному на строку):",
+            font=ctk.CTkFont(size=12),
+            text_color="gray"
+        ).grid(row=1, column=0, sticky="w", pady=(0, 10))
+
+        # Scrollable textbox for prohibitions
+        self.prohibitions_text = ctk.CTkTextbox(
+            self.tab_prohibitions, corner_radius=12,
+            font=ctk.CTkFont(size=12)
+        )
+        self.prohibitions_text.grid(row=2, column=0, sticky="nsew", pady=(0, 10))
+
+        # Buttons
+        btn_frame = ctk.CTkFrame(self.tab_prohibitions, fg_color="transparent")
+        btn_frame.grid(row=3, column=0, sticky="ew")
+
+        ctk.CTkButton(
+            btn_frame, text="Сохранить запреты", height=40,
+            corner_radius=10, font=ctk.CTkFont(size=14, weight="bold"),
+            fg_color="#27ae60", hover_color="#1e8449",
+            command=self._save_prohibitions
+        ).pack(side="left", padx=(0, 10))
+
+        ctk.CTkButton(
+            btn_frame, text="Очистить", height=40,
+            corner_radius=10, fg_color="gray30",
+            command=self._clear_prohibitions
+        ).pack(side="left")
+
+        # Load saved prohibitions
+        self._load_prohibitions()
+
+    def _create_tasks_tab(self):
+        """Create Tasks tab - Algorithm and response logic"""
+        self.tab_tasks.grid_rowconfigure(1, weight=1)
+        self.tab_tasks.grid_columnconfigure(0, weight=1)
+
+        # Header
+        header = ctk.CTkFrame(self.tab_tasks, fg_color="transparent")
+        header.grid(row=0, column=0, sticky="ew", pady=(0, 10))
+
+        ctk.CTkLabel(
+            header, text="Задачи - Алгоритм ответа нейросети",
+            font=ctk.CTkFont(size=20, weight="bold")
+        ).pack(side="left")
+
+        # Description
+        ctk.CTkLabel(
+            self.tab_tasks,
+            text="Настройте алгоритм обработки запросов и ответов:",
+            font=ctk.CTkFont(size=12),
+            text_color="gray"
+        ).grid(row=1, column=0, sticky="w", pady=(0, 10))
+
+        # Scrollable textbox for tasks/algorithm
+        self.tasks_text = ctk.CTkTextbox(
+            self.tab_tasks, corner_radius=12,
+            font=ctk.CTkFont(size=12)
+        )
+        self.tasks_text.grid(row=2, column=0, sticky="nsew", pady=(0, 10))
+
+        # Preset algorithms frame
+        preset_frame = ctk.CTkFrame(self.tab_tasks, corner_radius=12)
+        preset_frame.grid(row=3, column=0, sticky="ew", pady=(0, 10))
+
+        ctk.CTkLabel(
+            preset_frame, text="Шаблоны алгоритмов:",
+            font=ctk.CTkFont(size=12, weight="bold")
+        ).pack(anchor="w", padx=15, pady=(10, 5))
+
+        presets_buttons = ctk.CTkFrame(preset_frame, fg_color="transparent")
+        presets_buttons.pack(fill="x", padx=15, pady=(0, 10))
+
+        ctk.CTkButton(
+            presets_buttons, text="Параллельный", height=32,
+            corner_radius=8, fg_color="#3498db",
+            command=lambda: self._load_task_preset("parallel")
+        ).pack(side="left", padx=(0, 5))
+
+        ctk.CTkButton(
+            presets_buttons, text="Последовательный", height=32,
+            corner_radius=8, fg_color="#9b59b6",
+            command=lambda: self._load_task_preset("sequential")
+        ).pack(side="left", padx=(0, 5))
+
+        ctk.CTkButton(
+            presets_buttons, text="Арбитраж", height=32,
+            corner_radius=8, fg_color="#e74c3c",
+            command=lambda: self._load_task_preset("arbitration")
+        ).pack(side="left")
+
+        # Buttons
+        btn_frame = ctk.CTkFrame(self.tab_tasks, fg_color="transparent")
+        btn_frame.grid(row=4, column=0, sticky="ew")
+
+        ctk.CTkButton(
+            btn_frame, text="Сохранить алгоритм", height=40,
+            corner_radius=10, font=ctk.CTkFont(size=14, weight="bold"),
+            fg_color="#27ae60", hover_color="#1e8449",
+            command=self._save_tasks
+        ).pack(side="left", padx=(0, 10))
+
+        ctk.CTkButton(
+            btn_frame, text="Очистить", height=40,
+            corner_radius=10, fg_color="gray30",
+            command=self._clear_tasks
+        ).pack(side="left")
+
+        # Load saved tasks
+        self._load_tasks()
 
     def _refresh_logs_display(self):
         """Refresh logs display"""
@@ -2571,6 +2853,191 @@ class AIManagerApp(ctk.CTk):
         except Exception as e:
             print(f"Error saving file: {e}")
             return None
+
+    # ==================== New Tab Helper Methods ====================
+
+    def _save_arbitrator_settings(self):
+        """Save arbitrator (chairman) settings"""
+        try:
+            chairman = self.chairman_var.get()
+            config_path = os.path.join(".", "arbitrator_config.json")
+
+            config = {
+                "chairman": chairman,
+                "updated_at": datetime.now().isoformat()
+            }
+
+            with open(config_path, 'w', encoding='utf-8') as f:
+                json.dump(config, f, ensure_ascii=False, indent=2)
+
+            messagebox.showinfo("Успешно", f"Председатель сохранен: {chairman}")
+            self.status_label.configure(text=f"Председатель: {chairman}")
+        except Exception as e:
+            messagebox.showerror("Ошибка", f"Не удалось сохранить: {e}")
+
+    def _load_arbitrator_settings(self):
+        """Load arbitrator settings"""
+        try:
+            config_path = os.path.join(".", "arbitrator_config.json")
+            if os.path.exists(config_path):
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                chairman = config.get("chairman", "Не выбран")
+                self.chairman_var.set(chairman)
+        except Exception as e:
+            logging.error(f"Failed to load arbitrator settings: {e}")
+
+    def _save_role_settings(self):
+        """Save role settings (prompts and models for each provider)"""
+        try:
+            config_path = os.path.join(".", "role_config.json")
+
+            config = {
+                "providers": {},
+                "updated_at": datetime.now().isoformat()
+            }
+
+            for key, prompt_box in self.role_prompts.items():
+                prompt = prompt_box.get("1.0", "end-1c")
+                model = self.role_models[key].get()
+                config["providers"][key] = {
+                    "prompt": prompt,
+                    "model": model
+                }
+
+            with open(config_path, 'w', encoding='utf-8') as f:
+                json.dump(config, f, ensure_ascii=False, indent=2)
+
+            messagebox.showinfo("Успешно", "Все промпты сохранены!")
+            self.status_label.configure(text="Промпты сохранены")
+        except Exception as e:
+            messagebox.showerror("Ошибка", f"Не удалось сохранить: {e}")
+
+    def _load_role_settings(self):
+        """Load role settings"""
+        try:
+            config_path = os.path.join(".", "role_config.json")
+            if os.path.exists(config_path):
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+
+                providers = config.get("providers", {})
+                for key, data in providers.items():
+                    if key in self.role_prompts:
+                        self.role_prompts[key].delete("1.0", "end")
+                        self.role_prompts[key].insert("1.0", data.get("prompt", ""))
+                    if key in self.role_models:
+                        self.role_models[key].set(data.get("model", "default"))
+        except Exception as e:
+            logging.error(f"Failed to load role settings: {e}")
+
+    def _save_prohibitions(self):
+        """Save prohibitions list"""
+        try:
+            config_path = os.path.join(".", "prohibitions_config.json")
+
+            prohibitions_text = self.prohibitions_text.get("1.0", "end-1c")
+            prohibitions_list = [line.strip() for line in prohibitions_text.split('\n') if line.strip()]
+
+            config = {
+                "prohibitions": prohibitions_list,
+                "updated_at": datetime.now().isoformat()
+            }
+
+            with open(config_path, 'w', encoding='utf-8') as f:
+                json.dump(config, f, ensure_ascii=False, indent=2)
+
+            messagebox.showinfo("Успешно", f"Сохранено {len(prohibitions_list)} запретов")
+            self.status_label.configure(text=f"Запреты сохранены: {len(prohibitions_list)}")
+        except Exception as e:
+            messagebox.showerror("Ошибка", f"Не удалось сохранить: {e}")
+
+    def _load_prohibitions(self):
+        """Load prohibitions"""
+        try:
+            config_path = os.path.join(".", "prohibitions_config.json")
+            if os.path.exists(config_path):
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+
+                prohibitions = config.get("prohibitions", [])
+                self.prohibitions_text.delete("1.0", "end")
+                self.prohibitions_text.insert("1.0", "\n".join(prohibitions))
+        except Exception as e:
+            logging.error(f"Failed to load prohibitions: {e}")
+
+    def _clear_prohibitions(self):
+        """Clear prohibitions text"""
+        if messagebox.askyesno("Подтверждение", "Очистить все запреты?"):
+            self.prohibitions_text.delete("1.0", "end")
+            self.status_label.configure(text="Запреты очищены")
+
+    def _save_tasks(self):
+        """Save tasks/algorithm"""
+        try:
+            config_path = os.path.join(".", "tasks_config.json")
+
+            tasks_text = self.tasks_text.get("1.0", "end-1c")
+
+            config = {
+                "algorithm": tasks_text,
+                "updated_at": datetime.now().isoformat()
+            }
+
+            with open(config_path, 'w', encoding='utf-8') as f:
+                json.dump(config, f, ensure_ascii=False, indent=2)
+
+            messagebox.showinfo("Успешно", "Алгоритм сохранен!")
+            self.status_label.configure(text="Алгоритм сохранен")
+        except Exception as e:
+            messagebox.showerror("Ошибка", f"Не удалось сохранить: {e}")
+
+    def _load_tasks(self):
+        """Load tasks/algorithm"""
+        try:
+            config_path = os.path.join(".", "tasks_config.json")
+            if os.path.exists(config_path):
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+
+                algorithm = config.get("algorithm", "")
+                self.tasks_text.delete("1.0", "end")
+                self.tasks_text.insert("1.0", algorithm)
+        except Exception as e:
+            logging.error(f"Failed to load tasks: {e}")
+
+    def _clear_tasks(self):
+        """Clear tasks text"""
+        if messagebox.askyesno("Подтверждение", "Очистить алгоритм?"):
+            self.tasks_text.delete("1.0", "end")
+            self.status_label.configure(text="Алгоритм очищен")
+
+    def _load_task_preset(self, preset_type: str):
+        """Load preset algorithm"""
+        presets = {
+            "parallel": """# Параллельный режим
+1. Отправить запрос всем активным нейросетям одновременно
+2. Дождаться ответов от всех
+3. Показать все ответы пользователю
+4. Пользователь выбирает лучший ответ""",
+
+            "sequential": """# Последовательный режим
+1. Отправить запрос первой нейросети
+2. Если ответ неудовлетворителен, отправить следующей
+3. Продолжать пока не получим хороший ответ
+4. Показать финальный ответ пользователю""",
+
+            "arbitration": """# Режим арбитража
+1. Отправить запрос всем активным нейросетям
+2. Собрать все ответы
+3. Отправить все ответы Председателю для анализа
+4. Председатель выбирает или синтезирует финальный ответ
+5. Показать решение Председателя пользователю"""
+        }
+
+        self.tasks_text.delete("1.0", "end")
+        self.tasks_text.insert("1.0", presets.get(preset_type, ""))
+        self.status_label.configure(text=f"Загружен шаблон: {preset_type}")
 
 
 def main():

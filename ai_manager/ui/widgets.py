@@ -1,6 +1,6 @@
 """
 Custom UI Widgets for AI Manager
-- APIKeyCard: Card for API key input with model selection
+- APIKeyCard: Card for API key input with model entry
 - ModernSwitch: Toggle switch for provider selection
 - ProviderMetricsCard: Display provider performance metrics
 """
@@ -8,7 +8,7 @@ Custom UI Widgets for AI Manager
 import customtkinter as ctk
 import tkinter as tk
 import webbrowser
-from typing import Callable, List, Optional
+from typing import Callable, Optional
 
 
 class ModernSwitch(ctk.CTkFrame):
@@ -51,7 +51,7 @@ class ModernSwitch(ctk.CTkFrame):
 
 
 class APIKeyCard(ctk.CTkFrame):
-    """Modern card for API key input with model selection"""
+    """Modern card for API key input with model entry"""
 
     def __init__(
         self,
@@ -60,7 +60,6 @@ class APIKeyCard(ctk.CTkFrame):
         color: str,
         url: str,
         description: str,
-        models: List[str] = None,
         on_model_change: Optional[Callable] = None,
         **kwargs
     ):
@@ -70,7 +69,6 @@ class APIKeyCard(ctk.CTkFrame):
         self.url = url
         self.color = color
         self.show_key = False
-        self.models = models or []
         self.on_model_change = on_model_change
 
         # Header with color accent
@@ -104,27 +102,22 @@ class APIKeyCard(ctk.CTkFrame):
             text_color="gray"
         ).pack(anchor="w", pady=(2, 8))
 
-        # Model selector (if models available)
-        if self.models:
-            model_row = ctk.CTkFrame(content, fg_color="transparent")
-            model_row.pack(fill="x", pady=(0, 8))
+        # Model entry
+        model_row = ctk.CTkFrame(content, fg_color="transparent")
+        model_row.pack(fill="x", pady=(0, 8))
 
-            ctk.CTkLabel(
-                model_row, text="Model:",
-                font=ctk.CTkFont(size=12)
-            ).pack(side="left", padx=(0, 10))
+        ctk.CTkLabel(
+            model_row, text="Model:",
+            font=ctk.CTkFont(size=12)
+        ).pack(side="left", padx=(0, 10))
 
-            self.model_combo = ctk.CTkComboBox(
-                model_row,
-                values=self.models,
-                width=200,
-                height=28,
-                command=self._on_model_select
-            )
-            self.model_combo.pack(side="left")
-            self.model_combo.set(self.models[0])
-        else:
-            self.model_combo = None
+        self.model_entry = ctk.CTkEntry(
+            model_row, width=240, height=28,
+            placeholder_text="Enter model name..."
+        )
+        self.model_entry.pack(side="left")
+        self.model_entry.bind("<FocusOut>", self._on_model_change)
+        self.model_entry.bind("<Return>", self._on_model_change)
 
         # Key input row
         key_row = ctk.CTkFrame(content, fg_color="transparent")
@@ -135,6 +128,7 @@ class APIKeyCard(ctk.CTkFrame):
             show="*", height=36, corner_radius=8
         )
         self.key_entry.pack(side="left", fill="x", expand=True, padx=(0, 8))
+        self._entry_widget = self.key_entry._entry if hasattr(self.key_entry, "_entry") else self.key_entry
 
         # Paste button
         ctk.CTkButton(
@@ -172,17 +166,17 @@ class APIKeyCard(ctk.CTkFrame):
         self.entry_menu.add_command(label="Clear", command=lambda: self.key_entry.delete(0, "end"))
 
         # Right-click menu
-        self.key_entry.bind("<Button-3>", self._show_entry_menu)
+        self._entry_widget.bind("<Button-3>", self._show_entry_menu)
 
         # Keyboard shortcuts
-        self.key_entry.bind("<Control-a>", lambda e: self._select_all_entry() or "break")
-        self.key_entry.bind("<Control-A>", lambda e: self._select_all_entry() or "break")
-        self.key_entry.bind("<Control-c>", lambda e: self._copy_entry() or "break")
-        self.key_entry.bind("<Control-C>", lambda e: self._copy_entry() or "break")
-        self.key_entry.bind("<Control-v>", lambda e: self._paste_key() or "break")
-        self.key_entry.bind("<Control-V>", lambda e: self._paste_key() or "break")
-        self.key_entry.bind("<Control-x>", lambda e: self._cut_entry() or "break")
-        self.key_entry.bind("<Control-X>", lambda e: self._cut_entry() or "break")
+        self._entry_widget.bind("<Control-a>", lambda e: self._select_all_entry() or "break")
+        self._entry_widget.bind("<Control-A>", lambda e: self._select_all_entry() or "break")
+        self._entry_widget.bind("<Control-c>", lambda e: self._copy_entry() or "break")
+        self._entry_widget.bind("<Control-C>", lambda e: self._copy_entry() or "break")
+        self._entry_widget.bind("<Control-v>", lambda e: self._paste_key() or "break")
+        self._entry_widget.bind("<Control-V>", lambda e: self._paste_key() or "break")
+        self._entry_widget.bind("<Control-x>", lambda e: self._cut_entry() or "break")
+        self._entry_widget.bind("<Control-X>", lambda e: self._cut_entry() or "break")
 
     def _show_entry_menu(self, event):
         try:
@@ -191,13 +185,14 @@ class APIKeyCard(ctk.CTkFrame):
             self.entry_menu.grab_release()
 
     def _select_all_entry(self):
-        self.key_entry.select_range(0, "end")
-        self.key_entry.focus()
+        if hasattr(self._entry_widget, "selection_range"):
+            self._entry_widget.selection_range(0, "end")
+        self._entry_widget.focus_set()
 
     def _copy_entry(self):
         try:
-            if self.key_entry.selection_present():
-                selected = self.key_entry.selection_get()
+            if self._entry_widget.selection_present():
+                selected = self._entry_widget.selection_get()
             else:
                 selected = self.key_entry.get()
             if selected:
@@ -208,12 +203,12 @@ class APIKeyCard(ctk.CTkFrame):
 
     def _cut_entry(self):
         try:
-            if self.key_entry.selection_present():
-                selected = self.key_entry.selection_get()
+            if self._entry_widget.selection_present():
+                selected = self._entry_widget.selection_get()
                 if selected:
                     self.clipboard_clear()
                     self.clipboard_append(selected)
-                    self.key_entry.delete("sel.first", "sel.last")
+                    self._entry_widget.delete("sel.first", "sel.last")
         except Exception:
             pass
 
@@ -232,9 +227,9 @@ class APIKeyCard(ctk.CTkFrame):
         except Exception:
             pass
 
-    def _on_model_select(self, model: str):
+    def _on_model_change(self, _event=None):
         if self.on_model_change:
-            self.on_model_change(model)
+            self.on_model_change(self.get_model())
 
     def _darken(self, hex_color: str) -> str:
         """Darken a hex color"""
@@ -252,13 +247,15 @@ class APIKeyCard(ctk.CTkFrame):
             self.key_entry.insert(0, key)
 
     def get_model(self) -> str:
-        if self.model_combo:
-            return self.model_combo.get()
+        if self.model_entry:
+            return self.model_entry.get().strip()
         return ""
 
     def set_model(self, model: str):
-        if self.model_combo and model in self.models:
-            self.model_combo.set(model)
+        if self.model_entry:
+            self.model_entry.delete(0, "end")
+            if model:
+                self.model_entry.insert(0, model)
 
     def set_status(self, connected: bool):
         color = "#27ae60" if connected else "#e74c3c"

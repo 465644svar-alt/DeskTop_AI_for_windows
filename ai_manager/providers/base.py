@@ -112,7 +112,7 @@ class AIProvider(ABC):
 
     def set_model(self, model: str):
         """Change the model"""
-        if model in self.AVAILABLE_MODELS or not self.AVAILABLE_MODELS:
+        if model is not None:
             self.model = model
             self._token_counter = TokenCounter(model)
 

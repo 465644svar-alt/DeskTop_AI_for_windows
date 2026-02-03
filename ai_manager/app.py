@@ -9,6 +9,7 @@ import tkinter as tk
 import threading
 import os
 import json
+import contextlib
 from datetime import datetime
 from typing import Dict, List, Tuple, Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -260,17 +261,15 @@ class AIManagerApp(ctk.CTk):
 
         # API cards
         for key, info in PROVIDER_INFO.items():
-            provider = self.providers.get(key)
-            models = provider.AVAILABLE_MODELS if provider else []
-
             card = APIKeyCard(
                 scroll, info["name"], info["color"],
                 info["url"], info["description"],
-                models=models,
                 on_model_change=lambda m, k=key: self._on_model_change(k, m)
             )
             card.pack(fill="x", pady=8)
             self.api_cards[key] = card
+            self._bind_clipboard_shortcuts(card.key_entry, editable=True)
+            self._bind_clipboard_shortcuts(card.model_entry, editable=True)
 
         # Buttons frame
         btn_frame = ctk.CTkFrame(scroll, fg_color="transparent")
@@ -398,65 +397,122 @@ class AIManagerApp(ctk.CTk):
         self._bind_clipboard_shortcuts(self.chat_input, editable=True)
         self._bind_clipboard_shortcuts(self.chat_display, editable=False)
 
-    def _bind_clipboard_shortcuts(self, widget, editable=True):
-        """Bind clipboard shortcuts to a text widget"""
-        # Ctrl+A - Select All
-        def select_all(e):
-            widget.tag_add("sel", "1.0", "end-1c")
-            return "break"
-        widget.bind("<Control-a>", select_all)
-        widget.bind("<Control-A>", select_all)
+    def _get_text_widget(self, widget):
+        """Resolve to the underlying tk widget for clipboard operations."""
+        if hasattr(widget, "_entry"):
+            return widget._entry
+        if hasattr(widget, "_textbox"):
+            return widget._textbox
+        return widget
 
-        # Ctrl+C - Copy
-        def copy_text(e):
+    @contextlib.contextmanager
+    def _with_widget_enabled(self, widget):
+        """Temporarily enable disabled/readonly widgets for clipboard operations."""
+        original_state = None
+        try:
+            original_state = widget.cget("state")
+        except Exception:
+            original_state = None
+        if original_state in ("disabled", "readonly"):
             try:
-                text_widget = widget._textbox if hasattr(widget, '_textbox') else widget
-                text_widget.event_generate("<<Copy>>")
-            except:
+                widget.configure(state="normal")
+            except Exception:
+                pass
+        try:
+            yield
+        finally:
+            if original_state in ("disabled", "readonly"):
                 try:
-                    sel = widget.get("sel.first", "sel.last")
-                    if sel:
-                        self.clipboard_clear()
-                        self.clipboard_append(sel)
-                except:
+                    widget.configure(state=original_state)
+                except Exception:
                     pass
-            return "break"
-        widget.bind("<Control-c>", copy_text)
-        widget.bind("<Control-C>", copy_text)
 
-        if editable:
-            # Ctrl+V - Paste
-            def paste_text(e):
-                try:
-                    text_widget = widget._textbox if hasattr(widget, '_textbox') else widget
-                    text_widget.event_generate("<<Paste>>")
-                except:
-                    try:
-                        text = self.clipboard_get()
-                        widget.insert("insert", text)
-                    except:
-                        pass
-                return "break"
-            widget.bind("<Control-v>", paste_text)
-            widget.bind("<Control-V>", paste_text)
+    def _bind_clipboard_shortcuts(self, widget, editable=True):
+        """Bind clipboard shortcuts using native Tk events with safe fallback."""
+        def _selection_present(target):
+            if isinstance(target, tk.Entry):
+                return target.selection_present()
+            if isinstance(target, tk.Text):
+                return bool(target.tag_ranges("sel"))
+            return False
 
-            # Ctrl+X - Cut
-            def cut_text(e):
+        def _handle_copy(event=None):
+            target = self._get_text_widget(event.widget if event else widget)
+            if not target or not _selection_present(target):
+                return None
+            with self._with_widget_enabled(target):
                 try:
-                    text_widget = widget._textbox if hasattr(widget, '_textbox') else widget
-                    text_widget.event_generate("<<Cut>>")
-                except:
+                    target.event_generate("<<Copy>>")
+                    return "break"
+                except Exception:
+                    return None
+
+        def _handle_cut(event=None):
+            if not editable:
+                return None
+            target = self._get_text_widget(event.widget if event else widget)
+            if not target or not _selection_present(target):
+                return None
+            with self._with_widget_enabled(target):
+                try:
+                    target.event_generate("<<Cut>>")
+                    return "break"
+                except Exception:
+                    return None
+
+        def _handle_paste(event=None):
+            if not editable:
+                return None
+            try:
+                clipboard_text = self.clipboard_get()
+            except Exception:
+                return None
+            if not clipboard_text:
+                return None
+            target = self._get_text_widget(event.widget if event else widget)
+            if not target:
+                return None
+            with self._with_widget_enabled(target):
+                try:
+                    target.event_generate("<<Paste>>")
+                    return "break"
+                except Exception:
                     try:
-                        sel = widget.get("sel.first", "sel.last")
-                        if sel:
-                            self.clipboard_clear()
-                            self.clipboard_append(sel)
-                            widget.delete("sel.first", "sel.last")
-                    except:
-                        pass
-                return "break"
-            widget.bind("<Control-x>", cut_text)
-            widget.bind("<Control-X>", cut_text)
+                        if isinstance(target, tk.Entry):
+                            if target.selection_present():
+                                target.delete("sel.first", "sel.last")
+                            target.insert(target.index("insert"), clipboard_text)
+                        elif isinstance(target, tk.Text):
+                            if target.tag_ranges("sel"):
+                                target.delete("sel.first", "sel.last")
+                            target.insert("insert", clipboard_text)
+                        return "break"
+                    except Exception:
+                        return None
+
+        def _handle_select_all(event=None):
+            target = self._get_text_widget(event.widget if event else widget)
+            if not target:
+                return None
+            with self._with_widget_enabled(target):
+                try:
+                    if isinstance(target, tk.Entry):
+                        target.select_range(0, "end")
+                    elif isinstance(target, tk.Text):
+                        target.tag_add("sel", "1.0", "end-1c")
+                    target.focus_set()
+                    return "break"
+                except Exception:
+                    return None
+
+        widget.bind("<Control-c>", _handle_copy)
+        widget.bind("<Control-C>", _handle_copy)
+        widget.bind("<Control-x>", _handle_cut)
+        widget.bind("<Control-X>", _handle_cut)
+        widget.bind("<Control-v>", _handle_paste)
+        widget.bind("<Control-V>", _handle_paste)
+        widget.bind("<Control-a>", _handle_select_all)
+        widget.bind("<Control-A>", _handle_select_all)
 
     def _setup_logs_bindings(self):
         """Setup keyboard bindings for logs"""
@@ -709,67 +765,90 @@ class AIManagerApp(ctk.CTk):
         self.clipboard_append(text)
 
     def _cut_input(self):
-        try:
-            selected = self.chat_input.get("sel.first", "sel.last")
-            if selected:
-                self._copy_to_clipboard(selected)
-                self.chat_input.delete("sel.first", "sel.last")
-        except Exception:
-            pass
+        target = self._get_text_widget(self.chat_input)
+        if not target:
+            return
+        with self._with_widget_enabled(target):
+            try:
+                target.event_generate("<<Cut>>")
+            except Exception:
+                pass
 
     def _copy_input(self):
-        try:
-            selected = self.chat_input.get("sel.first", "sel.last")
-            if selected:
-                self._copy_to_clipboard(selected)
-        except Exception:
-            pass
+        target = self._get_text_widget(self.chat_input)
+        if not target:
+            return
+        with self._with_widget_enabled(target):
+            try:
+                target.event_generate("<<Copy>>")
+            except Exception:
+                pass
 
     def _paste_input(self):
-        try:
-            text = self.clipboard_get()
-            if text:
-                self.chat_input.insert("insert", text)
-        except Exception:
-            pass
+        target = self._get_text_widget(self.chat_input)
+        if not target:
+            return
+        with self._with_widget_enabled(target):
+            try:
+                target.event_generate("<<Paste>>")
+            except Exception:
+                pass
 
     def _select_all_input(self):
-        self.chat_input.tag_add("sel", "1.0", "end-1c")
+        target = self._get_text_widget(self.chat_input)
+        if not target:
+            return
+        with self._with_widget_enabled(target):
+            try:
+                if isinstance(target, tk.Text):
+                    target.tag_add("sel", "1.0", "end-1c")
+                target.focus_set()
+            except Exception:
+                pass
 
     def _copy_chat(self):
-        try:
-            self.chat_display.configure(state="normal")
-            selected = self.chat_display.get("sel.first", "sel.last")
-            self.chat_display.configure(state="disabled")
-            if selected:
-                self._copy_to_clipboard(selected)
-        except Exception:
-            # Copy all if no selection
-            self.chat_display.configure(state="normal")
-            content = self.chat_display.get("1.0", "end-1c")
-            self.chat_display.configure(state="disabled")
-            if content.strip():
-                self._copy_to_clipboard(content)
+        target = self._get_text_widget(self.chat_display)
+        if not target:
+            return
+        with self._with_widget_enabled(target):
+            try:
+                target.event_generate("<<Copy>>")
+            except Exception:
+                pass
 
     def _select_all_chat(self):
-        self.chat_display.configure(state="normal")
-        self.chat_display.tag_add("sel", "1.0", "end-1c")
-        self.chat_display.configure(state="disabled")
+        target = self._get_text_widget(self.chat_display)
+        if not target:
+            return
+        with self._with_widget_enabled(target):
+            try:
+                if isinstance(target, tk.Text):
+                    target.tag_add("sel", "1.0", "end-1c")
+                target.focus_set()
+            except Exception:
+                pass
 
     def _copy_logs(self):
-        try:
-            self.logs_display.configure(state="normal")
-            selected = self.logs_display.get("sel.first", "sel.last")
-            self.logs_display.configure(state="disabled")
-            if selected:
-                self._copy_to_clipboard(selected)
-        except Exception:
-            pass
+        target = self._get_text_widget(self.logs_display)
+        if not target:
+            return
+        with self._with_widget_enabled(target):
+            try:
+                target.event_generate("<<Copy>>")
+            except Exception:
+                pass
 
     def _select_all_logs(self):
-        self.logs_display.configure(state="normal")
-        self.logs_display.tag_add("sel", "1.0", "end-1c")
-        self.logs_display.configure(state="disabled")
+        target = self._get_text_widget(self.logs_display)
+        if not target:
+            return
+        with self._with_widget_enabled(target):
+            try:
+                if isinstance(target, tk.Text):
+                    target.tag_add("sel", "1.0", "end-1c")
+                target.focus_set()
+            except Exception:
+                pass
 
     # ==================== Config & Providers ====================
 

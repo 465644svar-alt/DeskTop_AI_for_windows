@@ -1,6 +1,6 @@
 """
 Custom UI Widgets for AI Manager
-- APIKeyCard: Card for API key input with model selection
+- APIKeyCard: Card for API key input with model entry
 - ModernSwitch: Toggle switch for provider selection
 - ProviderMetricsCard: Display provider performance metrics
 """
@@ -8,7 +8,7 @@ Custom UI Widgets for AI Manager
 import customtkinter as ctk
 import tkinter as tk
 import webbrowser
-from typing import Callable, List, Optional
+from typing import Callable, Optional
 
 
 class ModernSwitch(ctk.CTkFrame):
@@ -51,7 +51,7 @@ class ModernSwitch(ctk.CTkFrame):
 
 
 class APIKeyCard(ctk.CTkFrame):
-    """Modern card for API key input with model selection"""
+    """Modern card for API key input with model entry"""
 
     def __init__(
         self,
@@ -60,7 +60,6 @@ class APIKeyCard(ctk.CTkFrame):
         color: str,
         url: str,
         description: str,
-        models: List[str] = None,
         on_model_change: Optional[Callable] = None,
         **kwargs
     ):
@@ -70,7 +69,6 @@ class APIKeyCard(ctk.CTkFrame):
         self.url = url
         self.color = color
         self.show_key = False
-        self.models = models or []
         self.on_model_change = on_model_change
 
         # Header with color accent
@@ -104,27 +102,22 @@ class APIKeyCard(ctk.CTkFrame):
             text_color="gray"
         ).pack(anchor="w", pady=(2, 8))
 
-        # Model selector (if models available)
-        if self.models:
-            model_row = ctk.CTkFrame(content, fg_color="transparent")
-            model_row.pack(fill="x", pady=(0, 8))
+        # Model entry
+        model_row = ctk.CTkFrame(content, fg_color="transparent")
+        model_row.pack(fill="x", pady=(0, 8))
 
-            ctk.CTkLabel(
-                model_row, text="Model:",
-                font=ctk.CTkFont(size=12)
-            ).pack(side="left", padx=(0, 10))
+        ctk.CTkLabel(
+            model_row, text="Model:",
+            font=ctk.CTkFont(size=12)
+        ).pack(side="left", padx=(0, 10))
 
-            self.model_combo = ctk.CTkComboBox(
-                model_row,
-                values=self.models,
-                width=200,
-                height=28,
-                command=self._on_model_select
-            )
-            self.model_combo.pack(side="left")
-            self.model_combo.set(self.models[0])
-        else:
-            self.model_combo = None
+        self.model_entry = ctk.CTkEntry(
+            model_row, width=240, height=28,
+            placeholder_text="Enter model name..."
+        )
+        self.model_entry.pack(side="left")
+        self.model_entry.bind("<FocusOut>", self._on_model_change)
+        self.model_entry.bind("<Return>", self._on_model_change)
 
         # Key input row
         key_row = ctk.CTkFrame(content, fg_color="transparent")
@@ -234,9 +227,9 @@ class APIKeyCard(ctk.CTkFrame):
         except Exception:
             pass
 
-    def _on_model_select(self, model: str):
+    def _on_model_change(self, _event=None):
         if self.on_model_change:
-            self.on_model_change(model)
+            self.on_model_change(self.get_model())
 
     def _darken(self, hex_color: str) -> str:
         """Darken a hex color"""
@@ -254,13 +247,15 @@ class APIKeyCard(ctk.CTkFrame):
             self.key_entry.insert(0, key)
 
     def get_model(self) -> str:
-        if self.model_combo:
-            return self.model_combo.get()
+        if self.model_entry:
+            return self.model_entry.get().strip()
         return ""
 
     def set_model(self, model: str):
-        if self.model_combo and model in self.models:
-            self.model_combo.set(model)
+        if self.model_entry:
+            self.model_entry.delete(0, "end")
+            if model:
+                self.model_entry.insert(0, model)
 
     def set_status(self, connected: bool):
         color = "#27ae60" if connected else "#e74c3c"

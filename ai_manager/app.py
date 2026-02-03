@@ -260,13 +260,9 @@ class AIManagerApp(ctk.CTk):
 
         # API cards
         for key, info in PROVIDER_INFO.items():
-            provider = self.providers.get(key)
-            models = provider.AVAILABLE_MODELS if provider else []
-
             card = APIKeyCard(
                 scroll, info["name"], info["color"],
                 info["url"], info["description"],
-                models=models,
                 on_model_change=lambda m, k=key: self._on_model_change(k, m)
             )
             card.pack(fill="x", pady=8)

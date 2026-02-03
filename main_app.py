@@ -961,7 +961,7 @@ class ModernSwitch(ctk.CTkFrame):
 
 
 class APIKeyCard(ctk.CTkFrame):
-    """Modern card for API key input"""
+    """Modern card for API key input with model entry"""
 
     def __init__(self, master, name: str, color: str, url: str, description: str, **kwargs):
         super().__init__(master, corner_radius=12, **kwargs)
@@ -1000,6 +1000,21 @@ class APIKeyCard(ctk.CTkFrame):
             font=ctk.CTkFont(size=11),
             text_color="gray"
         ).pack(anchor="w", pady=(2, 8))
+
+        # Model entry row
+        model_row = ctk.CTkFrame(content, fg_color="transparent")
+        model_row.pack(fill="x", pady=(0, 8))
+
+        ctk.CTkLabel(
+            model_row, text="Model:",
+            font=ctk.CTkFont(size=12)
+        ).pack(side="left", padx=(0, 10))
+
+        self.model_entry = ctk.CTkEntry(
+            model_row, width=240, height=28,
+            placeholder_text="Enter model name..."
+        )
+        self.model_entry.pack(side="left")
 
         # Key input row
         key_row = ctk.CTkFrame(content, fg_color="transparent")
@@ -1134,6 +1149,14 @@ class APIKeyCard(ctk.CTkFrame):
         self.key_entry.delete(0, "end")
         self.key_entry.insert(0, key)
 
+    def get_model(self) -> str:
+        return self.model_entry.get().strip()
+
+    def set_model(self, model: str):
+        self.model_entry.delete(0, "end")
+        if model:
+            self.model_entry.insert(0, model)
+
     def set_status(self, connected: bool):
         color = "#2ecc71" if connected else "#e74c3c"
         self.status_indicator.configure(fg_color=color)
@@ -1146,17 +1169,17 @@ class AIManagerApp(ctk.CTk):
 
     PROVIDER_INFO = [
         ("OpenAI GPT", "openai", "#10a37f", "https://platform.openai.com/api-keys",
-         "GPT-4o, GPT-4, GPT-3.5 Turbo"),
+         "Enter model name manually"),
         ("Anthropic Claude", "anthropic", "#cc785c", "https://console.anthropic.com/",
-         "Claude 3.5 Sonnet, Claude 3 Haiku"),
+         "Enter model name manually"),
         ("Gemini", "gemini", "#4285f4", "https://aistudio.google.com/apikey",
-         "Gemini 1.5 Flash, Gemini 1.5 Pro"),
+         "Enter model name manually"),
         ("DeepSeek", "deepseek", "#5436da", "https://platform.deepseek.com/",
-         "DeepSeek Chat, DeepSeek Coder"),
+         "Enter model name manually"),
         ("Groq", "groq", "#f55036", "https://console.groq.com/keys",
-         "Llama 3.3, Mixtral (Ultra fast!)"),
+         "Enter model name manually"),
         ("Mistral AI", "mistral", "#ff7000", "https://console.mistral.ai/api-keys/",
-         "Mistral Small, Mistral Large")
+         "Enter model name manually")
     ]
 
     # Default prompts for each AI provider
@@ -1354,6 +1377,10 @@ Expected output:
                 "openai": "", "anthropic": "", "gemini": "",
                 "deepseek": "", "groq": "", "mistral": ""
             },
+            "models": {
+                "openai": "", "anthropic": "", "gemini": "",
+                "deepseek": "", "groq": "", "mistral": ""
+            },
             "output_dir": os.path.expanduser("~/Documents"),
             "theme": "dark"
         }
@@ -1391,6 +1418,7 @@ Expected output:
         safe_config = {
             "output_dir": self.config.get("output_dir", ""),
             "theme": self.config.get("theme", "dark"),
+            "models": self.config.get("models", {}),
             "api_keys": {}  # Empty - keys are in secure storage
         }
         try:
@@ -1409,6 +1437,18 @@ Expected output:
             "Groq": GroqProvider(self.config["api_keys"].get("groq", "")),
             "Mistral AI": MistralProvider(self.config["api_keys"].get("mistral", ""))
         }
+        key_map = {
+            "OpenAI GPT": "openai",
+            "Anthropic Claude": "anthropic",
+            "Gemini": "gemini",
+            "DeepSeek": "deepseek",
+            "Groq": "groq",
+            "Mistral AI": "mistral"
+        }
+        for name, key in key_map.items():
+            model_name = self.config.get("models", {}).get(key, "")
+            if model_name and name in self.providers:
+                self.providers[name].model = model_name
 
     def _create_ui(self):
         """Create main UI"""
@@ -2412,6 +2452,7 @@ Expected output:
         """Load config to UI"""
         for key, card in self.api_cards.items():
             card.set_key(self.config["api_keys"].get(key, ""))
+            card.set_model(self.config.get("models", {}).get(key, ""))
 
         # Theme
         if self.config.get("theme") == "light":
@@ -2423,6 +2464,7 @@ Expected output:
         for key, card in self.api_cards.items():
             api_key = card.get_key()
             self.config["api_keys"][key] = api_key
+            self.config["models"][key] = card.get_model()
             # Save directly to secure storage
             secure_storage.set_key(key, api_key)
 
@@ -2446,6 +2488,9 @@ Expected output:
         for name, key in key_map.items():
             if name in self.providers:
                 self.providers[name].api_key = self.config["api_keys"].get(key, "")
+                model_name = self.config.get("models", {}).get(key, "")
+                if model_name:
+                    self.providers[name].model = model_name
 
     def _check_connections_background(self):
         """Check connections in background"""

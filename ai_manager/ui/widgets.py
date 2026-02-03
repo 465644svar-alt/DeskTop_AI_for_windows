@@ -135,6 +135,7 @@ class APIKeyCard(ctk.CTkFrame):
             show="*", height=36, corner_radius=8
         )
         self.key_entry.pack(side="left", fill="x", expand=True, padx=(0, 8))
+        self._entry_widget = self.key_entry._entry if hasattr(self.key_entry, "_entry") else self.key_entry
 
         # Paste button
         ctk.CTkButton(
@@ -172,17 +173,17 @@ class APIKeyCard(ctk.CTkFrame):
         self.entry_menu.add_command(label="Clear", command=lambda: self.key_entry.delete(0, "end"))
 
         # Right-click menu
-        self.key_entry.bind("<Button-3>", self._show_entry_menu)
+        self._entry_widget.bind("<Button-3>", self._show_entry_menu)
 
         # Keyboard shortcuts
-        self.key_entry.bind("<Control-a>", lambda e: self._select_all_entry() or "break")
-        self.key_entry.bind("<Control-A>", lambda e: self._select_all_entry() or "break")
-        self.key_entry.bind("<Control-c>", lambda e: self._copy_entry() or "break")
-        self.key_entry.bind("<Control-C>", lambda e: self._copy_entry() or "break")
-        self.key_entry.bind("<Control-v>", lambda e: self._paste_key() or "break")
-        self.key_entry.bind("<Control-V>", lambda e: self._paste_key() or "break")
-        self.key_entry.bind("<Control-x>", lambda e: self._cut_entry() or "break")
-        self.key_entry.bind("<Control-X>", lambda e: self._cut_entry() or "break")
+        self._entry_widget.bind("<Control-a>", lambda e: self._select_all_entry() or "break")
+        self._entry_widget.bind("<Control-A>", lambda e: self._select_all_entry() or "break")
+        self._entry_widget.bind("<Control-c>", lambda e: self._copy_entry() or "break")
+        self._entry_widget.bind("<Control-C>", lambda e: self._copy_entry() or "break")
+        self._entry_widget.bind("<Control-v>", lambda e: self._paste_key() or "break")
+        self._entry_widget.bind("<Control-V>", lambda e: self._paste_key() or "break")
+        self._entry_widget.bind("<Control-x>", lambda e: self._cut_entry() or "break")
+        self._entry_widget.bind("<Control-X>", lambda e: self._cut_entry() or "break")
 
     def _show_entry_menu(self, event):
         try:
@@ -191,13 +192,14 @@ class APIKeyCard(ctk.CTkFrame):
             self.entry_menu.grab_release()
 
     def _select_all_entry(self):
-        self.key_entry.select_range(0, "end")
-        self.key_entry.focus()
+        if hasattr(self._entry_widget, "selection_range"):
+            self._entry_widget.selection_range(0, "end")
+        self._entry_widget.focus_set()
 
     def _copy_entry(self):
         try:
-            if self.key_entry.selection_present():
-                selected = self.key_entry.selection_get()
+            if self._entry_widget.selection_present():
+                selected = self._entry_widget.selection_get()
             else:
                 selected = self.key_entry.get()
             if selected:
@@ -208,12 +210,12 @@ class APIKeyCard(ctk.CTkFrame):
 
     def _cut_entry(self):
         try:
-            if self.key_entry.selection_present():
-                selected = self.key_entry.selection_get()
+            if self._entry_widget.selection_present():
+                selected = self._entry_widget.selection_get()
                 if selected:
                     self.clipboard_clear()
                     self.clipboard_append(selected)
-                    self.key_entry.delete("sel.first", "sel.last")
+                    self._entry_widget.delete("sel.first", "sel.last")
         except Exception:
             pass
 

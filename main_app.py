@@ -36,7 +36,7 @@ from datetime import datetime
 from typing import Dict, Optional, List, Tuple
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import webbrowser
-from collections import deque
+from collections import deque, OrderedDict
 import base64
 import hashlib
 
@@ -2631,13 +2631,15 @@ Expected output:
         filename = f"admin_chat_log_{timestamp}.txt"
         filepath = os.path.join(self.admin_log_dir, filename)
 
+        formatted_content = self._format_admin_log_for_export(content)
+
         try:
             with open(filepath, "w", encoding="utf-8") as f:
                 f.write("=" * 70 + "\n")
                 f.write("AI Manager Admin Chat Log\n")
                 f.write(f"Saved: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
                 f.write("=" * 70 + "\n\n")
-                f.write(content)
+                f.write(formatted_content)
                 f.write("\n\n" + "=" * 70 + "\n")
                 f.write("End of admin log\n")
                 f.write("=" * 70 + "\n")
@@ -2650,6 +2652,48 @@ Expected output:
     def log_admin(self, text: str):
         """Thread-safe admin log helper."""
         self.after(0, lambda: self._append_admin_log(text))
+
+    def _format_admin_log_for_export(self, content: str) -> str:
+        """Format admin log content grouped by provider for readable export."""
+        lines = [line for line in content.splitlines() if line.strip()]
+        if not lines:
+            return ""
+
+        sections: "OrderedDict[str, List[str]]" = OrderedDict()
+        for line in lines:
+            provider = self._extract_provider_from_log_line(line)
+            if not provider:
+                provider = "Общее"
+            sections.setdefault(provider, []).append(line)
+
+        formatted_lines: List[str] = []
+        for provider, provider_lines in sections.items():
+            formatted_lines.append(f"**{provider}**")
+            formatted_lines.append("")
+            for entry in provider_lines:
+                formatted_lines.append(f"    {entry}")
+                formatted_lines.append("")
+        return "\n".join(formatted_lines).rstrip()
+
+    def _extract_provider_from_log_line(self, line: str) -> Optional[str]:
+        """Try to determine provider name from a log line."""
+        message = re.sub(r"^\[[^\]]+\]\s*", "", line)
+        if message.startswith("[") and "]" in message:
+            provider = message[1:message.index("]")]
+            return provider.strip()
+
+        patterns = [
+            r"provider:\s*(?P<provider>.+)$",
+            r"from\s+(?P<provider>.+?)\s+in\s+",
+            r"from\s+(?P<provider>.+)$",
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, message, re.IGNORECASE)
+            if match:
+                provider = match.group("provider").strip()
+                if provider:
+                    return provider
+        return None
 
     def get_role_text(self) -> str:
         provider_key = getattr(self, "_calibration_provider_key", None)

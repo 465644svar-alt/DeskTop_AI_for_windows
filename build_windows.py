@@ -1,113 +1,125 @@
 #!/usr/bin/env python3
+# НАЗНАЧЕНИЕ ФАЙЛА: Скрипт сборки Windows-исполняемого файла через PyInstaller.
 """
 AI Manager v9.0 - Cross-platform Build Script
 Builds executable for Windows using PyInstaller
 """
 
-import os
-import sys
-import subprocess
-import shutil
-from pathlib import Path
+import os  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+import sys  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+import subprocess  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+import shutil  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+from pathlib import Path  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
 
-def main():
-    print("=" * 50)
-    print("AI Manager v9.0 - Build Script")
-    print("=" * 50)
-    print()
+# ЛОГИЧЕСКИЙ БЛОК: функция `main` — выполняет отдельный шаг бизнес-логики.
+def main():  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    """Учебный комментарий: функция `main`. Добавьте доменную детализацию при необходимости."""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    print("=" * 50)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    print("AI Manager v9.0 - Build Script")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    print("=" * 50)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    print()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
     # Check Python version
-    if sys.version_info < (3, 8):
-        print("ERROR: Python 3.8+ required")
-        sys.exit(1)
+    # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+    if sys.version_info < (3, 8):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        print("ERROR: Python 3.8+ required")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        sys.exit(1)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    print(f"Python version: {sys.version}")
-    print()
+    print(f"Python version: {sys.version}")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    print()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
     # Get script directory
-    script_dir = Path(__file__).parent.absolute()
-    os.chdir(script_dir)
+    script_dir = Path(__file__).parent.absolute()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    os.chdir(script_dir)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
     # Step 1: Install dependencies
-    print("[1/4] Installing dependencies...")
-    subprocess.run([
-        sys.executable, "-m", "pip", "install", "-r", "requirements.txt"
-    ], check=True)
+    print("[1/4] Installing dependencies...")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    subprocess.run([  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        sys.executable, "-m", "pip", "install", "-r", "requirements.txt"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    ], check=True)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
     # Step 2: Install PyInstaller
-    print()
-    print("[2/4] Installing PyInstaller...")
-    subprocess.run([
-        sys.executable, "-m", "pip", "install", "pyinstaller"
-    ], check=True)
+    print()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    print("[2/4] Installing PyInstaller...")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    subprocess.run([  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        sys.executable, "-m", "pip", "install", "pyinstaller"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    ], check=True)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
     # Step 3: Build executable
-    print()
-    print("[3/4] Building executable...")
+    print()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    print("[3/4] Building executable...")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
     # PyInstaller arguments
-    args = [
-        sys.executable, "-m", "PyInstaller",
-        "--onefile",
-        "--windowed",
-        "--name", "AI_Manager",
-        "--clean",
+    args = [  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        sys.executable, "-m", "PyInstaller",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        "--onefile",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        "--windowed",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        "--name", "AI_Manager",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        "--clean",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
         # Hidden imports for customtkinter
-        "--hidden-import", "customtkinter",
-        "--collect-all", "customtkinter",
-    ]
+        "--hidden-import", "customtkinter",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        "--collect-all", "customtkinter",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    ]  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
     # Add icon if exists
-    icon_path = script_dir / "icon.ico"
-    if icon_path.exists():
-        args.extend(["--icon", str(icon_path)])
-        print(f"  Using icon: {icon_path}")
+    icon_path = script_dir / "icon.ico"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+    if icon_path.exists():  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        args.extend(["--icon", str(icon_path)])  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        print(f"  Using icon: {icon_path}")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
     # Add main script
-    args.append("main_app.py")
+    args.append("main_app.py")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
     # Run PyInstaller
-    result = subprocess.run(args)
+    result = subprocess.run(args)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    if result.returncode != 0:
-        print("ERROR: Build failed")
-        sys.exit(1)
+    # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+    if result.returncode != 0:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        print("ERROR: Build failed")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        sys.exit(1)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
     # Step 4: Cleanup
-    print()
-    print("[4/4] Cleaning up...")
+    print()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    print("[4/4] Cleaning up...")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
     # Remove build directory
-    build_dir = script_dir / "build"
-    if build_dir.exists():
-        shutil.rmtree(build_dir)
+    build_dir = script_dir / "build"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+    if build_dir.exists():  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        shutil.rmtree(build_dir)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
     # Remove spec file
-    spec_file = script_dir / "AI_Manager.spec"
-    if spec_file.exists():
-        spec_file.unlink()
+    spec_file = script_dir / "AI_Manager.spec"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+    if spec_file.exists():  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        spec_file.unlink()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
     # Success message
-    print()
-    print("=" * 50)
-    print("BUILD COMPLETE!")
-    print("=" * 50)
-    print()
+    print()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    print("=" * 50)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    print("BUILD COMPLETE!")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    print("=" * 50)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    print()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    dist_dir = script_dir / "dist"
-    if sys.platform == "win32":
-        exe_path = dist_dir / "AI_Manager.exe"
-    else:
-        exe_path = dist_dir / "AI_Manager"
+    dist_dir = script_dir / "dist"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+    if sys.platform == "win32":  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        exe_path = dist_dir / "AI_Manager.exe"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+    else:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        exe_path = dist_dir / "AI_Manager"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    print(f"Executable location: {exe_path}")
-    print()
+    print(f"Executable location: {exe_path}")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    print()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    if exe_path.exists():
-        print(f"File size: {exe_path.stat().st_size / 1024 / 1024:.1f} MB")
-    print()
+    # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+    if exe_path.exists():  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        print(f"File size: {exe_path.stat().st_size / 1024 / 1024:.1f} MB")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    print()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
 
-if __name__ == "__main__":
-    main()
+# ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+if __name__ == "__main__":  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    main()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.

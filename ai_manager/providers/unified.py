@@ -1,442 +1,543 @@
+# НАЗНАЧЕНИЕ ФАЙЛА: Реализации провайдеров ИИ в унифицированном формате запросов/ответов.
 """
 Unified AI Providers with consistent interface
 All providers inherit from HTTPAIProvider for common functionality
 """
 
-import time
-import logging
-import requests
-from typing import Dict, List, Tuple, Optional, Iterator
+import time  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+import logging  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+import requests  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+from typing import Dict, List, Tuple, Optional, Iterator  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-from .base import HTTPAIProvider, AIProvider, APIError, ErrorCategory
+from .base import HTTPAIProvider, AIProvider, APIError, ErrorCategory  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
 
-class OpenAIProvider(HTTPAIProvider):
-    """OpenAI GPT provider"""
+# ЛОГИЧЕСКИЙ БЛОК: класс `OpenAIProvider(HTTPAIProvider)` — объединяет состояние и поведение подсистемы.
+class OpenAIProvider(HTTPAIProvider):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    """OpenAI GPT provider"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    AVAILABLE_MODELS = [
-        "gpt-4o-mini",
-        "gpt-4o",
-        "gpt-4-turbo",
-        "gpt-4",
-        "gpt-3.5-turbo",
-        "o1-preview",
-        "o1-mini"
-    ]
+    AVAILABLE_MODELS = [  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        "gpt-4o-mini",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        "gpt-4o",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        "gpt-4-turbo",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        "gpt-4",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        "gpt-3.5-turbo",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        "o1-preview",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        "o1-mini"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    ]  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def __init__(self, api_key: str = "", model: str = "gpt-4o-mini"):
-        super().__init__("OpenAI GPT", api_key, "#10a37f", model)
-        self.base_url = "https://api.openai.com/v1"
-        self.max_context_tokens = 128000 if "gpt-4" in model else 16000
-        self.system_prompt = "You are a helpful assistant."
+    # ЛОГИЧЕСКИЙ БЛОК: функция `__init__` — выполняет отдельный шаг бизнес-логики.
+    def __init__(self, api_key: str = "", model: str = "gpt-4o-mini"):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Учебный комментарий: функция `__init__`. Добавьте доменную детализацию при необходимости."""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        super().__init__("OpenAI GPT", api_key, "#10a37f", model)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.base_url = "https://api.openai.com/v1"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.max_context_tokens = 128000 if "gpt-4" in model else 16000  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.system_prompt = "You are a helpful assistant."  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def _get_headers(self) -> Dict[str, str]:
-        return {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json"
-        }
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_get_headers` — выполняет отдельный шаг бизнес-логики.
+    def _get_headers(self) -> Dict[str, str]:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Учебный комментарий: функция `_get_headers`. Добавьте доменную детализацию при необходимости."""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        return {  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            "Authorization": f"Bearer {self.api_key}",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            "Content-Type": "application/json"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        }  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def _build_request_data(self, messages: List[dict]) -> dict:
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_build_request_data` — выполняет отдельный шаг бизнес-логики.
+    def _build_request_data(self, messages: List[dict]) -> dict:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
         # Add system prompt
-        all_messages = [{"role": "system", "content": self.system_prompt}]
-        all_messages.extend(messages)
+        """Учебный комментарий: функция `_build_request_data`. Добавьте доменную детализацию при необходимости."""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        all_messages = [{"role": "system", "content": self.system_prompt}]  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        all_messages.extend(messages)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        return {
-            "model": self.model,
-            "messages": all_messages,
-            "max_tokens": self.max_response_tokens,
-            "temperature": 0.7
-        }
+        return {  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            "model": self.model,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            "messages": all_messages,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            "max_tokens": self.max_response_tokens,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            "temperature": 0.7  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        }  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def _parse_response(self, response: requests.Response) -> str:
-        data = response.json()
-        return data["choices"][0]["message"]["content"]
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_parse_response` — выполняет отдельный шаг бизнес-логики.
+    def _parse_response(self, response: requests.Response) -> str:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Учебный комментарий: функция `_parse_response`. Добавьте доменную детализацию при необходимости."""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        data = response.json()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        return data["choices"][0]["message"]["content"]  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def query_stream(self, question: str) -> Iterator[Tuple[str, bool]]:
-        """Stream query results"""
-        if not self.api_key:
-            yield f"Error: Enter {self.name} API key", True
-            return
+    # ЛОГИЧЕСКИЙ БЛОК: функция `query_stream` — выполняет отдельный шаг бизнес-логики.
+    def query_stream(self, question: str) -> Iterator[Tuple[str, bool]]:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Stream query results"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if not self.api_key:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            yield f"Error: Enter {self.name} API key", True  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            return  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        self.add_to_history("user", question)
+        self.add_to_history("user", question)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        try:
-            headers = self._get_headers()
-            data = self._build_request_data(self.conversation_history)
-            data["stream"] = True
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            headers = self._get_headers()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            data = self._build_request_data(self.conversation_history)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            data["stream"] = True  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-            response = requests.post(
-                f"{self.base_url}/chat/completions",
-                headers=headers,
-                json=data,
-                stream=True,
-                timeout=self.timeout
-            )
+            response = requests.post(  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                f"{self.base_url}/chat/completions",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                headers=headers,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                json=data,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                stream=True,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                timeout=self.timeout  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            )  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-            if response.status_code != 200:
-                raise self._parse_error(response)
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if response.status_code != 200:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                raise self._parse_error(response)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-            full_response = ""
-            for line in response.iter_lines():
-                if line:
-                    line = line.decode('utf-8')
-                    if line.startswith("data: "):
-                        line = line[6:]
-                        if line == "[DONE]":
-                            break
-                        try:
-                            import json
-                            chunk_data = json.loads(line)
-                            delta = chunk_data["choices"][0].get("delta", {})
-                            content = delta.get("content", "")
-                            if content:
-                                full_response += content
-                                yield content, False
-                        except Exception:
-                            pass
+            full_response = ""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+            for line in response.iter_lines():  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                if line:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    line = line.decode('utf-8')  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                    if line.startswith("data: "):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                        line = line[6:]  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                        if line == "[DONE]":  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                            break  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+                        try:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                            import json  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                            chunk_data = json.loads(line)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                            delta = chunk_data["choices"][0].get("delta", {})  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                            content = delta.get("content", "")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                            if content:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                                full_response += content  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                                yield content, False  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+                        except Exception:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                            pass  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-            self.add_to_history("assistant", full_response)
-            yield "", True
+            self.add_to_history("assistant", full_response)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            yield "", True  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        except Exception as e:
-            if self.conversation_history and self.conversation_history[-1]["role"] == "user":
-                self.conversation_history.pop()
-            yield f"Error: {str(e)}", True
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except Exception as e:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if self.conversation_history and self.conversation_history[-1]["role"] == "user":  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                self.conversation_history.pop()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            yield f"Error: {str(e)}", True  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
 
-class AnthropicProvider(HTTPAIProvider):
-    """Anthropic Claude provider"""
+# ЛОГИЧЕСКИЙ БЛОК: класс `AnthropicProvider(HTTPAIProvider)` — объединяет состояние и поведение подсистемы.
+class AnthropicProvider(HTTPAIProvider):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    """Anthropic Claude provider"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    AVAILABLE_MODELS = [
-        "claude-3-5-sonnet-20241022",
-        "claude-3-5-haiku-20241022",
-        "claude-3-opus-20240229",
-        "claude-3-sonnet-20240229",
-        "claude-3-haiku-20240307"
-    ]
+    AVAILABLE_MODELS = [  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        "claude-3-5-sonnet-20241022",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        "claude-3-5-haiku-20241022",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        "claude-3-opus-20240229",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        "claude-3-sonnet-20240229",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        "claude-3-haiku-20240307"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    ]  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def __init__(self, api_key: str = "", model: str = "claude-3-5-haiku-20241022"):
-        super().__init__("Anthropic Claude", api_key, "#cc785c", model)
-        self.base_url = "https://api.anthropic.com/v1"
-        self.max_context_tokens = 200000
+    # ЛОГИЧЕСКИЙ БЛОК: функция `__init__` — выполняет отдельный шаг бизнес-логики.
+    def __init__(self, api_key: str = "", model: str = "claude-3-5-haiku-20241022"):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Учебный комментарий: функция `__init__`. Добавьте доменную детализацию при необходимости."""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        super().__init__("Anthropic Claude", api_key, "#cc785c", model)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.base_url = "https://api.anthropic.com/v1"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.max_context_tokens = 200000  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def _get_headers(self) -> Dict[str, str]:
-        return {
-            "x-api-key": self.api_key,
-            "anthropic-version": "2023-06-01",
-            "Content-Type": "application/json"
-        }
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_get_headers` — выполняет отдельный шаг бизнес-логики.
+    def _get_headers(self) -> Dict[str, str]:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Учебный комментарий: функция `_get_headers`. Добавьте доменную детализацию при необходимости."""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        return {  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            "x-api-key": self.api_key,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            "anthropic-version": "2023-06-01",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            "Content-Type": "application/json"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        }  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def _get_chat_endpoint(self) -> str:
-        return "/messages"
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_get_chat_endpoint` — выполняет отдельный шаг бизнес-логики.
+    def _get_chat_endpoint(self) -> str:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Учебный комментарий: функция `_get_chat_endpoint`. Добавьте доменную детализацию при необходимости."""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        return "/messages"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def _build_request_data(self, messages: List[dict]) -> dict:
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_build_request_data` — выполняет отдельный шаг бизнес-логики.
+    def _build_request_data(self, messages: List[dict]) -> dict:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
         # Anthropic doesn't use system in messages array
-        return {
-            "model": self.model,
-            "max_tokens": self.max_response_tokens,
-            "messages": messages
-        }
+        """Учебный комментарий: функция `_build_request_data`. Добавьте доменную детализацию при необходимости."""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        return {  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            "model": self.model,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            "max_tokens": self.max_response_tokens,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            "messages": messages  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        }  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def _parse_response(self, response: requests.Response) -> str:
-        data = response.json()
-        return data["content"][0]["text"]
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_parse_response` — выполняет отдельный шаг бизнес-логики.
+    def _parse_response(self, response: requests.Response) -> str:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Учебный комментарий: функция `_parse_response`. Добавьте доменную детализацию при необходимости."""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        data = response.json()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        return data["content"][0]["text"]  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def query_stream(self, question: str) -> Iterator[Tuple[str, bool]]:
-        """Stream query results"""
-        if not self.api_key:
-            yield f"Error: Enter {self.name} API key", True
-            return
+    # ЛОГИЧЕСКИЙ БЛОК: функция `query_stream` — выполняет отдельный шаг бизнес-логики.
+    def query_stream(self, question: str) -> Iterator[Tuple[str, bool]]:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Stream query results"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if not self.api_key:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            yield f"Error: Enter {self.name} API key", True  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            return  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        self.add_to_history("user", question)
+        self.add_to_history("user", question)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        try:
-            headers = self._get_headers()
-            data = self._build_request_data(self.conversation_history)
-            data["stream"] = True
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            headers = self._get_headers()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            data = self._build_request_data(self.conversation_history)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            data["stream"] = True  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-            response = requests.post(
-                f"{self.base_url}/messages",
-                headers=headers,
-                json=data,
-                stream=True,
-                timeout=self.timeout
-            )
+            response = requests.post(  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                f"{self.base_url}/messages",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                headers=headers,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                json=data,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                stream=True,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                timeout=self.timeout  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            )  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-            if response.status_code != 200:
-                raise self._parse_error(response)
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if response.status_code != 200:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                raise self._parse_error(response)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-            full_response = ""
-            for line in response.iter_lines():
-                if line:
-                    line = line.decode('utf-8')
-                    if line.startswith("data: "):
-                        try:
-                            import json
-                            event_data = json.loads(line[6:])
-                            if event_data.get("type") == "content_block_delta":
-                                content = event_data.get("delta", {}).get("text", "")
-                                if content:
-                                    full_response += content
-                                    yield content, False
-                        except Exception:
-                            pass
+            full_response = ""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+            for line in response.iter_lines():  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                if line:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    line = line.decode('utf-8')  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                    if line.startswith("data: "):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+                        try:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                            import json  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                            event_data = json.loads(line[6:])  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                            if event_data.get("type") == "content_block_delta":  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                                content = event_data.get("delta", {}).get("text", "")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                                # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                                if content:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                                    full_response += content  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                                    yield content, False  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+                        except Exception:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                            pass  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-            self.add_to_history("assistant", full_response)
-            yield "", True
+            self.add_to_history("assistant", full_response)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            yield "", True  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        except Exception as e:
-            if self.conversation_history and self.conversation_history[-1]["role"] == "user":
-                self.conversation_history.pop()
-            yield f"Error: {str(e)}", True
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except Exception as e:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if self.conversation_history and self.conversation_history[-1]["role"] == "user":  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                self.conversation_history.pop()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            yield f"Error: {str(e)}", True  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
 
-class GeminiProvider(HTTPAIProvider):
-    """Google Gemini provider"""
+# ЛОГИЧЕСКИЙ БЛОК: класс `GeminiProvider(HTTPAIProvider)` — объединяет состояние и поведение подсистемы.
+class GeminiProvider(HTTPAIProvider):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    """Google Gemini provider"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    AVAILABLE_MODELS = [
-        "gemini-1.5-flash",
-        "gemini-1.5-pro",
-        "gemini-1.0-pro"
-    ]
+    AVAILABLE_MODELS = [  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        "gemini-1.5-flash",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        "gemini-1.5-pro",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        "gemini-1.0-pro"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    ]  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def __init__(self, api_key: str = "", model: str = "gemini-1.5-flash"):
-        super().__init__("Google Gemini", api_key, "#4285f4", model)
-        self.base_url = "https://generativelanguage.googleapis.com/v1beta"
-        self.max_context_tokens = 1000000  # Gemini has huge context
+    # ЛОГИЧЕСКИЙ БЛОК: функция `__init__` — выполняет отдельный шаг бизнес-логики.
+    def __init__(self, api_key: str = "", model: str = "gemini-1.5-flash"):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Учебный комментарий: функция `__init__`. Добавьте доменную детализацию при необходимости."""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        super().__init__("Google Gemini", api_key, "#4285f4", model)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.base_url = "https://generativelanguage.googleapis.com/v1beta"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.max_context_tokens = 1000000  # Gemini has huge context  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def _get_headers(self) -> Dict[str, str]:
-        return {"Content-Type": "application/json"}
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_get_headers` — выполняет отдельный шаг бизнес-логики.
+    def _get_headers(self) -> Dict[str, str]:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Учебный комментарий: функция `_get_headers`. Добавьте доменную детализацию при необходимости."""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        return {"Content-Type": "application/json"}  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def _get_chat_endpoint(self) -> str:
-        return f"/models/{self.model}:generateContent?key={self.api_key}"
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_get_chat_endpoint` — выполняет отдельный шаг бизнес-логики.
+    def _get_chat_endpoint(self) -> str:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Учебный комментарий: функция `_get_chat_endpoint`. Добавьте доменную детализацию при необходимости."""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        return f"/models/{self.model}:generateContent?key={self.api_key}"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def _build_request_data(self, messages: List[dict]) -> dict:
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_build_request_data` — выполняет отдельный шаг бизнес-логики.
+    def _build_request_data(self, messages: List[dict]) -> dict:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
         # Convert to Gemini format
-        contents = []
-        for msg in messages:
-            role = "user" if msg["role"] == "user" else "model"
-            contents.append({
-                "role": role,
-                "parts": [{"text": msg["content"]}]
-            })
+        """Учебный комментарий: функция `_build_request_data`. Добавьте доменную детализацию при необходимости."""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        contents = []  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+        for msg in messages:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            role = "user" if msg["role"] == "user" else "model"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            contents.append({  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                "role": role,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                "parts": [{"text": msg["content"]}]  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            })  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        return {
-            "contents": contents,
-            "generationConfig": {
-                "temperature": 0.7,
-                "maxOutputTokens": self.max_response_tokens
-            }
-        }
+        return {  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            "contents": contents,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            "generationConfig": {  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                "temperature": 0.7,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                "maxOutputTokens": self.max_response_tokens  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            }  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        }  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def _parse_response(self, response: requests.Response) -> str:
-        data = response.json()
-        if "candidates" in data and len(data["candidates"]) > 0:
-            return data["candidates"][0]["content"]["parts"][0]["text"]
-        raise APIError("No response from Gemini", ErrorCategory.UNKNOWN, provider=self.name)
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_parse_response` — выполняет отдельный шаг бизнес-логики.
+    def _parse_response(self, response: requests.Response) -> str:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Учебный комментарий: функция `_parse_response`. Добавьте доменную детализацию при необходимости."""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        data = response.json()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if "candidates" in data and len(data["candidates"]) > 0:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            return data["candidates"][0]["content"]["parts"][0]["text"]  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        raise APIError("No response from Gemini", ErrorCategory.UNKNOWN, provider=self.name)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def _make_request(self, method: str, endpoint: str, headers: Dict[str, str],
-                      data: Optional[dict] = None, timeout: Optional[int] = None,
-                      stream: bool = False) -> requests.Response:
-        """Override to handle Gemini's different URL structure"""
-        url = f"{self.base_url}{endpoint}"
-        timeout = timeout or self.timeout
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_make_request` — выполняет отдельный шаг бизнес-логики.
+    def _make_request(self, method: str, endpoint: str, headers: Dict[str, str],  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                      data: Optional[dict] = None, timeout: Optional[int] = None,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                      stream: bool = False) -> requests.Response:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Override to handle Gemini's different URL structure"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        url = f"{self.base_url}{endpoint}"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        timeout = timeout or self.timeout  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        try:
-            response = requests.post(url, headers=headers, json=data, timeout=timeout)
-            if response.status_code >= 400:
-                raise self._parse_error(response)
-            return response
-        except APIError:
-            raise
-        except requests.exceptions.Timeout:
-            raise APIError("Request timeout", ErrorCategory.NETWORK, provider=self.name)
-        except Exception as e:
-            raise APIError(str(e), ErrorCategory.UNKNOWN, provider=self.name)
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            response = requests.post(url, headers=headers, json=data, timeout=timeout)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if response.status_code >= 400:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                raise self._parse_error(response)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            return response  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except APIError:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            raise  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except requests.exceptions.Timeout:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            raise APIError("Request timeout", ErrorCategory.NETWORK, provider=self.name)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except Exception as e:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            raise APIError(str(e), ErrorCategory.UNKNOWN, provider=self.name)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def test_connection(self) -> bool:
-        if not self.api_key:
-            self.is_connected = False
-            return False
-        try:
-            headers = self._get_headers()
-            data = {"contents": [{"parts": [{"text": "Hi"}]}]}
-            url = f"{self.base_url}/models/{self.model}:generateContent?key={self.api_key}"
-            response = requests.post(url, headers=headers, json=data, timeout=15)
-            self.is_connected = response.status_code == 200
-            return self.is_connected
-        except Exception:
-            self.is_connected = False
-            return False
-
-
-class DeepSeekProvider(HTTPAIProvider):
-    """DeepSeek provider"""
-
-    AVAILABLE_MODELS = [
-        "deepseek-chat",
-        "deepseek-coder"
-    ]
-
-    def __init__(self, api_key: str = "", model: str = "deepseek-chat"):
-        super().__init__("DeepSeek", api_key, "#5c6bc0", model)
-        self.base_url = "https://api.deepseek.com/v1"
-        self.max_context_tokens = 64000
-        self.system_prompt = "You are a helpful assistant."
-
-    def _get_headers(self) -> Dict[str, str]:
-        return {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json"
-        }
-
-    def _build_request_data(self, messages: List[dict]) -> dict:
-        all_messages = [{"role": "system", "content": self.system_prompt}]
-        all_messages.extend(messages)
-
-        return {
-            "model": self.model,
-            "messages": all_messages,
-            "max_tokens": self.max_response_tokens,
-            "temperature": 0.7
-        }
-
-    def _parse_response(self, response: requests.Response) -> str:
-        data = response.json()
-        return data["choices"][0]["message"]["content"]
+    # ЛОГИЧЕСКИЙ БЛОК: функция `test_connection` — выполняет отдельный шаг бизнес-логики.
+    def test_connection(self) -> bool:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Учебный комментарий: функция `test_connection`. Добавьте доменную детализацию при необходимости."""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if not self.api_key:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            self.is_connected = False  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            return False  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            headers = self._get_headers()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            data = {"contents": [{"parts": [{"text": "Hi"}]}]}  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            url = f"{self.base_url}/models/{self.model}:generateContent?key={self.api_key}"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            response = requests.post(url, headers=headers, json=data, timeout=15)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            self.is_connected = response.status_code == 200  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            return self.is_connected  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except Exception:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            self.is_connected = False  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            return False  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
 
-class GroqProvider(HTTPAIProvider):
-    """Groq provider (fast inference)"""
+# ЛОГИЧЕСКИЙ БЛОК: класс `DeepSeekProvider(HTTPAIProvider)` — объединяет состояние и поведение подсистемы.
+class DeepSeekProvider(HTTPAIProvider):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    """DeepSeek provider"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    AVAILABLE_MODELS = [
-        "llama-3.3-70b-versatile",
-        "llama-3.1-8b-instant",
-        "mixtral-8x7b-32768",
-        "gemma2-9b-it"
-    ]
+    AVAILABLE_MODELS = [  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        "deepseek-chat",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        "deepseek-coder"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    ]  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def __init__(self, api_key: str = "", model: str = "llama-3.3-70b-versatile"):
-        super().__init__("Groq", api_key, "#f55036", model)
-        self.base_url = "https://api.groq.com/openai/v1"
-        self.max_context_tokens = 32000
-        self.system_prompt = "You are a helpful assistant."
+    # ЛОГИЧЕСКИЙ БЛОК: функция `__init__` — выполняет отдельный шаг бизнес-логики.
+    def __init__(self, api_key: str = "", model: str = "deepseek-chat"):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Учебный комментарий: функция `__init__`. Добавьте доменную детализацию при необходимости."""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        super().__init__("DeepSeek", api_key, "#5c6bc0", model)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.base_url = "https://api.deepseek.com/v1"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.max_context_tokens = 64000  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.system_prompt = "You are a helpful assistant."  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def _get_headers(self) -> Dict[str, str]:
-        return {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json"
-        }
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_get_headers` — выполняет отдельный шаг бизнес-логики.
+    def _get_headers(self) -> Dict[str, str]:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Учебный комментарий: функция `_get_headers`. Добавьте доменную детализацию при необходимости."""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        return {  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            "Authorization": f"Bearer {self.api_key}",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            "Content-Type": "application/json"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        }  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def _build_request_data(self, messages: List[dict]) -> dict:
-        all_messages = [{"role": "system", "content": self.system_prompt}]
-        all_messages.extend(messages)
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_build_request_data` — выполняет отдельный шаг бизнес-логики.
+    def _build_request_data(self, messages: List[dict]) -> dict:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Учебный комментарий: функция `_build_request_data`. Добавьте доменную детализацию при необходимости."""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        all_messages = [{"role": "system", "content": self.system_prompt}]  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        all_messages.extend(messages)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        return {
-            "model": self.model,
-            "messages": all_messages,
-            "max_tokens": self.max_response_tokens,
-            "temperature": 0.7
-        }
+        return {  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            "model": self.model,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            "messages": all_messages,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            "max_tokens": self.max_response_tokens,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            "temperature": 0.7  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        }  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def _parse_response(self, response: requests.Response) -> str:
-        data = response.json()
-        return data["choices"][0]["message"]["content"]
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_parse_response` — выполняет отдельный шаг бизнес-логики.
+    def _parse_response(self, response: requests.Response) -> str:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Учебный комментарий: функция `_parse_response`. Добавьте доменную детализацию при необходимости."""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        data = response.json()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        return data["choices"][0]["message"]["content"]  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
 
-class MistralProvider(HTTPAIProvider):
-    """Mistral AI provider"""
+# ЛОГИЧЕСКИЙ БЛОК: класс `GroqProvider(HTTPAIProvider)` — объединяет состояние и поведение подсистемы.
+class GroqProvider(HTTPAIProvider):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    """Groq provider (fast inference)"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    AVAILABLE_MODELS = [
-        "mistral-small-latest",
-        "mistral-medium-latest",
-        "mistral-large-latest",
-        "open-mistral-7b",
-        "open-mixtral-8x7b"
-    ]
+    AVAILABLE_MODELS = [  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        "llama-3.3-70b-versatile",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        "llama-3.1-8b-instant",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        "mixtral-8x7b-32768",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        "gemma2-9b-it"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    ]  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def __init__(self, api_key: str = "", model: str = "mistral-small-latest"):
-        super().__init__("Mistral AI", api_key, "#ff7000", model)
-        self.base_url = "https://api.mistral.ai/v1"
-        self.max_context_tokens = 32000
+    # ЛОГИЧЕСКИЙ БЛОК: функция `__init__` — выполняет отдельный шаг бизнес-логики.
+    def __init__(self, api_key: str = "", model: str = "llama-3.3-70b-versatile"):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Учебный комментарий: функция `__init__`. Добавьте доменную детализацию при необходимости."""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        super().__init__("Groq", api_key, "#f55036", model)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.base_url = "https://api.groq.com/openai/v1"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.max_context_tokens = 32000  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.system_prompt = "You are a helpful assistant."  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def _get_headers(self) -> Dict[str, str]:
-        return {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json"
-        }
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_get_headers` — выполняет отдельный шаг бизнес-логики.
+    def _get_headers(self) -> Dict[str, str]:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Учебный комментарий: функция `_get_headers`. Добавьте доменную детализацию при необходимости."""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        return {  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            "Authorization": f"Bearer {self.api_key}",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            "Content-Type": "application/json"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        }  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def _build_request_data(self, messages: List[dict]) -> dict:
-        return {
-            "model": self.model,
-            "messages": messages,
-            "max_tokens": self.max_response_tokens,
-            "temperature": 0.7
-        }
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_build_request_data` — выполняет отдельный шаг бизнес-логики.
+    def _build_request_data(self, messages: List[dict]) -> dict:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Учебный комментарий: функция `_build_request_data`. Добавьте доменную детализацию при необходимости."""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        all_messages = [{"role": "system", "content": self.system_prompt}]  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        all_messages.extend(messages)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def _parse_response(self, response: requests.Response) -> str:
-        data = response.json()
-        return data["choices"][0]["message"]["content"]
+        return {  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            "model": self.model,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            "messages": all_messages,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            "max_tokens": self.max_response_tokens,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            "temperature": 0.7  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        }  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_parse_response` — выполняет отдельный шаг бизнес-логики.
+    def _parse_response(self, response: requests.Response) -> str:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Учебный комментарий: функция `_parse_response`. Добавьте доменную детализацию при необходимости."""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        data = response.json()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        return data["choices"][0]["message"]["content"]  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+
+
+# ЛОГИЧЕСКИЙ БЛОК: класс `MistralProvider(HTTPAIProvider)` — объединяет состояние и поведение подсистемы.
+class MistralProvider(HTTPAIProvider):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    """Mistral AI provider"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+
+    AVAILABLE_MODELS = [  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        "mistral-small-latest",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        "mistral-medium-latest",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        "mistral-large-latest",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        "open-mistral-7b",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        "open-mixtral-8x7b"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    ]  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+
+    # ЛОГИЧЕСКИЙ БЛОК: функция `__init__` — выполняет отдельный шаг бизнес-логики.
+    def __init__(self, api_key: str = "", model: str = "mistral-small-latest"):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Учебный комментарий: функция `__init__`. Добавьте доменную детализацию при необходимости."""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        super().__init__("Mistral AI", api_key, "#ff7000", model)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.base_url = "https://api.mistral.ai/v1"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.max_context_tokens = 32000  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_get_headers` — выполняет отдельный шаг бизнес-логики.
+    def _get_headers(self) -> Dict[str, str]:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Учебный комментарий: функция `_get_headers`. Добавьте доменную детализацию при необходимости."""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        return {  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            "Authorization": f"Bearer {self.api_key}",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            "Content-Type": "application/json"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        }  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_build_request_data` — выполняет отдельный шаг бизнес-логики.
+    def _build_request_data(self, messages: List[dict]) -> dict:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Учебный комментарий: функция `_build_request_data`. Добавьте доменную детализацию при необходимости."""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        return {  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            "model": self.model,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            "messages": messages,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            "max_tokens": self.max_response_tokens,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            "temperature": 0.7  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        }  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_parse_response` — выполняет отдельный шаг бизнес-логики.
+    def _parse_response(self, response: requests.Response) -> str:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Учебный комментарий: функция `_parse_response`. Добавьте доменную детализацию при необходимости."""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        data = response.json()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        return data["choices"][0]["message"]["content"]  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
 
 # Provider registry for dynamic creation
-PROVIDER_REGISTRY = {
-    "openai": OpenAIProvider,
-    "anthropic": AnthropicProvider,
-    "gemini": GeminiProvider,
-    "deepseek": DeepSeekProvider,
-    "groq": GroqProvider,
-    "mistral": MistralProvider
-}
+PROVIDER_REGISTRY = {  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    "openai": OpenAIProvider,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    "anthropic": AnthropicProvider,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    "gemini": GeminiProvider,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    "deepseek": DeepSeekProvider,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    "groq": GroqProvider,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    "mistral": MistralProvider  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+}  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
 # Provider display info
-PROVIDER_INFO = {
-    "openai": {
-        "name": "OpenAI GPT",
-        "color": "#10a37f",
-        "url": "https://platform.openai.com/api-keys",
-        "description": "GPT-4, GPT-3.5 models"
-    },
-    "anthropic": {
-        "name": "Anthropic Claude",
-        "color": "#cc785c",
-        "url": "https://console.anthropic.com/",
-        "description": "Claude 3.5, Claude 3 models"
-    },
-    "gemini": {
-        "name": "Google Gemini",
-        "color": "#4285f4",
-        "url": "https://aistudio.google.com/apikey",
-        "description": "Gemini 1.5 Pro/Flash"
-    },
-    "deepseek": {
-        "name": "DeepSeek",
-        "color": "#5c6bc0",
-        "url": "https://platform.deepseek.com/",
-        "description": "DeepSeek Chat & Coder"
-    },
-    "groq": {
-        "name": "Groq",
-        "color": "#f55036",
-        "url": "https://console.groq.com/keys",
-        "description": "Llama, Mixtral (fast)"
-    },
-    "mistral": {
-        "name": "Mistral AI",
-        "color": "#ff7000",
-        "url": "https://console.mistral.ai/api-keys/",
-        "description": "Mistral models"
-    }
-}
+PROVIDER_INFO = {  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    "openai": {  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        "name": "OpenAI GPT",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        "color": "#10a37f",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        "url": "https://platform.openai.com/api-keys",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        "description": "GPT-4, GPT-3.5 models"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    },  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    "anthropic": {  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        "name": "Anthropic Claude",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        "color": "#cc785c",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        "url": "https://console.anthropic.com/",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        "description": "Claude 3.5, Claude 3 models"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    },  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    "gemini": {  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        "name": "Google Gemini",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        "color": "#4285f4",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        "url": "https://aistudio.google.com/apikey",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        "description": "Gemini 1.5 Pro/Flash"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    },  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    "deepseek": {  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        "name": "DeepSeek",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        "color": "#5c6bc0",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        "url": "https://platform.deepseek.com/",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        "description": "DeepSeek Chat & Coder"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    },  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    "groq": {  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        "name": "Groq",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        "color": "#f55036",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        "url": "https://console.groq.com/keys",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        "description": "Llama, Mixtral (fast)"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    },  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    "mistral": {  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        "name": "Mistral AI",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        "color": "#ff7000",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        "url": "https://console.mistral.ai/api-keys/",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        "description": "Mistral models"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    }  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+}  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
 
-def create_provider(provider_key: str, api_key: str = "", model: str = "") -> Optional[AIProvider]:
-    """Create a provider instance by key"""
-    if provider_key in PROVIDER_REGISTRY:
-        provider_class = PROVIDER_REGISTRY[provider_key]
-        if model:
-            return provider_class(api_key, model)
-        return provider_class(api_key)
-    return None
+# ЛОГИЧЕСКИЙ БЛОК: функция `create_provider` — выполняет отдельный шаг бизнес-логики.
+def create_provider(provider_key: str, api_key: str = "", model: str = "") -> Optional[AIProvider]:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    """Create a provider instance by key"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+    if provider_key in PROVIDER_REGISTRY:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        provider_class = PROVIDER_REGISTRY[provider_key]  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if model:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            return provider_class(api_key, model)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        return provider_class(api_key)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    return None  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.

@@ -1,75 +1,93 @@
+# НАЗНАЧЕНИЕ ФАЙЛА: Сервис очереди UI-событий для безопасного обновления интерфейса из фоновых задач.
 """
 Thread-safe UI Queue for Tkinter
 Ensures all UI updates happen on the main thread
 """
 
-from queue import Queue, Empty
-from dataclasses import dataclass
-from typing import Any, Callable, Optional
-from enum import Enum
-import logging
+from queue import Queue, Empty  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+from dataclasses import dataclass  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+from typing import Any, Callable, Optional  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+from enum import Enum  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+import logging  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-logger = logging.getLogger(__name__)
-
-
-class MessageType(Enum):
-    """Types of UI messages"""
-    RESPONSE = "response"
-    RESPONSE_CHUNK = "response_chunk"  # For streaming
-    ERROR = "error"
-    STATUS = "status"
-    PROGRESS = "progress"
-    FINISHED = "finished"
-    CONNECTION_STATUS = "connection_status"
-    CLEAR_CHAT = "clear_chat"
-    METRICS_UPDATE = "metrics_update"
+logger = logging.getLogger(__name__)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
 
-@dataclass
-class UIMessage:
-    """Message to be processed by UI thread"""
-    msg_type: MessageType
-    provider: str = ""
-    data: Any = None
-    elapsed: float = 0.0
-    success: bool = True
-
-    @classmethod
-    def response(cls, provider: str, text: str, elapsed: float):
-        return cls(MessageType.RESPONSE, provider, text, elapsed, True)
-
-    @classmethod
-    def response_chunk(cls, provider: str, chunk: str):
-        """For streaming responses"""
-        return cls(MessageType.RESPONSE_CHUNK, provider, chunk)
-
-    @classmethod
-    def error(cls, provider: str, error: str, elapsed: float = 0):
-        return cls(MessageType.ERROR, provider, error, elapsed, False)
-
-    @classmethod
-    def status(cls, text: str):
-        return cls(MessageType.STATUS, "", text)
-
-    @classmethod
-    def progress(cls, value: float):
-        """Progress value 0.0 to 1.0, or -1 for indeterminate"""
-        return cls(MessageType.PROGRESS, "", value)
-
-    @classmethod
-    def finished(cls, count: int, total_time: float, filepath: str = ""):
-        return cls(MessageType.FINISHED, "", {"count": count, "time": total_time, "file": filepath})
-
-    @classmethod
-    def connection_status(cls, provider: str, connected: bool):
-        return cls(MessageType.CONNECTION_STATUS, provider, connected)
-
-    @classmethod
-    def metrics_update(cls, provider: str, metrics: dict):
-        return cls(MessageType.METRICS_UPDATE, provider, metrics)
+# ЛОГИЧЕСКИЙ БЛОК: класс `MessageType(Enum)` — объединяет состояние и поведение подсистемы.
+class MessageType(Enum):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    """Types of UI messages"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    RESPONSE = "response"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    RESPONSE_CHUNK = "response_chunk"  # For streaming  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    ERROR = "error"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    STATUS = "status"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    PROGRESS = "progress"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    FINISHED = "finished"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    CONNECTION_STATUS = "connection_status"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    CLEAR_CHAT = "clear_chat"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    METRICS_UPDATE = "metrics_update"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
 
-class UIQueue:
+@dataclass  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+# ЛОГИЧЕСКИЙ БЛОК: класс `UIMessage` — объединяет состояние и поведение подсистемы.
+class UIMessage:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    """Message to be processed by UI thread"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    msg_type: MessageType  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    provider: str = ""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    data: Any = None  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    elapsed: float = 0.0  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    success: bool = True  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+
+    @classmethod  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    # ЛОГИЧЕСКИЙ БЛОК: функция `response` — выполняет отдельный шаг бизнес-логики.
+    def response(cls, provider: str, text: str, elapsed: float):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Учебный комментарий: функция `response`. Добавьте доменную детализацию при необходимости."""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        return cls(MessageType.RESPONSE, provider, text, elapsed, True)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+
+    @classmethod  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    # ЛОГИЧЕСКИЙ БЛОК: функция `response_chunk` — выполняет отдельный шаг бизнес-логики.
+    def response_chunk(cls, provider: str, chunk: str):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """For streaming responses"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        return cls(MessageType.RESPONSE_CHUNK, provider, chunk)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+
+    @classmethod  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    # ЛОГИЧЕСКИЙ БЛОК: функция `error` — выполняет отдельный шаг бизнес-логики.
+    def error(cls, provider: str, error: str, elapsed: float = 0):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Учебный комментарий: функция `error`. Добавьте доменную детализацию при необходимости."""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        return cls(MessageType.ERROR, provider, error, elapsed, False)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+
+    @classmethod  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    # ЛОГИЧЕСКИЙ БЛОК: функция `status` — выполняет отдельный шаг бизнес-логики.
+    def status(cls, text: str):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Учебный комментарий: функция `status`. Добавьте доменную детализацию при необходимости."""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        return cls(MessageType.STATUS, "", text)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+
+    @classmethod  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    # ЛОГИЧЕСКИЙ БЛОК: функция `progress` — выполняет отдельный шаг бизнес-логики.
+    def progress(cls, value: float):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Progress value 0.0 to 1.0, or -1 for indeterminate"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        return cls(MessageType.PROGRESS, "", value)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+
+    @classmethod  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    # ЛОГИЧЕСКИЙ БЛОК: функция `finished` — выполняет отдельный шаг бизнес-логики.
+    def finished(cls, count: int, total_time: float, filepath: str = ""):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Учебный комментарий: функция `finished`. Добавьте доменную детализацию при необходимости."""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        return cls(MessageType.FINISHED, "", {"count": count, "time": total_time, "file": filepath})  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+
+    @classmethod  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    # ЛОГИЧЕСКИЙ БЛОК: функция `connection_status` — выполняет отдельный шаг бизнес-логики.
+    def connection_status(cls, provider: str, connected: bool):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Учебный комментарий: функция `connection_status`. Добавьте доменную детализацию при необходимости."""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        return cls(MessageType.CONNECTION_STATUS, provider, connected)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+
+    @classmethod  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    # ЛОГИЧЕСКИЙ БЛОК: функция `metrics_update` — выполняет отдельный шаг бизнес-логики.
+    def metrics_update(cls, provider: str, metrics: dict):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Учебный комментарий: функция `metrics_update`. Добавьте доменную детализацию при необходимости."""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        return cls(MessageType.METRICS_UPDATE, provider, metrics)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+
+
+# ЛОГИЧЕСКИЙ БЛОК: класс `UIQueue` — объединяет состояние и поведение подсистемы.
+class UIQueue:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
     """Thread-safe queue for UI updates
 
     Usage:
@@ -81,88 +99,112 @@ class UIQueue:
         self.ui_queue.put(UIMessage.response("OpenAI", "Hello!", 1.5))
 
         # In main app:
+        # ЛОГИЧЕСКИЙ БЛОК: функция `_handle_ui_message` — выполняет отдельный шаг бизнес-логики.
         def _handle_ui_message(self, msg: UIMessage):
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
             if msg.msg_type == MessageType.RESPONSE:
                 self._show_response(msg.provider, msg.data, msg.elapsed)
     """
 
-    def __init__(self, poll_interval: int = 50):
+    # ЛОГИЧЕСКИЙ БЛОК: функция `__init__` — выполняет отдельный шаг бизнес-логики.
+    def __init__(self, poll_interval: int = 50):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
         """
         Args:
             poll_interval: Milliseconds between queue checks
         """
-        self._queue: Queue = Queue()
-        self._poll_interval = poll_interval
-        self._polling = False
-        self._widget = None
-        self._handler = None
+        self._queue: Queue = Queue()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self._poll_interval = poll_interval  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self._polling = False  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self._widget = None  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self._handler = None  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def put(self, message: UIMessage):
-        """Put a message in the queue (thread-safe)"""
-        self._queue.put(message)
+    # ЛОГИЧЕСКИЙ БЛОК: функция `put` — выполняет отдельный шаг бизнес-логики.
+    def put(self, message: UIMessage):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Put a message in the queue (thread-safe)"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self._queue.put(message)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def get(self, timeout: float = 0) -> Optional[UIMessage]:
-        """Get a message from the queue"""
-        try:
-            return self._queue.get(timeout=timeout)
-        except Empty:
-            return None
+    # ЛОГИЧЕСКИЙ БЛОК: функция `get` — выполняет отдельный шаг бизнес-логики.
+    def get(self, timeout: float = 0) -> Optional[UIMessage]:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Get a message from the queue"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            return self._queue.get(timeout=timeout)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except Empty:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            return None  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def start_polling(self, widget, handler: Callable[[UIMessage], None]):
+    # ЛОГИЧЕСКИЙ БЛОК: функция `start_polling` — выполняет отдельный шаг бизнес-логики.
+    def start_polling(self, widget, handler: Callable[[UIMessage], None]):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
         """Start polling the queue from the main thread
 
         Args:
             widget: Tkinter widget with .after() method
             handler: Function to call with each UIMessage
         """
-        self._widget = widget
-        self._handler = handler
-        self._polling = True
-        self._poll()
+        self._widget = widget  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self._handler = handler  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self._polling = True  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self._poll()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def stop_polling(self):
-        """Stop polling"""
-        self._polling = False
+    # ЛОГИЧЕСКИЙ БЛОК: функция `stop_polling` — выполняет отдельный шаг бизнес-логики.
+    def stop_polling(self):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Stop polling"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self._polling = False  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def _poll(self):
-        """Poll the queue and process messages"""
-        if not self._polling or self._widget is None:
-            return
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_poll` — выполняет отдельный шаг бизнес-логики.
+    def _poll(self):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Poll the queue and process messages"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if not self._polling or self._widget is None:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            return  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Process all available messages
-        messages_processed = 0
-        max_per_poll = 20  # Limit to prevent UI blocking
+        messages_processed = 0  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        max_per_poll = 20  # Limit to prevent UI blocking  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        while messages_processed < max_per_poll:
-            try:
-                message = self._queue.get_nowait()
-                if self._handler:
-                    try:
-                        self._handler(message)
-                    except Exception as e:
-                        logger.error(f"Error handling UI message: {e}")
-                messages_processed += 1
-            except Empty:
-                break
+        # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+        while messages_processed < max_per_poll:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+            try:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                message = self._queue.get_nowait()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                if self._handler:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+                    try:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                        self._handler(message)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+                    except Exception as e:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                        logger.error(f"Error handling UI message: {e}")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                messages_processed += 1  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+            except Empty:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                break  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Schedule next poll
-        if self._polling:
-            self._widget.after(self._poll_interval, self._poll)
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if self._polling:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            self._widget.after(self._poll_interval, self._poll)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def clear(self):
-        """Clear all pending messages"""
-        while True:
-            try:
-                self._queue.get_nowait()
-            except Empty:
-                break
+    # ЛОГИЧЕСКИЙ БЛОК: функция `clear` — выполняет отдельный шаг бизнес-логики.
+    def clear(self):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Clear all pending messages"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+        while True:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+            try:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                self._queue.get_nowait()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+            except Empty:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                break  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    @property
-    def is_empty(self) -> bool:
-        """Check if queue is empty"""
-        return self._queue.empty()
+    @property  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    # ЛОГИЧЕСКИЙ БЛОК: функция `is_empty` — выполняет отдельный шаг бизнес-логики.
+    def is_empty(self) -> bool:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Check if queue is empty"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        return self._queue.empty()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    @property
-    def size(self) -> int:
-        """Get approximate queue size"""
-        return self._queue.qsize()
+    @property  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    # ЛОГИЧЕСКИЙ БЛОК: функция `size` — выполняет отдельный шаг бизнес-логики.
+    def size(self) -> int:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Get approximate queue size"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        return self._queue.qsize()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.

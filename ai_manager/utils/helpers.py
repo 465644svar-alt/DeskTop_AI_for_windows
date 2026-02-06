@@ -1,165 +1,207 @@
+# НАЗНАЧЕНИЕ ФАЙЛА: Вспомогательные утилиты общего назначения для приложения.
 """
 Helper utilities for AI Manager
 - Token counting and estimation
 - Text processing
 """
 
-import re
-import logging
-from typing import List, Dict, Optional
+import re  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+import logging  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+from typing import List, Dict, Optional  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
 # Try to import tiktoken for accurate token counting
-try:
-    import tiktoken
-    TIKTOKEN_AVAILABLE = True
-except ImportError:
-    TIKTOKEN_AVAILABLE = False
-    logger.info("tiktoken not available, using estimation")
+# ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+try:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    import tiktoken  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    TIKTOKEN_AVAILABLE = True  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+# ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+except ImportError:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    TIKTOKEN_AVAILABLE = False  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    logger.info("tiktoken not available, using estimation")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
 
-class TokenCounter:
-    """Token counter with tiktoken or estimation fallback"""
+# ЛОГИЧЕСКИЙ БЛОК: класс `TokenCounter` — объединяет состояние и поведение подсистемы.
+class TokenCounter:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    """Token counter with tiktoken or estimation fallback"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
     # Average chars per token for different languages
-    CHARS_PER_TOKEN = {
-        "english": 4.0,
-        "code": 3.5,
-        "mixed": 3.0,
-        "russian": 2.0,  # Cyrillic uses more tokens
-        "chinese": 1.5
-    }
+    CHARS_PER_TOKEN = {  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        "english": 4.0,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        "code": 3.5,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        "mixed": 3.0,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        "russian": 2.0,  # Cyrillic uses more tokens  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        "chinese": 1.5  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    }  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def __init__(self, model: str = "gpt-4"):
-        self.model = model
-        self._encoder = None
+    # ЛОГИЧЕСКИЙ БЛОК: функция `__init__` — выполняет отдельный шаг бизнес-логики.
+    def __init__(self, model: str = "gpt-4"):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Учебный комментарий: функция `__init__`. Добавьте доменную детализацию при необходимости."""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.model = model  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self._encoder = None  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        if TIKTOKEN_AVAILABLE:
-            try:
-                self._encoder = tiktoken.encoding_for_model(model)
-            except KeyError:
-                try:
-                    self._encoder = tiktoken.get_encoding("cl100k_base")
-                except Exception:
-                    pass
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if TIKTOKEN_AVAILABLE:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+            try:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                self._encoder = tiktoken.encoding_for_model(model)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+            except KeyError:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+                try:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    self._encoder = tiktoken.get_encoding("cl100k_base")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+                except Exception:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    pass  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def count_tokens(self, text: str) -> int:
-        """Count tokens in text"""
-        if self._encoder:
-            try:
-                return len(self._encoder.encode(text))
-            except Exception:
-                pass
-        return self._estimate_tokens(text)
+    # ЛОГИЧЕСКИЙ БЛОК: функция `count_tokens` — выполняет отдельный шаг бизнес-логики.
+    def count_tokens(self, text: str) -> int:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Count tokens in text"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if self._encoder:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+            try:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                return len(self._encoder.encode(text))  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+            except Exception:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                pass  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        return self._estimate_tokens(text)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def _estimate_tokens(self, text: str) -> int:
-        """Estimate token count based on character analysis"""
-        if not text:
-            return 0
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_estimate_tokens` — выполняет отдельный шаг бизнес-логики.
+    def _estimate_tokens(self, text: str) -> int:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Estimate token count based on character analysis"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if not text:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            return 0  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Detect language/content type
-        cyrillic_ratio = len(re.findall(r'[а-яА-ЯёЁ]', text)) / max(len(text), 1)
-        code_ratio = len(re.findall(r'[{}()\[\];=<>]', text)) / max(len(text), 1)
+        cyrillic_ratio = len(re.findall(r'[а-яА-ЯёЁ]', text)) / max(len(text), 1)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        code_ratio = len(re.findall(r'[{}()\[\];=<>]', text)) / max(len(text), 1)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        if cyrillic_ratio > 0.3:
-            chars_per_token = self.CHARS_PER_TOKEN["russian"]
-        elif code_ratio > 0.1:
-            chars_per_token = self.CHARS_PER_TOKEN["code"]
-        else:
-            chars_per_token = self.CHARS_PER_TOKEN["mixed"]
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if cyrillic_ratio > 0.3:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            chars_per_token = self.CHARS_PER_TOKEN["russian"]  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        elif code_ratio > 0.1:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            chars_per_token = self.CHARS_PER_TOKEN["code"]  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        else:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            chars_per_token = self.CHARS_PER_TOKEN["mixed"]  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        return int(len(text) / chars_per_token) + 1
+        return int(len(text) / chars_per_token) + 1  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def count_messages_tokens(self, messages: List[Dict[str, str]]) -> int:
-        """Count total tokens in a list of messages"""
-        total = 0
-        for msg in messages:
+    # ЛОГИЧЕСКИЙ БЛОК: функция `count_messages_tokens` — выполняет отдельный шаг бизнес-логики.
+    def count_messages_tokens(self, messages: List[Dict[str, str]]) -> int:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Count total tokens in a list of messages"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        total = 0  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+        for msg in messages:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
             # Add overhead for message structure (~4 tokens per message)
-            total += 4
-            content = msg.get("content", "")
-            total += self.count_tokens(content)
-        return total
+            total += 4  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            content = msg.get("content", "")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            total += self.count_tokens(content)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        return total  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def trim_messages_by_tokens(
-        self,
-        messages: List[Dict[str, str]],
-        max_tokens: int,
-        keep_system: bool = True
-    ) -> List[Dict[str, str]]:
-        """Trim messages to fit within token limit"""
-        if not messages:
-            return messages
+    # ЛОГИЧЕСКИЙ БЛОК: функция `trim_messages_by_tokens` — выполняет отдельный шаг бизнес-логики.
+    def trim_messages_by_tokens(  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        messages: List[Dict[str, str]],  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        max_tokens: int,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        keep_system: bool = True  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    ) -> List[Dict[str, str]]:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Trim messages to fit within token limit"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if not messages:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            return messages  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        result = []
-        current_tokens = 0
+        result = []  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        current_tokens = 0  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # If keeping system message, add it first
-        system_msg = None
-        other_messages = []
+        system_msg = None  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        other_messages = []  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        for msg in messages:
-            if msg.get("role") == "system" and keep_system:
-                system_msg = msg
-            else:
-                other_messages.append(msg)
+        # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+        for msg in messages:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if msg.get("role") == "system" and keep_system:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                system_msg = msg  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            else:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                other_messages.append(msg)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        if system_msg:
-            system_tokens = self.count_tokens(system_msg.get("content", "")) + 4
-            current_tokens += system_tokens
-            result.append(system_msg)
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if system_msg:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            system_tokens = self.count_tokens(system_msg.get("content", "")) + 4  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            current_tokens += system_tokens  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            result.append(system_msg)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Add messages from newest to oldest until limit
-        for msg in reversed(other_messages):
-            msg_tokens = self.count_tokens(msg.get("content", "")) + 4
-            if current_tokens + msg_tokens <= max_tokens:
-                result.insert(1 if system_msg else 0, msg)
-                current_tokens += msg_tokens
-            else:
-                break
+        # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+        for msg in reversed(other_messages):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            msg_tokens = self.count_tokens(msg.get("content", "")) + 4  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if current_tokens + msg_tokens <= max_tokens:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                result.insert(1 if system_msg else 0, msg)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                current_tokens += msg_tokens  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            else:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                break  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Ensure at least the last user message is included
-        if len(result) == (1 if system_msg else 0) and other_messages:
-            result.append(other_messages[-1])
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if len(result) == (1 if system_msg else 0) and other_messages:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            result.append(other_messages[-1])  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        return result
+        return result  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
 
-def estimate_tokens(text: str) -> int:
-    """Quick token estimation without creating TokenCounter"""
-    if not text:
-        return 0
+# ЛОГИЧЕСКИЙ БЛОК: функция `estimate_tokens` — выполняет отдельный шаг бизнес-логики.
+def estimate_tokens(text: str) -> int:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    """Quick token estimation without creating TokenCounter"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+    if not text:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        return 0  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
     # Simple estimation: ~4 chars per token for English, ~2 for Cyrillic
-    cyrillic_count = len(re.findall(r'[а-яА-ЯёЁ]', text))
-    other_count = len(text) - cyrillic_count
+    cyrillic_count = len(re.findall(r'[а-яА-ЯёЁ]', text))  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    other_count = len(text) - cyrillic_count  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    return int(cyrillic_count / 2 + other_count / 4) + 1
-
-
-def truncate_text(text: str, max_chars: int = 500, suffix: str = "...") -> str:
-    """Truncate text to max characters"""
-    if len(text) <= max_chars:
-        return text
-    return text[:max_chars - len(suffix)] + suffix
+    return int(cyrillic_count / 2 + other_count / 4) + 1  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
 
-def format_elapsed_time(seconds: float) -> str:
-    """Format elapsed time nicely"""
-    if seconds < 1:
-        return f"{seconds*1000:.0f}ms"
-    elif seconds < 60:
-        return f"{seconds:.1f}s"
-    else:
-        minutes = int(seconds // 60)
-        secs = seconds % 60
-        return f"{minutes}m {secs:.0f}s"
+# ЛОГИЧЕСКИЙ БЛОК: функция `truncate_text` — выполняет отдельный шаг бизнес-логики.
+def truncate_text(text: str, max_chars: int = 500, suffix: str = "...") -> str:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    """Truncate text to max characters"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+    if len(text) <= max_chars:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        return text  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    return text[:max_chars - len(suffix)] + suffix  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
 
-def sanitize_filename(name: str) -> str:
-    """Sanitize string for use as filename"""
+# ЛОГИЧЕСКИЙ БЛОК: функция `format_elapsed_time` — выполняет отдельный шаг бизнес-логики.
+def format_elapsed_time(seconds: float) -> str:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    """Format elapsed time nicely"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+    if seconds < 1:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        return f"{seconds*1000:.0f}ms"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+    elif seconds < 60:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        return f"{seconds:.1f}s"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+    else:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        minutes = int(seconds // 60)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        secs = seconds % 60  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        return f"{minutes}m {secs:.0f}s"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+
+
+# ЛОГИЧЕСКИЙ БЛОК: функция `sanitize_filename` — выполняет отдельный шаг бизнес-логики.
+def sanitize_filename(name: str) -> str:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    """Sanitize string for use as filename"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
     # Remove invalid characters
-    invalid_chars = '<>:"/\\|?*'
-    for char in invalid_chars:
-        name = name.replace(char, '_')
-    return name[:100]  # Limit length
+    invalid_chars = '<>:"/\\|?*'  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+    for char in invalid_chars:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        name = name.replace(char, '_')  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    return name[:100]  # Limit length  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.

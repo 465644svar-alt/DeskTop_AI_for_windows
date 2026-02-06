@@ -1,162 +1,197 @@
+# НАЗНАЧЕНИЕ ФАЙЛА: Сервис управления ветками/режимами выполнения и связанной логикой состояния.
 """
 Conversation Branch Manager
 Save, load, switch between conversation branches
 """
 
-import os
-import json
-import logging
-from datetime import datetime
-from typing import Dict, List, Optional
+import os  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+import json  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+import logging  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+from datetime import datetime  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+from typing import Dict, List, Optional  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
 
-class ConversationBranchManager:
-    """Manager for conversation branches (save/load/switch/delete)"""
+# ЛОГИЧЕСКИЙ БЛОК: класс `ConversationBranchManager` — объединяет состояние и поведение подсистемы.
+class ConversationBranchManager:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    """Manager for conversation branches (save/load/switch/delete)"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def __init__(self, save_dir: str = "branches"):
-        self.save_dir = save_dir
-        self.branches_file = os.path.join(save_dir, "branches.json")
-        self.branches: List[dict] = []
-        self.current_branch_id: Optional[str] = None
-        os.makedirs(save_dir, exist_ok=True)
-        self._load_branches_index()
+    # ЛОГИЧЕСКИЙ БЛОК: функция `__init__` — выполняет отдельный шаг бизнес-логики.
+    def __init__(self, save_dir: str = "branches"):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Учебный комментарий: функция `__init__`. Добавьте доменную детализацию при необходимости."""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.save_dir = save_dir  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.branches_file = os.path.join(save_dir, "branches.json")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.branches: List[dict] = []  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.current_branch_id: Optional[str] = None  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        os.makedirs(save_dir, exist_ok=True)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self._load_branches_index()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def _load_branches_index(self):
-        """Load branches index from file"""
-        try:
-            if os.path.exists(self.branches_file):
-                with open(self.branches_file, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                    self.branches = data.get("branches", [])
-                    self.current_branch_id = data.get("current_branch_id")
-        except Exception as e:
-            logger.error(f"Failed to load branches index: {e}")
-            self.branches = []
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_load_branches_index` — выполняет отдельный шаг бизнес-логики.
+    def _load_branches_index(self):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Load branches index from file"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if os.path.exists(self.branches_file):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                with open(self.branches_file, 'r', encoding='utf-8') as f:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    data = json.load(f)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    self.branches = data.get("branches", [])  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    self.current_branch_id = data.get("current_branch_id")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except Exception as e:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            logger.error(f"Failed to load branches index: {e}")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            self.branches = []  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def _save_branches_index(self):
-        """Save branches index to file"""
-        try:
-            with open(self.branches_file, 'w', encoding='utf-8') as f:
-                json.dump({
-                    "branches": self.branches,
-                    "current_branch_id": self.current_branch_id
-                }, f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            logger.error(f"Failed to save branches index: {e}")
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_save_branches_index` — выполняет отдельный шаг бизнес-логики.
+    def _save_branches_index(self):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Save branches index to file"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            with open(self.branches_file, 'w', encoding='utf-8') as f:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                json.dump({  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    "branches": self.branches,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    "current_branch_id": self.current_branch_id  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                }, f, ensure_ascii=False, indent=2)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except Exception as e:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            logger.error(f"Failed to save branches index: {e}")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def create_branch(
-        self,
-        name: str,
-        providers_history: Dict[str, List[dict]],
-        chat_content: str = ""
-    ) -> str:
-        """Create a new branch from current state"""
-        branch_id = datetime.now().strftime("%Y%m%d_%H%M%S_") + str(len(self.branches))
+    # ЛОГИЧЕСКИЙ БЛОК: функция `create_branch` — выполняет отдельный шаг бизнес-логики.
+    def create_branch(  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        name: str,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        providers_history: Dict[str, List[dict]],  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        chat_content: str = ""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    ) -> str:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Create a new branch from current state"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        branch_id = datetime.now().strftime("%Y%m%d_%H%M%S_") + str(len(self.branches))  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        branch = {
-            "id": branch_id,
-            "name": name,
-            "created_at": datetime.now().isoformat(),
-            "message_count": sum(len(h) for h in providers_history.values())
-        }
+        branch = {  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            "id": branch_id,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            "name": name,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            "created_at": datetime.now().isoformat(),  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            "message_count": sum(len(h) for h in providers_history.values())  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        }  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Save branch data to separate file
-        branch_data = {
-            "id": branch_id,
-            "name": name,
-            "created_at": branch["created_at"],
-            "providers_history": providers_history,
-            "chat_content": chat_content
-        }
+        branch_data = {  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            "id": branch_id,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            "name": name,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            "created_at": branch["created_at"],  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            "providers_history": providers_history,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            "chat_content": chat_content  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        }  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        branch_file = os.path.join(self.save_dir, f"branch_{branch_id}.json")
-        try:
-            with open(branch_file, 'w', encoding='utf-8') as f:
-                json.dump(branch_data, f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            logger.error(f"Failed to save branch data: {e}")
-            return ""
+        branch_file = os.path.join(self.save_dir, f"branch_{branch_id}.json")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            with open(branch_file, 'w', encoding='utf-8') as f:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                json.dump(branch_data, f, ensure_ascii=False, indent=2)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except Exception as e:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            logger.error(f"Failed to save branch data: {e}")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            return ""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        self.branches.append(branch)
-        self.current_branch_id = branch_id
-        self._save_branches_index()
+        self.branches.append(branch)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.current_branch_id = branch_id  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self._save_branches_index()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        return branch_id
+        return branch_id  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def load_branch(self, branch_id: str) -> Optional[dict]:
-        """Load branch data by ID"""
-        branch_file = os.path.join(self.save_dir, f"branch_{branch_id}.json")
-        try:
-            if os.path.exists(branch_file):
-                with open(branch_file, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                    self.current_branch_id = branch_id
-                    self._save_branches_index()
-                    return data
-        except Exception as e:
-            logger.error(f"Failed to load branch: {e}")
-        return None
+    # ЛОГИЧЕСКИЙ БЛОК: функция `load_branch` — выполняет отдельный шаг бизнес-логики.
+    def load_branch(self, branch_id: str) -> Optional[dict]:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Load branch data by ID"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        branch_file = os.path.join(self.save_dir, f"branch_{branch_id}.json")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if os.path.exists(branch_file):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                with open(branch_file, 'r', encoding='utf-8') as f:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    data = json.load(f)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    self.current_branch_id = branch_id  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    self._save_branches_index()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    return data  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except Exception as e:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            logger.error(f"Failed to load branch: {e}")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        return None  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def delete_branch(self, branch_id: str) -> bool:
-        """Delete a branch"""
-        branch_file = os.path.join(self.save_dir, f"branch_{branch_id}.json")
-        try:
-            if os.path.exists(branch_file):
-                os.remove(branch_file)
+    # ЛОГИЧЕСКИЙ БЛОК: функция `delete_branch` — выполняет отдельный шаг бизнес-логики.
+    def delete_branch(self, branch_id: str) -> bool:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Delete a branch"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        branch_file = os.path.join(self.save_dir, f"branch_{branch_id}.json")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if os.path.exists(branch_file):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                os.remove(branch_file)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-            self.branches = [b for b in self.branches if b["id"] != branch_id]
+            self.branches = [b for b in self.branches if b["id"] != branch_id]  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-            if self.current_branch_id == branch_id:
-                self.current_branch_id = None
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if self.current_branch_id == branch_id:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                self.current_branch_id = None  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-            self._save_branches_index()
-            return True
-        except Exception as e:
-            logger.error(f"Failed to delete branch: {e}")
-            return False
+            self._save_branches_index()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            return True  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except Exception as e:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            logger.error(f"Failed to delete branch: {e}")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            return False  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def get_branches_list(self) -> List[dict]:
-        """Get list of all branches"""
-        return self.branches.copy()
+    # ЛОГИЧЕСКИЙ БЛОК: функция `get_branches_list` — выполняет отдельный шаг бизнес-логики.
+    def get_branches_list(self) -> List[dict]:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Get list of all branches"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        return self.branches.copy()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def rename_branch(self, branch_id: str, new_name: str) -> bool:
-        """Rename a branch"""
-        for branch in self.branches:
-            if branch["id"] == branch_id:
-                branch["name"] = new_name
-                self._save_branches_index()
+    # ЛОГИЧЕСКИЙ БЛОК: функция `rename_branch` — выполняет отдельный шаг бизнес-логики.
+    def rename_branch(self, branch_id: str, new_name: str) -> bool:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Rename a branch"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+        for branch in self.branches:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if branch["id"] == branch_id:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                branch["name"] = new_name  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                self._save_branches_index()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
                 # Update branch file
-                branch_file = os.path.join(self.save_dir, f"branch_{branch_id}.json")
-                try:
-                    if os.path.exists(branch_file):
-                        with open(branch_file, 'r', encoding='utf-8') as f:
-                            data = json.load(f)
-                        data["name"] = new_name
-                        with open(branch_file, 'w', encoding='utf-8') as f:
-                            json.dump(data, f, ensure_ascii=False, indent=2)
-                except Exception:
-                    pass
-                return True
-        return False
+                branch_file = os.path.join(self.save_dir, f"branch_{branch_id}.json")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+                try:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                    if os.path.exists(branch_file):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                        with open(branch_file, 'r', encoding='utf-8') as f:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                            data = json.load(f)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                        data["name"] = new_name  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                        with open(branch_file, 'w', encoding='utf-8') as f:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                            json.dump(data, f, ensure_ascii=False, indent=2)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+                except Exception:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    pass  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                return True  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        return False  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def get_branch_by_id(self, branch_id: str) -> Optional[dict]:
-        """Get branch info by ID"""
-        for branch in self.branches:
-            if branch["id"] == branch_id:
-                return branch.copy()
-        return None
+    # ЛОГИЧЕСКИЙ БЛОК: функция `get_branch_by_id` — выполняет отдельный шаг бизнес-логики.
+    def get_branch_by_id(self, branch_id: str) -> Optional[dict]:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Get branch info by ID"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+        for branch in self.branches:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if branch["id"] == branch_id:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                return branch.copy()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        return None  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
 
 # Singleton instance
-_branch_manager_instance: Optional[ConversationBranchManager] = None
+_branch_manager_instance: Optional[ConversationBranchManager] = None  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
 
-def get_branch_manager(save_dir: str = "branches") -> ConversationBranchManager:
-    """Get or create branch manager instance"""
-    global _branch_manager_instance
-    if _branch_manager_instance is None:
-        _branch_manager_instance = ConversationBranchManager(save_dir)
-    return _branch_manager_instance
+# ЛОГИЧЕСКИЙ БЛОК: функция `get_branch_manager` — выполняет отдельный шаг бизнес-логики.
+def get_branch_manager(save_dir: str = "branches") -> ConversationBranchManager:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    """Get or create branch manager instance"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    global _branch_manager_instance  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+    if _branch_manager_instance is None:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        _branch_manager_instance = ConversationBranchManager(save_dir)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    return _branch_manager_instance  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.

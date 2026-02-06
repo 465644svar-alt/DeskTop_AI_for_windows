@@ -1,358 +1,427 @@
+# НАЗНАЧЕНИЕ ФАЙЛА: Базовые абстракции провайдеров ИИ: интерфейсы, общие структуры и контракты.
 """
 Base AI Provider classes with improved error handling and retry logic
 """
 
-import time
-import logging
-import requests
-from abc import ABC, abstractmethod
-from typing import Dict, List, Tuple, Optional, Iterator, Any
-from dataclasses import dataclass
-from enum import Enum
+import time  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+import logging  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+import requests  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+from abc import ABC, abstractmethod  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+from typing import Dict, List, Tuple, Optional, Iterator, Any  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+from dataclasses import dataclass  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+from enum import Enum  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-from ..utils.helpers import TokenCounter, estimate_tokens
+from ..utils.helpers import TokenCounter, estimate_tokens  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-logger = logging.getLogger(__name__)
-
-
-class ErrorCategory(Enum):
-    """Categories of API errors"""
-    AUTH = "authentication"
-    RATE_LIMIT = "rate_limit"
-    CONTEXT_LENGTH = "context_length"
-    SERVER = "server_error"
-    NETWORK = "network"
-    INVALID_REQUEST = "invalid_request"
-    UNKNOWN = "unknown"
+logger = logging.getLogger(__name__)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
 
-@dataclass
-class APIError(Exception):
-    """Structured API error"""
-    message: str
-    category: ErrorCategory
-    status_code: int = 0
-    retryable: bool = False
-    raw_response: str = ""
-    provider: str = ""
-
-    def __str__(self):
-        return f"[{self.provider}] {self.category.value}: {self.message}"
+# ЛОГИЧЕСКИЙ БЛОК: класс `ErrorCategory(Enum)` — объединяет состояние и поведение подсистемы.
+class ErrorCategory(Enum):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    """Categories of API errors"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    AUTH = "authentication"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    RATE_LIMIT = "rate_limit"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    CONTEXT_LENGTH = "context_length"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    SERVER = "server_error"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    NETWORK = "network"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    INVALID_REQUEST = "invalid_request"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    UNKNOWN = "unknown"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
 
-class AIProvider(ABC):
-    """Base class for AI providers"""
+@dataclass  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+# ЛОГИЧЕСКИЙ БЛОК: класс `APIError(Exception)` — объединяет состояние и поведение подсистемы.
+class APIError(Exception):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    """Structured API error"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    message: str  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    category: ErrorCategory  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    status_code: int = 0  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    retryable: bool = False  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    raw_response: str = ""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    provider: str = ""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+
+    # ЛОГИЧЕСКИЙ БЛОК: функция `__str__` — выполняет отдельный шаг бизнес-логики.
+    def __str__(self):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Учебный комментарий: функция `__str__`. Добавьте доменную детализацию при необходимости."""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        return f"[{self.provider}] {self.category.value}: {self.message}"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+
+
+# ЛОГИЧЕСКИЙ БЛОК: класс `AIProvider(ABC)` — объединяет состояние и поведение подсистемы.
+class AIProvider(ABC):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    """Base class for AI providers"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
     # Available models for this provider
-    AVAILABLE_MODELS: List[str] = []
+    AVAILABLE_MODELS: List[str] = []  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def __init__(
-        self,
-        name: str,
-        api_key: str = "",
-        color: str = "#3498db",
-        model: str = ""
-    ):
-        self.name = name
-        self.api_key = api_key
-        self.color = color
-        self.is_connected = False
-        self.enabled = True
+    # ЛОГИЧЕСКИЙ БЛОК: функция `__init__` — выполняет отдельный шаг бизнес-логики.
+    def __init__(  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        name: str,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        api_key: str = "",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        color: str = "#3498db",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        model: str = ""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    ):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Учебный комментарий: функция `__init__`. Добавьте доменную детализацию при необходимости."""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.name = name  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.api_key = api_key  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.color = color  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.is_connected = False  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.enabled = True  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Model selection
-        self.model = model or (self.AVAILABLE_MODELS[0] if self.AVAILABLE_MODELS else "")
+        self.model = model or (self.AVAILABLE_MODELS[0] if self.AVAILABLE_MODELS else "")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Conversation history
-        self.conversation_history: List[dict] = []
+        self.conversation_history: List[dict] = []  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Token management
-        self.max_context_tokens = 8000  # Default, override per provider
-        self.max_response_tokens = 4000
-        self._token_counter = TokenCounter(self.model)
+        self.max_context_tokens = 8000  # Default, override per provider  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.max_response_tokens = 4000  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self._token_counter = TokenCounter(self.model)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    @abstractmethod
-    def test_connection(self) -> bool:
-        """Test connection to the API"""
-        raise NotImplementedError
+    @abstractmethod  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    # ЛОГИЧЕСКИЙ БЛОК: функция `test_connection` — выполняет отдельный шаг бизнес-логики.
+    def test_connection(self) -> bool:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Test connection to the API"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        raise NotImplementedError  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    @abstractmethod
-    def query(self, question: str) -> Tuple[str, float]:
-        """Send query and return (response, elapsed_time)"""
-        raise NotImplementedError
+    @abstractmethod  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    # ЛОГИЧЕСКИЙ БЛОК: функция `query` — выполняет отдельный шаг бизнес-логики.
+    def query(self, question: str) -> Tuple[str, float]:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Send query and return (response, elapsed_time)"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        raise NotImplementedError  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def query_stream(self, question: str) -> Iterator[Tuple[str, bool]]:
-        """Stream query results, yields (chunk, is_final)"""
+    # ЛОГИЧЕСКИЙ БЛОК: функция `query_stream` — выполняет отдельный шаг бизнес-логики.
+    def query_stream(self, question: str) -> Iterator[Tuple[str, bool]]:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Stream query results, yields (chunk, is_final)"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
         # Default implementation - non-streaming
-        response, _ = self.query(question)
-        yield response, True
+        response, _ = self.query(question)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        yield response, True  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def clear_history(self):
-        """Clear conversation history"""
-        self.conversation_history = []
+    # ЛОГИЧЕСКИЙ БЛОК: функция `clear_history` — выполняет отдельный шаг бизнес-логики.
+    def clear_history(self):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Clear conversation history"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.conversation_history = []  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def add_to_history(self, role: str, content: str):
-        """Add message to history with token-based trimming"""
-        self.conversation_history.append({"role": role, "content": content})
-        self._trim_history()
+    # ЛОГИЧЕСКИЙ БЛОК: функция `add_to_history` — выполняет отдельный шаг бизнес-логики.
+    def add_to_history(self, role: str, content: str):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Add message to history with token-based trimming"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.conversation_history.append({"role": role, "content": content})  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self._trim_history()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def _trim_history(self):
-        """Trim history to fit within token limit"""
-        max_history_tokens = self.max_context_tokens - self.max_response_tokens - 500  # Buffer
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_trim_history` — выполняет отдельный шаг бизнес-логики.
+    def _trim_history(self):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Trim history to fit within token limit"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        max_history_tokens = self.max_context_tokens - self.max_response_tokens - 500  # Buffer  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        while len(self.conversation_history) > 1:
-            total_tokens = self._token_counter.count_messages_tokens(self.conversation_history)
-            if total_tokens <= max_history_tokens:
-                break
+        # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+        while len(self.conversation_history) > 1:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            total_tokens = self._token_counter.count_messages_tokens(self.conversation_history)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if total_tokens <= max_history_tokens:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                break  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
             # Remove oldest message (keep at least the last one)
-            self.conversation_history.pop(0)
+            self.conversation_history.pop(0)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def get_history_tokens(self) -> int:
-        """Get current token count of history"""
-        return self._token_counter.count_messages_tokens(self.conversation_history)
+    # ЛОГИЧЕСКИЙ БЛОК: функция `get_history_tokens` — выполняет отдельный шаг бизнес-логики.
+    def get_history_tokens(self) -> int:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Get current token count of history"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        return self._token_counter.count_messages_tokens(self.conversation_history)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def set_model(self, model: str):
-        """Change the model"""
-        if model is not None:
-            self.model = model
-            self._token_counter = TokenCounter(model)
+    # ЛОГИЧЕСКИЙ БЛОК: функция `set_model` — выполняет отдельный шаг бизнес-логики.
+    def set_model(self, model: str):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Change the model"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if model is not None:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            self.model = model  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            self._token_counter = TokenCounter(model)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
 
-class HTTPAIProvider(AIProvider):
-    """Base class for HTTP-based AI providers with common functionality"""
+# ЛОГИЧЕСКИЙ БЛОК: класс `HTTPAIProvider(AIProvider)` — объединяет состояние и поведение подсистемы.
+class HTTPAIProvider(AIProvider):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    """Base class for HTTP-based AI providers with common functionality"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
     # HTTP settings
-    DEFAULT_TIMEOUT = 120
-    MAX_RETRIES = 3
-    RETRY_DELAYS = [1, 2, 4]  # Exponential backoff
+    DEFAULT_TIMEOUT = 120  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    MAX_RETRIES = 3  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    RETRY_DELAYS = [1, 2, 4]  # Exponential backoff  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.base_url = ""
-        self.timeout = self.DEFAULT_TIMEOUT
+    # ЛОГИЧЕСКИЙ БЛОК: функция `__init__` — выполняет отдельный шаг бизнес-логики.
+    def __init__(self, *args, **kwargs):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Учебный комментарий: функция `__init__`. Добавьте доменную детализацию при необходимости."""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        super().__init__(*args, **kwargs)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.base_url = ""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.timeout = self.DEFAULT_TIMEOUT  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def _make_request(
-        self,
-        method: str,
-        endpoint: str,
-        headers: Dict[str, str],
-        data: Optional[dict] = None,
-        timeout: Optional[int] = None,
-        stream: bool = False
-    ) -> requests.Response:
-        """Make HTTP request with retry logic"""
-        url = f"{self.base_url}{endpoint}"
-        timeout = timeout or self.timeout
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_make_request` — выполняет отдельный шаг бизнес-логики.
+    def _make_request(  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        method: str,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        endpoint: str,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        headers: Dict[str, str],  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        data: Optional[dict] = None,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        timeout: Optional[int] = None,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        stream: bool = False  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    ) -> requests.Response:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Make HTTP request with retry logic"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        url = f"{self.base_url}{endpoint}"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        timeout = timeout or self.timeout  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        last_error = None
-        for attempt in range(self.MAX_RETRIES):
-            try:
-                if method.upper() == "GET":
-                    response = requests.get(url, headers=headers, timeout=timeout)
-                else:
-                    response = requests.post(
-                        url, headers=headers, json=data,
-                        timeout=timeout, stream=stream
-                    )
+        last_error = None  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+        for attempt in range(self.MAX_RETRIES):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+            try:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                if method.upper() == "GET":  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    response = requests.get(url, headers=headers, timeout=timeout)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                else:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    response = requests.post(  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                        url, headers=headers, json=data,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                        timeout=timeout, stream=stream  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    )  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
                 # Check for rate limiting
-                if response.status_code == 429:
-                    retry_after = int(response.headers.get("Retry-After", self.RETRY_DELAYS[attempt]))
-                    if attempt < self.MAX_RETRIES - 1:
-                        logger.warning(f"[{self.name}] Rate limited, retrying in {retry_after}s...")
-                        time.sleep(retry_after)
-                        continue
-                    raise self._parse_error(response)
+                # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                if response.status_code == 429:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    retry_after = int(response.headers.get("Retry-After", self.RETRY_DELAYS[attempt]))  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                    if attempt < self.MAX_RETRIES - 1:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                        logger.warning(f"[{self.name}] Rate limited, retrying in {retry_after}s...")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                        time.sleep(retry_after)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                        continue  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    raise self._parse_error(response)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
                 # Check for server errors (potentially transient)
-                if response.status_code >= 500:
-                    if attempt < self.MAX_RETRIES - 1:
-                        delay = self.RETRY_DELAYS[attempt]
-                        logger.warning(f"[{self.name}] Server error {response.status_code}, retrying in {delay}s...")
-                        time.sleep(delay)
-                        continue
-                    raise self._parse_error(response)
+                # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                if response.status_code >= 500:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                    if attempt < self.MAX_RETRIES - 1:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                        delay = self.RETRY_DELAYS[attempt]  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                        logger.warning(f"[{self.name}] Server error {response.status_code}, retrying in {delay}s...")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                        time.sleep(delay)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                        continue  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    raise self._parse_error(response)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
                 # Client errors - don't retry
-                if response.status_code >= 400:
-                    raise self._parse_error(response)
+                # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                if response.status_code >= 400:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    raise self._parse_error(response)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-                return response
+                return response  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-            except requests.exceptions.Timeout:
-                last_error = APIError(
-                    message="Request timeout",
-                    category=ErrorCategory.NETWORK,
-                    retryable=True,
-                    provider=self.name
-                )
-                if attempt < self.MAX_RETRIES - 1:
-                    logger.warning(f"[{self.name}] Timeout, retrying...")
-                    time.sleep(self.RETRY_DELAYS[attempt])
-                    continue
+            # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+            except requests.exceptions.Timeout:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                last_error = APIError(  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    message="Request timeout",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    category=ErrorCategory.NETWORK,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    retryable=True,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    provider=self.name  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                )  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                if attempt < self.MAX_RETRIES - 1:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    logger.warning(f"[{self.name}] Timeout, retrying...")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    time.sleep(self.RETRY_DELAYS[attempt])  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    continue  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-            except requests.exceptions.ConnectionError as e:
-                last_error = APIError(
-                    message=f"Connection error: {str(e)[:100]}",
-                    category=ErrorCategory.NETWORK,
-                    retryable=True,
-                    provider=self.name
-                )
-                if attempt < self.MAX_RETRIES - 1:
-                    logger.warning(f"[{self.name}] Connection error, retrying...")
-                    time.sleep(self.RETRY_DELAYS[attempt])
-                    continue
+            # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+            except requests.exceptions.ConnectionError as e:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                last_error = APIError(  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    message=f"Connection error: {str(e)[:100]}",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    category=ErrorCategory.NETWORK,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    retryable=True,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    provider=self.name  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                )  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                if attempt < self.MAX_RETRIES - 1:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    logger.warning(f"[{self.name}] Connection error, retrying...")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    time.sleep(self.RETRY_DELAYS[attempt])  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    continue  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-            except APIError:
-                raise
+            # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+            except APIError:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                raise  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-            except Exception as e:
-                last_error = APIError(
-                    message=str(e),
-                    category=ErrorCategory.UNKNOWN,
-                    retryable=False,
-                    provider=self.name
-                )
+            # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+            except Exception as e:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                last_error = APIError(  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    message=str(e),  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    category=ErrorCategory.UNKNOWN,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    retryable=False,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    provider=self.name  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                )  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        if last_error:
-            raise last_error
-        raise APIError("Max retries exceeded", ErrorCategory.UNKNOWN, provider=self.name)
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if last_error:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            raise last_error  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        raise APIError("Max retries exceeded", ErrorCategory.UNKNOWN, provider=self.name)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def _parse_error(self, response: requests.Response) -> APIError:
-        """Parse error from response"""
-        status_code = response.status_code
-        raw_text = ""
-        error_message = f"HTTP {status_code}"
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_parse_error` — выполняет отдельный шаг бизнес-логики.
+    def _parse_error(self, response: requests.Response) -> APIError:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Parse error from response"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        status_code = response.status_code  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        raw_text = ""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        error_message = f"HTTP {status_code}"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        try:
-            raw_text = response.text[:500]
-            error_data = response.json()
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            raw_text = response.text[:500]  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            error_data = response.json()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
             # Try common error formats
-            if "error" in error_data:
-                err = error_data["error"]
-                if isinstance(err, dict):
-                    error_message = err.get("message", str(err))
-                else:
-                    error_message = str(err)
-            elif "message" in error_data:
-                error_message = error_data["message"]
-            elif "detail" in error_data:
-                error_message = str(error_data["detail"])
-        except Exception:
-            error_message = raw_text[:200] if raw_text else f"HTTP {status_code}"
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if "error" in error_data:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                err = error_data["error"]  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                if isinstance(err, dict):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    error_message = err.get("message", str(err))  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                else:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    error_message = str(err)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            elif "message" in error_data:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                error_message = error_data["message"]  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            elif "detail" in error_data:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                error_message = str(error_data["detail"])  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except Exception:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            error_message = raw_text[:200] if raw_text else f"HTTP {status_code}"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Categorize error
-        category = ErrorCategory.UNKNOWN
-        retryable = False
+        category = ErrorCategory.UNKNOWN  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        retryable = False  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        if status_code == 401:
-            category = ErrorCategory.AUTH
-            error_message = "Invalid API key"
-        elif status_code == 403:
-            category = ErrorCategory.AUTH
-            error_message = "Access denied - check API key permissions"
-        elif status_code == 429:
-            category = ErrorCategory.RATE_LIMIT
-            error_message = "Rate limit exceeded"
-            retryable = True
-        elif status_code == 400:
-            if "context" in error_message.lower() or "token" in error_message.lower():
-                category = ErrorCategory.CONTEXT_LENGTH
-                error_message = "Context length exceeded - try shorter messages"
-            else:
-                category = ErrorCategory.INVALID_REQUEST
-        elif status_code >= 500:
-            category = ErrorCategory.SERVER
-            error_message = f"Server error ({status_code})"
-            retryable = True
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if status_code == 401:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            category = ErrorCategory.AUTH  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            error_message = "Invalid API key"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        elif status_code == 403:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            category = ErrorCategory.AUTH  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            error_message = "Access denied - check API key permissions"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        elif status_code == 429:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            category = ErrorCategory.RATE_LIMIT  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            error_message = "Rate limit exceeded"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            retryable = True  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        elif status_code == 400:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if "context" in error_message.lower() or "token" in error_message.lower():  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                category = ErrorCategory.CONTEXT_LENGTH  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                error_message = "Context length exceeded - try shorter messages"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            else:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                category = ErrorCategory.INVALID_REQUEST  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        elif status_code >= 500:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            category = ErrorCategory.SERVER  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            error_message = f"Server error ({status_code})"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            retryable = True  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        return APIError(
-            message=error_message,
-            category=category,
-            status_code=status_code,
-            retryable=retryable,
-            raw_response=raw_text,
-            provider=self.name
-        )
+        return APIError(  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            message=error_message,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            category=category,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            status_code=status_code,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            retryable=retryable,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            raw_response=raw_text,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            provider=self.name  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        )  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def _get_headers(self) -> Dict[str, str]:
-        """Get default headers - override in subclasses"""
-        return {
-            "Content-Type": "application/json"
-        }
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_get_headers` — выполняет отдельный шаг бизнес-логики.
+    def _get_headers(self) -> Dict[str, str]:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Get default headers - override in subclasses"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        return {  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            "Content-Type": "application/json"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        }  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    @abstractmethod
-    def _build_request_data(self, messages: List[dict]) -> dict:
-        """Build request data for the API - override in subclasses"""
-        raise NotImplementedError
+    @abstractmethod  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_build_request_data` — выполняет отдельный шаг бизнес-логики.
+    def _build_request_data(self, messages: List[dict]) -> dict:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Build request data for the API - override in subclasses"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        raise NotImplementedError  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    @abstractmethod
-    def _parse_response(self, response: requests.Response) -> str:
-        """Parse response from the API - override in subclasses"""
-        raise NotImplementedError
+    @abstractmethod  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_parse_response` — выполняет отдельный шаг бизнес-логики.
+    def _parse_response(self, response: requests.Response) -> str:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Parse response from the API - override in subclasses"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        raise NotImplementedError  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def query(self, question: str) -> Tuple[str, float]:
-        """Send query and return (response, elapsed_time)"""
-        if not self.api_key:
-            return f"Error: Enter {self.name} API key", 0
+    # ЛОГИЧЕСКИЙ БЛОК: функция `query` — выполняет отдельный шаг бизнес-логики.
+    def query(self, question: str) -> Tuple[str, float]:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Send query and return (response, elapsed_time)"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if not self.api_key:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            return f"Error: Enter {self.name} API key", 0  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Add user message to history
-        self.add_to_history("user", question)
+        self.add_to_history("user", question)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        start_time = time.time()
+        start_time = time.time()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        try:
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
             # Build request
-            headers = self._get_headers()
-            data = self._build_request_data(self.conversation_history)
+            headers = self._get_headers()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            data = self._build_request_data(self.conversation_history)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
             # Make request
-            response = self._make_request("POST", self._get_chat_endpoint(), headers, data)
+            response = self._make_request("POST", self._get_chat_endpoint(), headers, data)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
             # Parse response
-            assistant_response = self._parse_response(response)
-            elapsed = time.time() - start_time
+            assistant_response = self._parse_response(response)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            elapsed = time.time() - start_time  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
             # Add to history
-            self.add_to_history("assistant", assistant_response)
+            self.add_to_history("assistant", assistant_response)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-            return assistant_response, elapsed
+            return assistant_response, elapsed  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        except APIError as e:
-            elapsed = time.time() - start_time
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except APIError as e:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            elapsed = time.time() - start_time  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
             # Remove the user message we added since the request failed
-            if self.conversation_history and self.conversation_history[-1]["role"] == "user":
-                self.conversation_history.pop()
-            return f"Error: {e.message}", elapsed
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if self.conversation_history and self.conversation_history[-1]["role"] == "user":  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                self.conversation_history.pop()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            return f"Error: {e.message}", elapsed  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        except Exception as e:
-            elapsed = time.time() - start_time
-            if self.conversation_history and self.conversation_history[-1]["role"] == "user":
-                self.conversation_history.pop()
-            logger.exception(f"[{self.name}] Unexpected error")
-            return f"Error: {str(e)}", elapsed
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except Exception as e:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            elapsed = time.time() - start_time  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if self.conversation_history and self.conversation_history[-1]["role"] == "user":  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                self.conversation_history.pop()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            logger.exception(f"[{self.name}] Unexpected error")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            return f"Error: {str(e)}", elapsed  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def _get_chat_endpoint(self) -> str:
-        """Get the chat completion endpoint - override if needed"""
-        return "/chat/completions"
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_get_chat_endpoint` — выполняет отдельный шаг бизнес-логики.
+    def _get_chat_endpoint(self) -> str:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Get the chat completion endpoint - override if needed"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        return "/chat/completions"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def test_connection(self) -> bool:
-        """Test connection to the API"""
-        if not self.api_key:
-            self.is_connected = False
-            return False
+    # ЛОГИЧЕСКИЙ БЛОК: функция `test_connection` — выполняет отдельный шаг бизнес-логики.
+    def test_connection(self) -> bool:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Test connection to the API"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if not self.api_key:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            self.is_connected = False  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            return False  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        try:
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
             # Simple test request
-            headers = self._get_headers()
-            data = self._build_request_data([{"role": "user", "content": "Hi"}])
-            data["max_tokens"] = 5  # Minimal response
+            headers = self._get_headers()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            data = self._build_request_data([{"role": "user", "content": "Hi"}])  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            data["max_tokens"] = 5  # Minimal response  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-            self._make_request("POST", self._get_chat_endpoint(), headers, data, timeout=15)
-            self.is_connected = True
-            return True
+            self._make_request("POST", self._get_chat_endpoint(), headers, data, timeout=15)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            self.is_connected = True  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            return True  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        except Exception as e:
-            logger.warning(f"[{self.name}] Connection test failed: {e}")
-            self.is_connected = False
-            return False
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except Exception as e:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            logger.warning(f"[{self.name}] Connection test failed: {e}")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            self.is_connected = False  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            return False  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.

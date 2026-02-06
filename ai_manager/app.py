@@ -1,1070 +1,1257 @@
+# НАЗНАЧЕНИЕ ФАЙЛА: Модуль приложения AI Manager: UI-логика, события, маршрутизация действий пользователя.
 """
 AI Manager Desktop Application v11.0
 Main Application Module with thread-safe UI and modular architecture
 """
 
-import customtkinter as ctk
-from tkinter import filedialog, messagebox
-import tkinter as tk
-import threading
-import os
-import json
-import contextlib
-from datetime import datetime
-from typing import Dict, List, Tuple, Optional
-from concurrent.futures import ThreadPoolExecutor, as_completed
+import customtkinter as ctk  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+from tkinter import filedialog, messagebox  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+import tkinter as tk  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+import threading  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+import os  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+import json  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+import contextlib  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+from datetime import datetime  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+from typing import Dict, List, Tuple, Optional  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+from concurrent.futures import ThreadPoolExecutor, as_completed  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-from . import __version__, __app_name__
-from .services import UIQueue, UIMessage, MessageType, get_logger, get_branch_manager
-from .providers import (
-    PROVIDER_REGISTRY, PROVIDER_INFO, create_provider,
-    OpenAIProvider, AnthropicProvider, GeminiProvider,
-    DeepSeekProvider, GroqProvider, MistralProvider
-)
-from .utils import SecureKeyStorage, get_key_storage
-from .ui.widgets import APIKeyCard, ModernSwitch, ProviderMetricsCard
+from . import __version__, __app_name__  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+from .services import UIQueue, UIMessage, MessageType, get_logger, get_branch_manager  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+from .providers import (  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    PROVIDER_REGISTRY, PROVIDER_INFO, create_provider,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    OpenAIProvider, AnthropicProvider, GeminiProvider,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    DeepSeekProvider, GroqProvider, MistralProvider  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+from .utils import SecureKeyStorage, get_key_storage  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+from .ui.widgets import APIKeyCard, ModernSwitch, ProviderMetricsCard  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
 # Theme settings
-ctk.set_appearance_mode("dark")
-ctk.set_default_color_theme("blue")
+ctk.set_appearance_mode("dark")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+ctk.set_default_color_theme("blue")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
 
-class AIManagerApp(ctk.CTk):
-    """Main application window"""
+# ЛОГИЧЕСКИЙ БЛОК: класс `AIManagerApp(ctk.CTk)` — объединяет состояние и поведение подсистемы.
+class AIManagerApp(ctk.CTk):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    """Main application window"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def __init__(self):
-        super().__init__()
+    # ЛОГИЧЕСКИЙ БЛОК: функция `__init__` — выполняет отдельный шаг бизнес-логики.
+    def __init__(self):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Учебный комментарий: функция `__init__`. Добавьте доменную детализацию при необходимости."""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        super().__init__()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # App state
-        self.is_processing = False
-        self.output_dir = "responses"
-        os.makedirs(self.output_dir, exist_ok=True)
+        self.is_processing = False  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.output_dir = "responses"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        os.makedirs(self.output_dir, exist_ok=True)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Services
-        self.logger = get_logger()
-        self.branch_manager = get_branch_manager()
-        self.key_storage = get_key_storage()
+        self.logger = get_logger()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.branch_manager = get_branch_manager()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.key_storage = get_key_storage()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Thread-safe UI queue
-        self.ui_queue = UIQueue(poll_interval=50)
+        self.ui_queue = UIQueue(poll_interval=50)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Initialize providers
-        self.providers: Dict[str, any] = {}
-        self._init_providers()
+        self.providers: Dict[str, any] = {}  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self._init_providers()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # UI state
-        self.provider_switches: Dict[str, ModernSwitch] = {}
-        self.api_cards: Dict[str, APIKeyCard] = {}
-        self.metrics_cards: Dict[str, ProviderMetricsCard] = {}
+        self.provider_switches: Dict[str, ModernSwitch] = {}  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.api_cards: Dict[str, APIKeyCard] = {}  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.metrics_cards: Dict[str, ProviderMetricsCard] = {}  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Window setup
-        self.title(f"{__app_name__} v{__version__}")
-        self.geometry("1200x800")
-        self.minsize(900, 600)
+        self.title(f"{__app_name__} v{__version__}")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.geometry("1200x800")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.minsize(900, 600)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Build UI
-        self._create_ui()
+        self._create_ui()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Load saved config
-        self._load_config()
+        self._load_config()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Start UI queue polling
-        self.ui_queue.start_polling(self, self._handle_ui_message)
+        self.ui_queue.start_polling(self, self._handle_ui_message)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Migrate keys from old config if needed
-        self._migrate_keys()
+        self._migrate_keys()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def _init_providers(self):
-        """Initialize all AI providers"""
-        for key in PROVIDER_REGISTRY:
-            self.providers[key] = create_provider(key)
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_init_providers` — выполняет отдельный шаг бизнес-логики.
+    def _init_providers(self):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Initialize all AI providers"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+        for key in PROVIDER_REGISTRY:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            self.providers[key] = create_provider(key)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def _migrate_keys(self):
-        """Migrate API keys from plain config to secure storage"""
-        config_path = "config.json"
-        if os.path.exists(config_path):
-            migrated = self.key_storage.migrate_from_config(config_path)
-            if migrated > 0:
-                self.logger.logger.info(f"Migrated {migrated} API keys to secure storage")
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_migrate_keys` — выполняет отдельный шаг бизнес-логики.
+    def _migrate_keys(self):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Migrate API keys from plain config to secure storage"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        config_path = "config.json"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if os.path.exists(config_path):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            migrated = self.key_storage.migrate_from_config(config_path)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if migrated > 0:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                self.logger.logger.info(f"Migrated {migrated} API keys to secure storage")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def _create_ui(self):
-        """Create main UI"""
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_create_ui` — выполняет отдельный шаг бизнес-логики.
+    def _create_ui(self):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Create main UI"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
         # Main container
-        self.grid_rowconfigure(0, weight=1)
-        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(0, weight=1)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.grid_columnconfigure(0, weight=1)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Tabview
-        self.tabview = ctk.CTkTabview(self, corner_radius=15)
-        self.tabview.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
+        self.tabview = ctk.CTkTabview(self, corner_radius=15)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.tabview.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Create tabs
-        self.tab_chat = self.tabview.add("Chat")
-        self.tab_settings = self.tabview.add("Settings")
-        self.tab_logs = self.tabview.add("Logs")
-        self.tab_metrics = self.tabview.add("Metrics")
+        self.tab_chat = self.tabview.add("Chat")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.tab_settings = self.tabview.add("Settings")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.tab_logs = self.tabview.add("Logs")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.tab_metrics = self.tabview.add("Metrics")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        self._create_chat_tab()
-        self._create_settings_tab()
-        self._create_logs_tab()
-        self._create_metrics_tab()
+        self._create_chat_tab()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self._create_settings_tab()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self._create_logs_tab()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self._create_metrics_tab()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def _create_chat_tab(self):
-        """Create chat tab with provider selection"""
-        self.tab_chat.grid_rowconfigure(1, weight=1)
-        self.tab_chat.grid_columnconfigure(0, weight=1)
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_create_chat_tab` — выполняет отдельный шаг бизнес-логики.
+    def _create_chat_tab(self):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Create chat tab with provider selection"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.tab_chat.grid_rowconfigure(1, weight=1)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.tab_chat.grid_columnconfigure(0, weight=1)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Header with provider toggles
-        header = ctk.CTkFrame(self.tab_chat, fg_color="transparent")
-        header.grid(row=0, column=0, sticky="ew", pady=(0, 10))
+        header = ctk.CTkFrame(self.tab_chat, fg_color="transparent")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        header.grid(row=0, column=0, sticky="ew", pady=(0, 10))  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        ctk.CTkLabel(
-            header, text="Ask AI",
-            font=ctk.CTkFont(size=20, weight="bold")
-        ).pack(side="left")
+        ctk.CTkLabel(  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            header, text="Ask AI",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            font=ctk.CTkFont(size=20, weight="bold")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        ).pack(side="left")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Status label
-        self.status_label = ctk.CTkLabel(
-            header, text="Ready",
-            font=ctk.CTkFont(size=12), text_color="gray"
-        )
-        self.status_label.pack(side="right")
+        self.status_label = ctk.CTkLabel(  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            header, text="Ready",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            font=ctk.CTkFont(size=12), text_color="gray"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        )  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.status_label.pack(side="right")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Provider toggles
-        toggles_frame = ctk.CTkFrame(self.tab_chat, fg_color="transparent")
-        toggles_frame.grid(row=0, column=0, sticky="e", pady=(0, 10), padx=(0, 100))
+        toggles_frame = ctk.CTkFrame(self.tab_chat, fg_color="transparent")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        toggles_frame.grid(row=0, column=0, sticky="e", pady=(0, 10), padx=(0, 100))  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        for key, info in PROVIDER_INFO.items():
-            switch = ModernSwitch(
-                toggles_frame, info["name"], info["color"]
-            )
-            switch.pack(side="left", padx=5)
-            self.provider_switches[key] = switch
+        # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+        for key, info in PROVIDER_INFO.items():  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            switch = ModernSwitch(  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                toggles_frame, info["name"], info["color"]  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            )  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            switch.pack(side="left", padx=5)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            self.provider_switches[key] = switch  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Chat display
-        self.chat_display = ctk.CTkTextbox(
-            self.tab_chat, corner_radius=12,
-            font=ctk.CTkFont(family="Consolas", size=12),
-            state="disabled"
-        )
-        self.chat_display.grid(row=1, column=0, sticky="nsew", pady=(0, 10))
+        self.chat_display = ctk.CTkTextbox(  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            self.tab_chat, corner_radius=12,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            font=ctk.CTkFont(family="Consolas", size=12),  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            state="disabled"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        )  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.chat_display.grid(row=1, column=0, sticky="nsew", pady=(0, 10))  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Input area
-        input_frame = ctk.CTkFrame(self.tab_chat, fg_color="transparent")
-        input_frame.grid(row=2, column=0, sticky="ew")
-        input_frame.grid_columnconfigure(0, weight=1)
+        input_frame = ctk.CTkFrame(self.tab_chat, fg_color="transparent")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        input_frame.grid(row=2, column=0, sticky="ew")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        input_frame.grid_columnconfigure(0, weight=1)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        self.chat_input = ctk.CTkTextbox(
-            input_frame, height=100, corner_radius=12,
-            font=ctk.CTkFont(size=13)
-        )
-        self.chat_input.grid(row=0, column=0, sticky="ew", padx=(0, 10))
+        self.chat_input = ctk.CTkTextbox(  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            input_frame, height=100, corner_radius=12,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            font=ctk.CTkFont(size=13)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        )  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.chat_input.grid(row=0, column=0, sticky="ew", padx=(0, 10))  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Keyboard shortcuts for chat input
-        self.chat_input.bind("<Return>", self._handle_enter_key)
-        self.chat_input.bind("<Shift-Return>", self._handle_shift_enter)
-        self._setup_chat_bindings()
+        self.chat_input.bind("<Return>", self._handle_enter_key)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.chat_input.bind("<Shift-Return>", self._handle_shift_enter)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self._setup_chat_bindings()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Buttons
-        btn_frame = ctk.CTkFrame(input_frame, fg_color="transparent")
-        btn_frame.grid(row=0, column=1)
+        btn_frame = ctk.CTkFrame(input_frame, fg_color="transparent")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        btn_frame.grid(row=0, column=1)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        self.send_btn = ctk.CTkButton(
-            btn_frame, text="Send", width=100, height=40,
-            corner_radius=10, font=ctk.CTkFont(size=14, weight="bold"),
-            command=self._send_query
-        )
-        self.send_btn.pack(pady=(0, 4))
+        self.send_btn = ctk.CTkButton(  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            btn_frame, text="Send", width=100, height=40,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            corner_radius=10, font=ctk.CTkFont(size=14, weight="bold"),  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            command=self._send_query  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        )  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.send_btn.pack(pady=(0, 4))  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        ctk.CTkButton(
-            btn_frame, text="Clear", width=100, height=30,
-            corner_radius=10, fg_color="gray30",
-            command=self._clear_chat
-        ).pack(pady=(0, 4))
+        ctk.CTkButton(  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            btn_frame, text="Clear", width=100, height=30,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            corner_radius=10, fg_color="gray30",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            command=self._clear_chat  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        ).pack(pady=(0, 4))  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        ctk.CTkButton(
-            btn_frame, text="New Chat", width=100, height=30,
-            corner_radius=10, fg_color="#e74c3c", hover_color="#c0392b",
-            command=self._new_chat
-        ).pack(pady=(0, 4))
+        ctk.CTkButton(  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            btn_frame, text="New Chat", width=100, height=30,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            corner_radius=10, fg_color="#e74c3c", hover_color="#c0392b",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            command=self._new_chat  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        ).pack(pady=(0, 4))  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        ctk.CTkButton(
-            btn_frame, text="Save Chat", width=100, height=30,
-            corner_radius=10, fg_color="#9b59b6", hover_color="#8e44ad",
-            command=self._save_chat_to_file
-        ).pack()
+        ctk.CTkButton(  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            btn_frame, text="Save Chat", width=100, height=30,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            corner_radius=10, fg_color="#9b59b6", hover_color="#8e44ad",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            command=self._save_chat_to_file  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        ).pack()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Progress bar
-        self.progress = ctk.CTkProgressBar(self.tab_chat, mode="indeterminate", height=3)
+        self.progress = ctk.CTkProgressBar(self.tab_chat, mode="indeterminate", height=3)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Streaming indicator
-        self.streaming_label = ctk.CTkLabel(
-            self.tab_chat, text="",
-            font=ctk.CTkFont(size=11), text_color="#27ae60"
-        )
+        self.streaming_label = ctk.CTkLabel(  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            self.tab_chat, text="",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            font=ctk.CTkFont(size=11), text_color="#27ae60"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        )  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Branches panel
-        self._create_branches_panel()
+        self._create_branches_panel()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def _create_branches_panel(self):
-        """Create conversation branches management panel"""
-        branches_frame = ctk.CTkFrame(self.tab_chat, corner_radius=12)
-        branches_frame.grid(row=4, column=0, sticky="ew", pady=(10, 0))
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_create_branches_panel` — выполняет отдельный шаг бизнес-логики.
+    def _create_branches_panel(self):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Create conversation branches management panel"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        branches_frame = ctk.CTkFrame(self.tab_chat, corner_radius=12)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        branches_frame.grid(row=4, column=0, sticky="ew", pady=(10, 0))  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Header
-        branches_header = ctk.CTkFrame(branches_frame, fg_color="transparent")
-        branches_header.pack(fill="x", padx=10, pady=(10, 5))
+        branches_header = ctk.CTkFrame(branches_frame, fg_color="transparent")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        branches_header.pack(fill="x", padx=10, pady=(10, 5))  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        ctk.CTkLabel(
-            branches_header, text="Conversation Branches",
-            font=ctk.CTkFont(size=14, weight="bold")
-        ).pack(side="left")
+        ctk.CTkLabel(  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            branches_header, text="Conversation Branches",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            font=ctk.CTkFont(size=14, weight="bold")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        ).pack(side="left")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        self.current_branch_label = ctk.CTkLabel(
-            branches_header, text="Current: None",
-            font=ctk.CTkFont(size=11), text_color="gray"
-        )
-        self.current_branch_label.pack(side="right")
+        self.current_branch_label = ctk.CTkLabel(  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            branches_header, text="Current: None",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            font=ctk.CTkFont(size=11), text_color="gray"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        )  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.current_branch_label.pack(side="right")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Controls
-        branches_controls = ctk.CTkFrame(branches_frame, fg_color="transparent")
-        branches_controls.pack(fill="x", padx=10, pady=(0, 10))
+        branches_controls = ctk.CTkFrame(branches_frame, fg_color="transparent")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        branches_controls.pack(fill="x", padx=10, pady=(0, 10))  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        self.branches_combo = ctk.CTkComboBox(
-            branches_controls, width=250, height=32,
-            values=["No saved branches"], state="readonly"
-        )
-        self.branches_combo.pack(side="left", padx=(0, 10))
+        self.branches_combo = ctk.CTkComboBox(  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            branches_controls, width=250, height=32,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            values=["No saved branches"], state="readonly"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        )  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.branches_combo.pack(side="left", padx=(0, 10))  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        for text, color, cmd in [
-            ("Save", "#27ae60", self._save_branch),
-            ("Load", "#3498db", self._load_branch),
-            ("Delete", "#e74c3c", self._delete_branch),
-            ("Refresh", "gray30", self._refresh_branches_list)
-        ]:
-            ctk.CTkButton(
-                branches_controls, text=text, width=70, height=32,
-                corner_radius=8, fg_color=color,
-                command=cmd
-            ).pack(side="left", padx=(0, 5))
+        # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+        for text, color, cmd in [  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            ("Save", "#27ae60", self._save_branch),  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            ("Load", "#3498db", self._load_branch),  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            ("Delete", "#e74c3c", self._delete_branch),  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            ("Refresh", "gray30", self._refresh_branches_list)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        ]:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            ctk.CTkButton(  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                branches_controls, text=text, width=70, height=32,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                corner_radius=8, fg_color=color,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                command=cmd  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            ).pack(side="left", padx=(0, 5))  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        self._refresh_branches_list()
+        self._refresh_branches_list()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def _create_settings_tab(self):
-        """Create settings tab with API key cards"""
-        scroll = ctk.CTkScrollableFrame(self.tab_settings, corner_radius=0)
-        scroll.pack(fill="both", expand=True)
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_create_settings_tab` — выполняет отдельный шаг бизнес-логики.
+    def _create_settings_tab(self):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Create settings tab with API key cards"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        scroll = ctk.CTkScrollableFrame(self.tab_settings, corner_radius=0)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        scroll.pack(fill="both", expand=True)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        ctk.CTkLabel(
-            scroll, text="API Keys Configuration",
-            font=ctk.CTkFont(size=20, weight="bold")
-        ).pack(anchor="w", pady=(0, 15))
+        ctk.CTkLabel(  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            scroll, text="API Keys Configuration",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            font=ctk.CTkFont(size=20, weight="bold")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        ).pack(anchor="w", pady=(0, 15))  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # API cards
-        for key, info in PROVIDER_INFO.items():
-            card = APIKeyCard(
-                scroll, info["name"], info["color"],
-                info["url"], info["description"],
-                on_model_change=lambda m, k=key: self._on_model_change(k, m)
-            )
-            card.pack(fill="x", pady=8)
-            self.api_cards[key] = card
-            self._bind_clipboard_shortcuts(card.key_entry, editable=True)
-            self._bind_clipboard_shortcuts(card.model_entry, editable=True)
+        # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+        for key, info in PROVIDER_INFO.items():  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            card = APIKeyCard(  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                scroll, info["name"], info["color"],  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                info["url"], info["description"],  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                on_model_change=lambda m, k=key: self._on_model_change(k, m)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            )  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            card.pack(fill="x", pady=8)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            self.api_cards[key] = card  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            self._bind_clipboard_shortcuts(card.key_entry, editable=True)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            self._bind_clipboard_shortcuts(card.model_entry, editable=True)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Buttons frame
-        btn_frame = ctk.CTkFrame(scroll, fg_color="transparent")
-        btn_frame.pack(fill="x", pady=20)
+        btn_frame = ctk.CTkFrame(scroll, fg_color="transparent")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        btn_frame.pack(fill="x", pady=20)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        ctk.CTkButton(
-            btn_frame, text="Save Settings", height=40,
-            corner_radius=10, fg_color="#27ae60", hover_color="#1e8449",
-            command=self._save_config
-        ).pack(side="left", padx=(0, 10))
+        ctk.CTkButton(  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            btn_frame, text="Save Settings", height=40,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            corner_radius=10, fg_color="#27ae60", hover_color="#1e8449",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            command=self._save_config  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        ).pack(side="left", padx=(0, 10))  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        ctk.CTkButton(
-            btn_frame, text="Test All Connections", height=40,
-            corner_radius=10, fg_color="#3498db", hover_color="#2980b9",
-            command=self._test_all_connections
-        ).pack(side="left")
+        ctk.CTkButton(  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            btn_frame, text="Test All Connections", height=40,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            corner_radius=10, fg_color="#3498db", hover_color="#2980b9",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            command=self._test_all_connections  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        ).pack(side="left")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def _create_logs_tab(self):
-        """Create logs tab"""
-        self.tab_logs.grid_rowconfigure(2, weight=1)
-        self.tab_logs.grid_columnconfigure(0, weight=1)
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_create_logs_tab` — выполняет отдельный шаг бизнес-логики.
+    def _create_logs_tab(self):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Create logs tab"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.tab_logs.grid_rowconfigure(2, weight=1)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.tab_logs.grid_columnconfigure(0, weight=1)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Header
-        header = ctk.CTkFrame(self.tab_logs, fg_color="transparent")
-        header.grid(row=0, column=0, sticky="ew", pady=(0, 10))
+        header = ctk.CTkFrame(self.tab_logs, fg_color="transparent")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        header.grid(row=0, column=0, sticky="ew", pady=(0, 10))  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        ctk.CTkLabel(
-            header, text="Logs & History",
-            font=ctk.CTkFont(size=20, weight="bold")
-        ).pack(side="left")
+        ctk.CTkLabel(  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            header, text="Logs & History",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            font=ctk.CTkFont(size=20, weight="bold")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        ).pack(side="left")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        self.logs_stats_label = ctk.CTkLabel(
-            header, text="Responses: 0 | Errors: 0",
-            font=ctk.CTkFont(size=12), text_color="gray"
-        )
-        self.logs_stats_label.pack(side="right")
+        self.logs_stats_label = ctk.CTkLabel(  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            header, text="Responses: 0 | Errors: 0",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            font=ctk.CTkFont(size=12), text_color="gray"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        )  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.logs_stats_label.pack(side="right")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Log type selector
-        selector_frame = ctk.CTkFrame(self.tab_logs, fg_color="transparent")
-        selector_frame.grid(row=1, column=0, sticky="ew", pady=(0, 10))
+        selector_frame = ctk.CTkFrame(self.tab_logs, fg_color="transparent")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        selector_frame.grid(row=1, column=0, sticky="ew", pady=(0, 10))  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        self.log_type_var = ctk.StringVar(value="responses")
-        for text, value in [("Responses", "responses"), ("Errors", "errors"), ("All", "all")]:
-            ctk.CTkRadioButton(
-                selector_frame, text=text,
-                variable=self.log_type_var, value=value,
-                command=self._refresh_logs_display
-            ).pack(side="left", padx=(0, 20))
+        self.log_type_var = ctk.StringVar(value="responses")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+        for text, value in [("Responses", "responses"), ("Errors", "errors"), ("All", "all")]:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            ctk.CTkRadioButton(  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                selector_frame, text=text,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                variable=self.log_type_var, value=value,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                command=self._refresh_logs_display  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            ).pack(side="left", padx=(0, 20))  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Logs display
-        self.logs_display = ctk.CTkTextbox(
-            self.tab_logs, corner_radius=12,
-            font=ctk.CTkFont(family="Consolas", size=11),
-            state="disabled"
-        )
-        self.logs_display.grid(row=2, column=0, sticky="nsew", pady=(0, 10))
+        self.logs_display = ctk.CTkTextbox(  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            self.tab_logs, corner_radius=12,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            font=ctk.CTkFont(family="Consolas", size=11),  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            state="disabled"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        )  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.logs_display.grid(row=2, column=0, sticky="nsew", pady=(0, 10))  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Setup keyboard shortcuts for logs
-        self._setup_logs_bindings()
+        self._setup_logs_bindings()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Buttons
-        btn_frame = ctk.CTkFrame(self.tab_logs, fg_color="transparent")
-        btn_frame.grid(row=3, column=0, sticky="ew")
+        btn_frame = ctk.CTkFrame(self.tab_logs, fg_color="transparent")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        btn_frame.grid(row=3, column=0, sticky="ew")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        for text, color, cmd in [
-            ("Refresh", "gray30", self._refresh_logs_display),
-            ("Export Logs", "#27ae60", self._export_logs),
-            ("Clear Logs", "#e74c3c", self._clear_logs)
-        ]:
-            ctk.CTkButton(
-                btn_frame, text=text, height=36,
-                corner_radius=8, fg_color=color,
-                command=cmd
-            ).pack(side="left", padx=(0, 10))
+        # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+        for text, color, cmd in [  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            ("Refresh", "gray30", self._refresh_logs_display),  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            ("Export Logs", "#27ae60", self._export_logs),  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            ("Clear Logs", "#e74c3c", self._clear_logs)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        ]:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            ctk.CTkButton(  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                btn_frame, text=text, height=36,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                corner_radius=8, fg_color=color,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                command=cmd  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            ).pack(side="left", padx=(0, 10))  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def _create_metrics_tab(self):
-        """Create metrics tab with provider statistics"""
-        self.tab_metrics.grid_rowconfigure(1, weight=1)
-        self.tab_metrics.grid_columnconfigure(0, weight=1)
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_create_metrics_tab` — выполняет отдельный шаг бизнес-логики.
+    def _create_metrics_tab(self):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Create metrics tab with provider statistics"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.tab_metrics.grid_rowconfigure(1, weight=1)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.tab_metrics.grid_columnconfigure(0, weight=1)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Header
-        ctk.CTkLabel(
-            self.tab_metrics, text="Provider Metrics",
-            font=ctk.CTkFont(size=20, weight="bold")
-        ).grid(row=0, column=0, sticky="w", pady=(0, 15))
+        ctk.CTkLabel(  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            self.tab_metrics, text="Provider Metrics",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            font=ctk.CTkFont(size=20, weight="bold")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        ).grid(row=0, column=0, sticky="w", pady=(0, 15))  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Metrics container
-        metrics_frame = ctk.CTkFrame(self.tab_metrics, fg_color="transparent")
-        metrics_frame.grid(row=1, column=0, sticky="nsew")
-        metrics_frame.grid_columnconfigure((0, 1, 2), weight=1)
+        metrics_frame = ctk.CTkFrame(self.tab_metrics, fg_color="transparent")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        metrics_frame.grid(row=1, column=0, sticky="nsew")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        metrics_frame.grid_columnconfigure((0, 1, 2), weight=1)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Create metrics cards for each provider
-        for i, (key, info) in enumerate(PROVIDER_INFO.items()):
-            row = i // 3
-            col = i % 3
-            card = ProviderMetricsCard(metrics_frame, info["name"], info["color"])
-            card.grid(row=row, column=col, padx=5, pady=5, sticky="ew")
-            self.metrics_cards[key] = card
+        # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+        for i, (key, info) in enumerate(PROVIDER_INFO.items()):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            row = i // 3  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            col = i % 3  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            card = ProviderMetricsCard(metrics_frame, info["name"], info["color"])  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            card.grid(row=row, column=col, padx=5, pady=5, sticky="ew")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            self.metrics_cards[key] = card  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Refresh button
-        ctk.CTkButton(
-            self.tab_metrics, text="Refresh Metrics", height=36,
-            corner_radius=8, fg_color="#3498db",
-            command=self._refresh_metrics
-        ).grid(row=2, column=0, sticky="w", pady=(15, 0))
+        ctk.CTkButton(  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            self.tab_metrics, text="Refresh Metrics", height=36,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            corner_radius=8, fg_color="#3498db",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            command=self._refresh_metrics  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        ).grid(row=2, column=0, sticky="w", pady=(15, 0))  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def _setup_chat_bindings(self):
-        """Setup keyboard bindings for chat"""
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_setup_chat_bindings` — выполняет отдельный шаг бизнес-логики.
+    def _setup_chat_bindings(self):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Setup keyboard bindings for chat"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
         # Universal clipboard shortcuts for chat widgets
-        self._bind_clipboard_shortcuts(self.chat_input, editable=True)
-        self._bind_clipboard_shortcuts(self.chat_display, editable=False)
+        self._bind_clipboard_shortcuts(self.chat_input, editable=True)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self._bind_clipboard_shortcuts(self.chat_display, editable=False)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def _get_text_widget(self, widget):
-        """Resolve to the underlying tk widget for clipboard operations."""
-        if hasattr(widget, "_entry"):
-            return widget._entry
-        if hasattr(widget, "_textbox"):
-            return widget._textbox
-        return widget
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_get_text_widget` — выполняет отдельный шаг бизнес-логики.
+    def _get_text_widget(self, widget):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Resolve to the underlying tk widget for clipboard operations."""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if hasattr(widget, "_entry"):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            return widget._entry  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if hasattr(widget, "_textbox"):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            return widget._textbox  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        return widget  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    @contextlib.contextmanager
-    def _with_widget_enabled(self, widget):
-        """Temporarily enable disabled/readonly widgets for clipboard operations."""
-        original_state = None
-        try:
-            original_state = widget.cget("state")
-        except Exception:
-            original_state = None
-        if original_state in ("disabled", "readonly"):
-            try:
-                widget.configure(state="normal")
-            except Exception:
-                pass
-        try:
-            yield
-        finally:
-            if original_state in ("disabled", "readonly"):
-                try:
-                    widget.configure(state=original_state)
-                except Exception:
-                    pass
+    @contextlib.contextmanager  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_with_widget_enabled` — выполняет отдельный шаг бизнес-логики.
+    def _with_widget_enabled(self, widget):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Temporarily enable disabled/readonly widgets for clipboard operations."""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        original_state = None  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            original_state = widget.cget("state")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except Exception:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            original_state = None  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if original_state in ("disabled", "readonly"):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+            try:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                widget.configure(state="normal")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+            except Exception:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                pass  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            yield  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        finally:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if original_state in ("disabled", "readonly"):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+                try:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    widget.configure(state=original_state)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+                except Exception:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    pass  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def _bind_clipboard_shortcuts(self, widget, editable=True):
-        """Universal clipboard binder - returns 'break' ONLY when operation succeeds."""
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_bind_clipboard_shortcuts` — выполняет отдельный шаг бизнес-логики.
+    def _bind_clipboard_shortcuts(self, widget, editable=True):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Universal clipboard binder - returns 'break' ONLY when operation succeeds."""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        def _handle_copy(event=None):
-            target = self._get_text_widget(event.widget if event else widget)
-            if not target:
-                return None
+        # ЛОГИЧЕСКИЙ БЛОК: функция `_handle_copy` — выполняет отдельный шаг бизнес-логики.
+        def _handle_copy(event=None):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            """Учебный комментарий: функция `_handle_copy`. Добавьте доменную детализацию при необходимости."""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            target = self._get_text_widget(event.widget if event else widget)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if not target:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                return None  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
             # Check selection exists
-            try:
-                if isinstance(target, tk.Entry) and not target.selection_present():
-                    return None
-                elif isinstance(target, tk.Text) and not target.tag_ranges("sel"):
-                    return None
-            except Exception:
-                return None
+            # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+            try:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                if isinstance(target, tk.Entry) and not target.selection_present():  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    return None  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                elif isinstance(target, tk.Text) and not target.tag_ranges("sel"):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    return None  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+            except Exception:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                return None  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
             # Perform copy
-            with self._with_widget_enabled(target):
-                try:
-                    target.event_generate("<<Copy>>")
-                    return "break"  # Break ONLY if successful
-                except Exception:
-                    return None  # Let default handler work
+            with self._with_widget_enabled(target):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+                try:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    target.event_generate("<<Copy>>")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    return "break"  # Break ONLY if successful  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+                except Exception:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    return None  # Let default handler work  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        def _handle_cut(event=None):
-            if not editable:
-                return None
+        # ЛОГИЧЕСКИЙ БЛОК: функция `_handle_cut` — выполняет отдельный шаг бизнес-логики.
+        def _handle_cut(event=None):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            """Учебный комментарий: функция `_handle_cut`. Добавьте доменную детализацию при необходимости."""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if not editable:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                return None  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-            target = self._get_text_widget(event.widget if event else widget)
-            if not target:
-                return None
+            target = self._get_text_widget(event.widget if event else widget)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if not target:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                return None  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
             # Check selection exists
-            try:
-                if isinstance(target, tk.Entry) and not target.selection_present():
-                    return None
-                elif isinstance(target, tk.Text) and not target.tag_ranges("sel"):
-                    return None
-            except Exception:
-                return None
+            # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+            try:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                if isinstance(target, tk.Entry) and not target.selection_present():  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    return None  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                elif isinstance(target, tk.Text) and not target.tag_ranges("sel"):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    return None  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+            except Exception:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                return None  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
             # Perform cut
-            with self._with_widget_enabled(target):
-                try:
-                    target.event_generate("<<Cut>>")
-                    return "break"
-                except Exception:
-                    return None
+            with self._with_widget_enabled(target):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+                try:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    target.event_generate("<<Cut>>")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    return "break"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+                except Exception:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    return None  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        def _handle_paste(event=None):
-            if not editable:
-                return None
+        # ЛОГИЧЕСКИЙ БЛОК: функция `_handle_paste` — выполняет отдельный шаг бизнес-логики.
+        def _handle_paste(event=None):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            """Учебный комментарий: функция `_handle_paste`. Добавьте доменную детализацию при необходимости."""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if not editable:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                return None  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
             # Get clipboard content
-            try:
-                clipboard_text = self.clipboard_get()
-                if not clipboard_text:
-                    return None
-            except Exception:
-                return None
+            # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+            try:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                clipboard_text = self.clipboard_get()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                if not clipboard_text:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    return None  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+            except Exception:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                return None  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-            target = self._get_text_widget(event.widget if event else widget)
-            if not target:
-                return None
+            target = self._get_text_widget(event.widget if event else widget)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if not target:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                return None  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
             # Perform paste
-            with self._with_widget_enabled(target):
+            with self._with_widget_enabled(target):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
                 # Try native paste
-                try:
-                    target.event_generate("<<Paste>>")
-                    return "break"
-                except Exception:
-                    pass
+                # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+                try:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    target.event_generate("<<Paste>>")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    return "break"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+                except Exception:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    pass  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
                 # Fallback: manual insert
-                try:
-                    if isinstance(target, tk.Entry):
-                        if target.selection_present():
-                            target.delete("sel.first", "sel.last")
-                        target.insert(target.index("insert"), clipboard_text)
-                        return "break"
-                    elif isinstance(target, tk.Text):
-                        if target.tag_ranges("sel"):
-                            target.delete("sel.first", "sel.last")
-                        target.insert("insert", clipboard_text)
-                        return "break"
-                except Exception:
-                    pass
+                # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+                try:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                    if isinstance(target, tk.Entry):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                        if target.selection_present():  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                            target.delete("sel.first", "sel.last")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                        target.insert(target.index("insert"), clipboard_text)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                        return "break"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                    elif isinstance(target, tk.Text):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                        if target.tag_ranges("sel"):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                            target.delete("sel.first", "sel.last")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                        target.insert("insert", clipboard_text)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                        return "break"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+                except Exception:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    pass  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-            return None  # Operation failed, allow default
+            return None  # Operation failed, allow default  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        def _handle_select_all(event=None):
-            target = self._get_text_widget(event.widget if event else widget)
-            if not target:
-                return None
+        # ЛОГИЧЕСКИЙ БЛОК: функция `_handle_select_all` — выполняет отдельный шаг бизнес-логики.
+        def _handle_select_all(event=None):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            """Учебный комментарий: функция `_handle_select_all`. Добавьте доменную детализацию при необходимости."""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            target = self._get_text_widget(event.widget if event else widget)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if not target:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                return None  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-            with self._with_widget_enabled(target):
-                try:
-                    if isinstance(target, tk.Entry):
-                        target.select_range(0, "end")
-                    elif isinstance(target, tk.Text):
-                        target.tag_add("sel", "1.0", "end-1c")
-                    target.focus_set()
-                    return "break"
-                except Exception:
-                    return None
+            with self._with_widget_enabled(target):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+                try:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                    if isinstance(target, tk.Entry):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                        target.select_range(0, "end")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                    elif isinstance(target, tk.Text):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                        target.tag_add("sel", "1.0", "end-1c")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    target.focus_set()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    return "break"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+                except Exception:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    return None  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Bind shortcuts
-        widget.bind("<Control-c>", _handle_copy)
-        widget.bind("<Control-C>", _handle_copy)
+        widget.bind("<Control-c>", _handle_copy)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        widget.bind("<Control-C>", _handle_copy)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        if editable:
-            widget.bind("<Control-x>", _handle_cut)
-            widget.bind("<Control-X>", _handle_cut)
-            widget.bind("<Control-v>", _handle_paste)
-            widget.bind("<Control-V>", _handle_paste)
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if editable:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            widget.bind("<Control-x>", _handle_cut)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            widget.bind("<Control-X>", _handle_cut)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            widget.bind("<Control-v>", _handle_paste)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            widget.bind("<Control-V>", _handle_paste)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        widget.bind("<Control-a>", _handle_select_all)
-        widget.bind("<Control-A>", _handle_select_all)
+        widget.bind("<Control-a>", _handle_select_all)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        widget.bind("<Control-A>", _handle_select_all)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def _setup_logs_bindings(self):
-        """Setup keyboard bindings for logs"""
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_setup_logs_bindings` — выполняет отдельный шаг бизнес-логики.
+    def _setup_logs_bindings(self):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Setup keyboard bindings for logs"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
         # Universal clipboard shortcuts for logs
-        self._bind_clipboard_shortcuts(self.logs_display, editable=False)
+        self._bind_clipboard_shortcuts(self.logs_display, editable=False)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
 
     # ==================== UI Queue Handler ====================
 
-    def _handle_ui_message(self, msg: UIMessage):
-        """Handle messages from worker threads (called on main thread)"""
-        if msg.msg_type == MessageType.RESPONSE:
-            self._show_response(msg.provider, msg.data, msg.elapsed)
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_handle_ui_message` — выполняет отдельный шаг бизнес-логики.
+    def _handle_ui_message(self, msg: UIMessage):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Handle messages from worker threads (called on main thread)"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if msg.msg_type == MessageType.RESPONSE:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            self._show_response(msg.provider, msg.data, msg.elapsed)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        elif msg.msg_type == MessageType.RESPONSE_CHUNK:
-            self._append_to_chat(msg.data)
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        elif msg.msg_type == MessageType.RESPONSE_CHUNK:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            self._append_to_chat(msg.data)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        elif msg.msg_type == MessageType.ERROR:
-            self._show_response(msg.provider, f"Error: {msg.data}", msg.elapsed)
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        elif msg.msg_type == MessageType.ERROR:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            self._show_response(msg.provider, f"Error: {msg.data}", msg.elapsed)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        elif msg.msg_type == MessageType.STATUS:
-            self.status_label.configure(text=msg.data)
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        elif msg.msg_type == MessageType.STATUS:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            self.status_label.configure(text=msg.data)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        elif msg.msg_type == MessageType.FINISHED:
-            self._finish_query(msg.data["count"], msg.data["time"], msg.data.get("file", ""))
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        elif msg.msg_type == MessageType.FINISHED:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            self._finish_query(msg.data["count"], msg.data["time"], msg.data.get("file", ""))  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        elif msg.msg_type == MessageType.CONNECTION_STATUS:
-            if msg.provider in self.api_cards:
-                self.api_cards[msg.provider].set_status(msg.data)
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        elif msg.msg_type == MessageType.CONNECTION_STATUS:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if msg.provider in self.api_cards:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                self.api_cards[msg.provider].set_status(msg.data)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        elif msg.msg_type == MessageType.METRICS_UPDATE:
-            if msg.provider in self.metrics_cards:
-                self.metrics_cards[msg.provider].update_metrics(msg.data)
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        elif msg.msg_type == MessageType.METRICS_UPDATE:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if msg.provider in self.metrics_cards:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                self.metrics_cards[msg.provider].update_metrics(msg.data)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
     # ==================== Query Processing ====================
 
-    def _handle_enter_key(self, event):
-        """Handle Enter key - send query"""
-        self._send_query()
-        return "break"
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_handle_enter_key` — выполняет отдельный шаг бизнес-логики.
+    def _handle_enter_key(self, event):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Handle Enter key - send query"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self._send_query()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        return "break"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def _handle_shift_enter(self, event):
-        """Handle Shift+Enter - insert newline"""
-        self.chat_input.insert("insert", "\n")
-        return "break"
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_handle_shift_enter` — выполняет отдельный шаг бизнес-логики.
+    def _handle_shift_enter(self, event):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Handle Shift+Enter - insert newline"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.chat_input.insert("insert", "\n")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        return "break"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def _send_query(self):
-        """Send query to selected providers"""
-        if self.is_processing:
-            return
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_send_query` — выполняет отдельный шаг бизнес-логики.
+    def _send_query(self):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Send query to selected providers"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if self.is_processing:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            return  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        question = self.chat_input.get("1.0", "end-1c").strip()
-        if not question:
-            return
+        question = self.chat_input.get("1.0", "end-1c").strip()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if not question:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            return  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Get selected providers
-        selected = [key for key, switch in self.provider_switches.items() if switch.get()]
-        if not selected:
-            messagebox.showwarning("Warning", "Please select at least one AI provider!")
-            return
+        selected = [key for key, switch in self.provider_switches.items() if switch.get()]  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if not selected:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            messagebox.showwarning("Warning", "Please select at least one AI provider!")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            return  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Update UI
-        self.is_processing = True
-        self.send_btn.configure(state="disabled")
-        self.progress.grid(row=3, column=0, sticky="ew", pady=(10, 0))
-        self.progress.start()
-        self.status_label.configure(text=f"Querying {len(selected)} AI providers...")
+        self.is_processing = True  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.send_btn.configure(state="disabled")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.progress.grid(row=3, column=0, sticky="ew", pady=(10, 0))  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.progress.start()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.status_label.configure(text=f"Querying {len(selected)} AI providers...")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Add user message to chat
-        self._add_to_chat(f"You: {question}\n", "user")
-        self._add_to_chat("-" * 60 + "\n", "divider")
+        self._add_to_chat(f"You: {question}\n", "user")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self._add_to_chat("-" * 60 + "\n", "divider")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Clear input
-        self.chat_input.delete("1.0", "end")
+        self.chat_input.delete("1.0", "end")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Update provider API keys
-        self._update_providers()
+        self._update_providers()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Start query thread
-        thread = threading.Thread(
-            target=self._process_query,
-            args=(question, selected),
-            daemon=True
-        )
-        thread.start()
+        thread = threading.Thread(  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            target=self._process_query,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            args=(question, selected),  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            daemon=True  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        )  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        thread.start()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def _process_query(self, question: str, providers: List[str]):
-        """Process query in parallel (runs in worker thread)"""
-        responses = {}
-        total_time = 0
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_process_query` — выполняет отдельный шаг бизнес-логики.
+    def _process_query(self, question: str, providers: List[str]):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Process query in parallel (runs in worker thread)"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        responses = {}  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        total_time = 0  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        with ThreadPoolExecutor(max_workers=len(providers)) as executor:
-            futures = {}
-            for key in providers:
-                if key in self.providers:
-                    provider = self.providers[key]
-                    future = executor.submit(provider.query, question)
-                    futures[future] = key
+        with ThreadPoolExecutor(max_workers=len(providers)) as executor:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            futures = {}  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+            for key in providers:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                if key in self.providers:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    provider = self.providers[key]  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    future = executor.submit(provider.query, question)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    futures[future] = key  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-            for future in as_completed(futures):
-                key = futures[future]
-                provider = self.providers[key]
-                try:
-                    response, elapsed = future.result()
-                    responses[key] = (response, elapsed)
-                    total_time = max(total_time, elapsed)
+            # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+            for future in as_completed(futures):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                key = futures[future]  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                provider = self.providers[key]  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+                try:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    response, elapsed = future.result()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    responses[key] = (response, elapsed)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    total_time = max(total_time, elapsed)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
                     # Log response
-                    success = not response.startswith("Error")
-                    self.logger.log_response(
-                        provider.name, question, response, elapsed,
-                        success=success, model=provider.model
-                    )
+                    success = not response.startswith("Error")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    self.logger.log_response(  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                        provider.name, question, response, elapsed,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                        success=success, model=provider.model  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    )  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-                    if not success:
-                        self.logger.log_error(provider.name, response, f"Query: {question[:100]}")
+                    # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                    if not success:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                        self.logger.log_error(provider.name, response, f"Query: {question[:100]}")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
                     # Send to UI queue (thread-safe)
-                    self.ui_queue.put(UIMessage.response(provider.name, response, elapsed))
+                    self.ui_queue.put(UIMessage.response(provider.name, response, elapsed))  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-                except Exception as e:
-                    responses[key] = (f"Error: {str(e)}", 0)
-                    self.logger.log_error(provider.name, str(e), f"Exception: {question[:100]}")
-                    self.ui_queue.put(UIMessage.error(provider.name, str(e)))
+                # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+                except Exception as e:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    responses[key] = (f"Error: {str(e)}", 0)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    self.logger.log_error(provider.name, str(e), f"Exception: {question[:100]}")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    self.ui_queue.put(UIMessage.error(provider.name, str(e)))  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Save to file
-        filepath = self._save_responses(question, responses)
+        filepath = self._save_responses(question, responses)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Signal completion
-        self.ui_queue.put(UIMessage.finished(len(responses), total_time, filepath))
+        self.ui_queue.put(UIMessage.finished(len(responses), total_time, filepath))  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def _show_response(self, name: str, response: str, elapsed: float):
-        """Show response in chat"""
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_show_response` — выполняет отдельный шаг бизнес-логики.
+    def _show_response(self, name: str, response: str, elapsed: float):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Show response in chat"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
         # Find provider color
-        color = "#3498db"
-        for key, info in PROVIDER_INFO.items():
-            if info["name"] == name:
-                color = info["color"]
-                break
+        color = "#3498db"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+        for key, info in PROVIDER_INFO.items():  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if info["name"] == name:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                color = info["color"]  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                break  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        header = f"\n[{name}] ({elapsed:.1f}s)\n"
-        self._add_to_chat(header, "header")
-        self._add_to_chat(response + "\n", "response")
-        self._add_to_chat("-" * 60 + "\n", "divider")
+        header = f"\n[{name}] ({elapsed:.1f}s)\n"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self._add_to_chat(header, "header")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self._add_to_chat(response + "\n", "response")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self._add_to_chat("-" * 60 + "\n", "divider")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def _finish_query(self, count: int, total_time: float, filepath: str):
-        """Finish query processing"""
-        self.is_processing = False
-        self.send_btn.configure(state="normal")
-        self.progress.stop()
-        self.progress.grid_forget()
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_finish_query` — выполняет отдельный шаг бизнес-логики.
+    def _finish_query(self, count: int, total_time: float, filepath: str):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Finish query processing"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.is_processing = False  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.send_btn.configure(state="normal")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.progress.stop()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.progress.grid_forget()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        status = f"Completed: {count} responses in {total_time:.1f}s"
-        if filepath:
-            status += f" | Saved to {os.path.basename(filepath)}"
-        self.status_label.configure(text=status)
+        status = f"Completed: {count} responses in {total_time:.1f}s"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if filepath:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            status += f" | Saved to {os.path.basename(filepath)}"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.status_label.configure(text=status)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Update metrics
-        self._refresh_metrics()
+        self._refresh_metrics()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def _add_to_chat(self, text: str, tag: str = ""):
-        """Add text to chat display"""
-        self.chat_display.configure(state="normal")
-        self.chat_display.insert("end", text)
-        self.chat_display.configure(state="disabled")
-        self.chat_display.see("end")
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_add_to_chat` — выполняет отдельный шаг бизнес-логики.
+    def _add_to_chat(self, text: str, tag: str = ""):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Add text to chat display"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.chat_display.configure(state="normal")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.chat_display.insert("end", text)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.chat_display.configure(state="disabled")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.chat_display.see("end")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def _append_to_chat(self, text: str):
-        """Append text to chat (for streaming)"""
-        self.chat_display.configure(state="normal")
-        self.chat_display.insert("end", text)
-        self.chat_display.configure(state="disabled")
-        self.chat_display.see("end")
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_append_to_chat` — выполняет отдельный шаг бизнес-логики.
+    def _append_to_chat(self, text: str):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Append text to chat (for streaming)"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.chat_display.configure(state="normal")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.chat_display.insert("end", text)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.chat_display.configure(state="disabled")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.chat_display.see("end")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def _clear_chat(self):
-        """Clear chat display"""
-        self.chat_display.configure(state="normal")
-        self.chat_display.delete("1.0", "end")
-        self.chat_display.configure(state="disabled")
-        self.status_label.configure(text="Ready")
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_clear_chat` — выполняет отдельный шаг бизнес-логики.
+    def _clear_chat(self):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Clear chat display"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.chat_display.configure(state="normal")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.chat_display.delete("1.0", "end")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.chat_display.configure(state="disabled")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.status_label.configure(text="Ready")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def _new_chat(self):
-        """Start new chat - clear history for all providers"""
-        for provider in self.providers.values():
-            provider.clear_history()
-        self._clear_chat()
-        self.status_label.configure(text="New chat started - history cleared")
-        self.current_branch_label.configure(text="Current: None")
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_new_chat` — выполняет отдельный шаг бизнес-логики.
+    def _new_chat(self):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Start new chat - clear history for all providers"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+        for provider in self.providers.values():  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            provider.clear_history()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self._clear_chat()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.status_label.configure(text="New chat started - history cleared")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.current_branch_label.configure(text="Current: None")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def _save_chat_to_file(self):
-        """Save chat content to a file with directory selection"""
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_save_chat_to_file` — выполняет отдельный шаг бизнес-логики.
+    def _save_chat_to_file(self):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Save chat content to a file with directory selection"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
         # Get chat content
-        self.chat_display.configure(state="normal")
-        content = self.chat_display.get("1.0", "end-1c")
-        self.chat_display.configure(state="disabled")
+        self.chat_display.configure(state="normal")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        content = self.chat_display.get("1.0", "end-1c")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.chat_display.configure(state="disabled")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        if not content.strip():
-            messagebox.showwarning("Warning", "Chat is empty. Nothing to save.")
-            return
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if not content.strip():  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            messagebox.showwarning("Warning", "Chat is empty. Nothing to save.")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            return  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Generate default filename
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        default_name = f"chat_log_{timestamp}.txt"
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        default_name = f"chat_log_{timestamp}.txt"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Ask user for save location
-        filepath = filedialog.asksaveasfilename(
-            defaultextension=".txt",
-            filetypes=[
-                ("Text files", "*.txt"),
-                ("Markdown files", "*.md"),
-                ("All files", "*.*")
-            ],
-            initialfile=default_name,
-            title="Save Chat Log"
-        )
+        filepath = filedialog.asksaveasfilename(  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            defaultextension=".txt",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            filetypes=[  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                ("Text files", "*.txt"),  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                ("Markdown files", "*.md"),  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                ("All files", "*.*")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            ],  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            initialfile=default_name,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            title="Save Chat Log"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        )  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        if not filepath:
-            return  # User cancelled
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if not filepath:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            return  # User cancelled  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        try:
-            with open(filepath, 'w', encoding='utf-8') as f:
-                f.write("=" * 70 + "\n")
-                f.write(f"AI Manager Chat Log\n")
-                f.write(f"Saved: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-                f.write("=" * 70 + "\n\n")
-                f.write(content)
-                f.write("\n\n" + "=" * 70 + "\n")
-                f.write("End of chat log\n")
-                f.write("=" * 70 + "\n")
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            with open(filepath, 'w', encoding='utf-8') as f:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                f.write("=" * 70 + "\n")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                f.write(f"AI Manager Chat Log\n")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                f.write(f"Saved: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                f.write("=" * 70 + "\n\n")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                f.write(content)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                f.write("\n\n" + "=" * 70 + "\n")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                f.write("End of chat log\n")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                f.write("=" * 70 + "\n")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-            self.status_label.configure(text=f"Chat saved to {os.path.basename(filepath)}")
-            messagebox.showinfo("Success", f"Chat saved to:\n{filepath}")
+            self.status_label.configure(text=f"Chat saved to {os.path.basename(filepath)}")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            messagebox.showinfo("Success", f"Chat saved to:\n{filepath}")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to save chat:\n{str(e)}")
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except Exception as e:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            messagebox.showerror("Error", f"Failed to save chat:\n{str(e)}")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
     # ==================== Clipboard Operations ====================
     # Removed duplicate methods - all handled by universal _bind_clipboard_shortcuts
 
     # ==================== Config & Providers ====================
 
-    def _update_providers(self):
-        """Update provider API keys from cards"""
-        for key, card in self.api_cards.items():
-            if key in self.providers:
-                self.providers[key].api_key = card.get_key()
-                model = card.get_model()
-                if model:
-                    self.providers[key].set_model(model)
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_update_providers` — выполняет отдельный шаг бизнес-логики.
+    def _update_providers(self):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Update provider API keys from cards"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+        for key, card in self.api_cards.items():  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if key in self.providers:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                self.providers[key].api_key = card.get_key()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                model = card.get_model()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                if model:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    self.providers[key].set_model(model)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def _on_model_change(self, provider_key: str, model: str):
-        """Handle model change from UI"""
-        if provider_key in self.providers:
-            self.providers[provider_key].set_model(model)
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_on_model_change` — выполняет отдельный шаг бизнес-логики.
+    def _on_model_change(self, provider_key: str, model: str):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Handle model change from UI"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if provider_key in self.providers:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            self.providers[provider_key].set_model(model)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def _save_config(self):
-        """Save configuration (keys to secure storage)"""
-        for key, card in self.api_cards.items():
-            api_key = card.get_key()
-            self.key_storage.set_key(key, api_key)
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_save_config` — выполняет отдельный шаг бизнес-логики.
+    def _save_config(self):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Save configuration (keys to secure storage)"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+        for key, card in self.api_cards.items():  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            api_key = card.get_key()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            self.key_storage.set_key(key, api_key)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
             # Update provider
-            if key in self.providers:
-                self.providers[key].api_key = api_key
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if key in self.providers:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                self.providers[key].api_key = api_key  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Save non-sensitive config
-        config = {
-            "theme": ctk.get_appearance_mode(),
-            "models": {key: card.get_model() for key, card in self.api_cards.items()},
-            "enabled_providers": [key for key, switch in self.provider_switches.items() if switch.get()]
-        }
+        config = {  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            "theme": ctk.get_appearance_mode(),  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            "models": {key: card.get_model() for key, card in self.api_cards.items()},  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            "enabled_providers": [key for key, switch in self.provider_switches.items() if switch.get()]  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        }  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        with open("config.json", "w", encoding="utf-8") as f:
-            json.dump(config, f, indent=2)
+        with open("config.json", "w", encoding="utf-8") as f:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            json.dump(config, f, indent=2)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        messagebox.showinfo("Success", "Settings saved securely!")
+        messagebox.showinfo("Success", "Settings saved securely!")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def _load_config(self):
-        """Load configuration"""
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_load_config` — выполняет отдельный шаг бизнес-логики.
+    def _load_config(self):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Load configuration"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
         # Load API keys from secure storage
-        for key, card in self.api_cards.items():
-            api_key = self.key_storage.get_key(key)
-            if api_key:
-                card.set_key(api_key)
-                if key in self.providers:
-                    self.providers[key].api_key = api_key
+        # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+        for key, card in self.api_cards.items():  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            api_key = self.key_storage.get_key(key)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if api_key:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                card.set_key(api_key)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                if key in self.providers:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    self.providers[key].api_key = api_key  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Load non-sensitive config
-        if os.path.exists("config.json"):
-            try:
-                with open("config.json", "r", encoding="utf-8") as f:
-                    config = json.load(f)
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if os.path.exists("config.json"):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+            try:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                with open("config.json", "r", encoding="utf-8") as f:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    config = json.load(f)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
                 # Load models
-                models = config.get("models", {})
-                for key, model in models.items():
-                    if key in self.api_cards and model:
-                        self.api_cards[key].set_model(model)
-                    if key in self.providers and model:
-                        self.providers[key].set_model(model)
+                models = config.get("models", {})  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+                for key, model in models.items():  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                    if key in self.api_cards and model:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                        self.api_cards[key].set_model(model)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                    if key in self.providers and model:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                        self.providers[key].set_model(model)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
                 # Load enabled providers
-                enabled = config.get("enabled_providers", list(PROVIDER_INFO.keys()))
-                for key, switch in self.provider_switches.items():
-                    switch.set(key in enabled)
+                enabled = config.get("enabled_providers", list(PROVIDER_INFO.keys()))  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+                for key, switch in self.provider_switches.items():  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    switch.set(key in enabled)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-            except Exception as e:
-                self.logger.log_error("Config", f"Failed to load config: {e}")
+            # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+            except Exception as e:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                self.logger.log_error("Config", f"Failed to load config: {e}")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def _test_all_connections(self):
-        """Test connections to all providers"""
-        self._update_providers()
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_test_all_connections` — выполняет отдельный шаг бизнес-логики.
+    def _test_all_connections(self):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Test connections to all providers"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self._update_providers()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        def test_provider(key):
-            provider = self.providers.get(key)
-            if provider and provider.api_key:
-                success = provider.test_connection()
-                self.ui_queue.put(UIMessage.connection_status(key, success))
-                return key, success
-            return key, False
+        # ЛОГИЧЕСКИЙ БЛОК: функция `test_provider` — выполняет отдельный шаг бизнес-логики.
+        def test_provider(key):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            """Учебный комментарий: функция `test_provider`. Добавьте доменную детализацию при необходимости."""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            provider = self.providers.get(key)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if provider and provider.api_key:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                success = provider.test_connection()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                self.ui_queue.put(UIMessage.connection_status(key, success))  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                return key, success  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            return key, False  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        self.status_label.configure(text="Testing connections...")
+        self.status_label.configure(text="Testing connections...")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        thread = threading.Thread(
-            target=lambda: [test_provider(k) for k in self.providers.keys()],
-            daemon=True
-        )
-        thread.start()
+        thread = threading.Thread(  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            target=lambda: [test_provider(k) for k in self.providers.keys()],  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            daemon=True  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        )  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        thread.start()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
     # ==================== Logs ====================
 
-    def _refresh_logs_display(self):
-        """Refresh logs display"""
-        log_type = self.log_type_var.get()
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_refresh_logs_display` — выполняет отдельный шаг бизнес-логики.
+    def _refresh_logs_display(self):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Refresh logs display"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        log_type = self.log_type_var.get()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        self.logs_display.configure(state="normal")
-        self.logs_display.delete("1.0", "end")
+        self.logs_display.configure(state="normal")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.logs_display.delete("1.0", "end")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        responses = self.logger.get_responses_log()
-        errors = self.logger.get_errors_log()
+        responses = self.logger.get_responses_log()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        errors = self.logger.get_errors_log()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        self.logs_stats_label.configure(text=f"Responses: {len(responses)} | Errors: {len(errors)}")
+        self.logs_stats_label.configure(text=f"Responses: {len(responses)} | Errors: {len(errors)}")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        if log_type in ["all", "responses"]:
-            self.logs_display.insert("end", "=" * 50 + "\n")
-            self.logs_display.insert("end", "RESPONSES LOG\n")
-            self.logs_display.insert("end", "=" * 50 + "\n\n")
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if log_type in ["all", "responses"]:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            self.logs_display.insert("end", "=" * 50 + "\n")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            self.logs_display.insert("end", "RESPONSES LOG\n")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            self.logs_display.insert("end", "=" * 50 + "\n\n")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-            for entry in reversed(responses):
-                self.logs_display.insert("end", f"[{entry['timestamp'][:19]}] {entry['provider']}\n")
-                self.logs_display.insert("end", f"Model: {entry.get('model', 'N/A')}\n")
-                self.logs_display.insert("end", f"Q: {entry['question'][:100]}...\n")
-                status = "OK" if entry['success'] else "FAIL"
-                self.logs_display.insert("end", f"Status: {status} | Time: {entry['elapsed_time']:.2f}s\n")
-                self.logs_display.insert("end", f"Response: {entry['response'][:200]}...\n")
-                self.logs_display.insert("end", "-" * 40 + "\n\n")
+            # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+            for entry in reversed(responses):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                self.logs_display.insert("end", f"[{entry['timestamp'][:19]}] {entry['provider']}\n")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                self.logs_display.insert("end", f"Model: {entry.get('model', 'N/A')}\n")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                self.logs_display.insert("end", f"Q: {entry['question'][:100]}...\n")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                status = "OK" if entry['success'] else "FAIL"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                self.logs_display.insert("end", f"Status: {status} | Time: {entry['elapsed_time']:.2f}s\n")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                self.logs_display.insert("end", f"Response: {entry['response'][:200]}...\n")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                self.logs_display.insert("end", "-" * 40 + "\n\n")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        if log_type in ["all", "errors"]:
-            self.logs_display.insert("end", "\n" + "=" * 50 + "\n")
-            self.logs_display.insert("end", "ERRORS LOG\n")
-            self.logs_display.insert("end", "=" * 50 + "\n\n")
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if log_type in ["all", "errors"]:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            self.logs_display.insert("end", "\n" + "=" * 50 + "\n")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            self.logs_display.insert("end", "ERRORS LOG\n")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            self.logs_display.insert("end", "=" * 50 + "\n\n")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-            for entry in reversed(errors):
-                self.logs_display.insert("end", f"[{entry['timestamp'][:19]}] {entry['provider']}\n")
-                self.logs_display.insert("end", f"Error: {entry['error']}\n")
-                if entry.get('details'):
-                    self.logs_display.insert("end", f"Details: {entry['details']}\n")
-                self.logs_display.insert("end", "-" * 40 + "\n\n")
+            # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+            for entry in reversed(errors):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                self.logs_display.insert("end", f"[{entry['timestamp'][:19]}] {entry['provider']}\n")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                self.logs_display.insert("end", f"Error: {entry['error']}\n")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                if entry.get('details'):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    self.logs_display.insert("end", f"Details: {entry['details']}\n")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                self.logs_display.insert("end", "-" * 40 + "\n\n")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        self.logs_display.configure(state="disabled")
+        self.logs_display.configure(state="disabled")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def _export_logs(self):
-        """Export logs to file"""
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        default_name = f"ai_manager_logs_{timestamp}.txt"
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_export_logs` — выполняет отдельный шаг бизнес-логики.
+    def _export_logs(self):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Export logs to file"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        default_name = f"ai_manager_logs_{timestamp}.txt"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        filepath = filedialog.asksaveasfilename(
-            defaultextension=".txt",
-            filetypes=[("Text files", "*.txt"), ("All files", "*.*")],
-            initialfile=default_name
-        )
+        filepath = filedialog.asksaveasfilename(  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            defaultextension=".txt",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            filetypes=[("Text files", "*.txt"), ("All files", "*.*")],  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            initialfile=default_name  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        )  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        if filepath:
-            if self.logger.export_logs(filepath):
-                messagebox.showinfo("Success", f"Logs exported to {filepath}")
-            else:
-                messagebox.showerror("Error", "Failed to export logs")
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if filepath:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if self.logger.export_logs(filepath):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                messagebox.showinfo("Success", f"Logs exported to {filepath}")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            else:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                messagebox.showerror("Error", "Failed to export logs")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def _clear_logs(self):
-        """Clear all logs"""
-        if messagebox.askyesno("Confirm", "Clear all logs?"):
-            self.logger.clear_logs()
-            self._refresh_logs_display()
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_clear_logs` — выполняет отдельный шаг бизнес-логики.
+    def _clear_logs(self):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Clear all logs"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if messagebox.askyesno("Confirm", "Clear all logs?"):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            self.logger.clear_logs()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            self._refresh_logs_display()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
     # ==================== Metrics ====================
 
-    def _refresh_metrics(self):
-        """Refresh provider metrics display"""
-        for key, card in self.metrics_cards.items():
-            metrics = self.logger.get_provider_metrics(PROVIDER_INFO[key]["name"])
-            if metrics:
-                card.update_metrics(metrics)
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_refresh_metrics` — выполняет отдельный шаг бизнес-логики.
+    def _refresh_metrics(self):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Refresh provider metrics display"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+        for key, card in self.metrics_cards.items():  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            metrics = self.logger.get_provider_metrics(PROVIDER_INFO[key]["name"])  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if metrics:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                card.update_metrics(metrics)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
     # ==================== Branches ====================
 
-    def _refresh_branches_list(self):
-        """Refresh branches dropdown"""
-        branches = self.branch_manager.get_branches_list()
-        if branches:
-            values = [f"{b['name']} ({b['created_at'][:10]})" for b in branches]
-            self.branches_combo.configure(values=values)
-            if self.branch_manager.current_branch_id:
-                for i, b in enumerate(branches):
-                    if b['id'] == self.branch_manager.current_branch_id:
-                        self.branches_combo.set(values[i])
-                        self.current_branch_label.configure(text=f"Current: {b['name']}")
-                        break
-        else:
-            self.branches_combo.configure(values=["No saved branches"])
-            self.branches_combo.set("No saved branches")
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_refresh_branches_list` — выполняет отдельный шаг бизнес-логики.
+    def _refresh_branches_list(self):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Refresh branches dropdown"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        branches = self.branch_manager.get_branches_list()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if branches:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            values = [f"{b['name']} ({b['created_at'][:10]})" for b in branches]  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            self.branches_combo.configure(values=values)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if self.branch_manager.current_branch_id:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+                for i, b in enumerate(branches):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                    if b['id'] == self.branch_manager.current_branch_id:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                        self.branches_combo.set(values[i])  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                        self.current_branch_label.configure(text=f"Current: {b['name']}")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                        break  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        else:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            self.branches_combo.configure(values=["No saved branches"])  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            self.branches_combo.set("No saved branches")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def _save_branch(self):
-        """Save current conversation as branch"""
-        dialog = ctk.CTkInputDialog(text="Enter branch name:", title="Save Branch")
-        name = dialog.get_input()
-        if not name:
-            return
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_save_branch` — выполняет отдельный шаг бизнес-логики.
+    def _save_branch(self):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Save current conversation as branch"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        dialog = ctk.CTkInputDialog(text="Enter branch name:", title="Save Branch")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        name = dialog.get_input()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if not name:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            return  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        providers_history = {key: p.conversation_history.copy() for key, p in self.providers.items()}
+        providers_history = {key: p.conversation_history.copy() for key, p in self.providers.items()}  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        self.chat_display.configure(state="normal")
-        chat_content = self.chat_display.get("1.0", "end-1c")
-        self.chat_display.configure(state="disabled")
+        self.chat_display.configure(state="normal")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        chat_content = self.chat_display.get("1.0", "end-1c")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.chat_display.configure(state="disabled")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        branch_id = self.branch_manager.create_branch(name, providers_history, chat_content)
-        if branch_id:
-            self._refresh_branches_list()
-            self.current_branch_label.configure(text=f"Current: {name}")
-            messagebox.showinfo("Success", f"Branch '{name}' saved!")
-        else:
-            messagebox.showerror("Error", "Failed to save branch")
+        branch_id = self.branch_manager.create_branch(name, providers_history, chat_content)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if branch_id:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            self._refresh_branches_list()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            self.current_branch_label.configure(text=f"Current: {name}")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            messagebox.showinfo("Success", f"Branch '{name}' saved!")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        else:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            messagebox.showerror("Error", "Failed to save branch")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def _load_branch(self):
-        """Load selected branch"""
-        selection = self.branches_combo.get()
-        if selection == "No saved branches":
-            messagebox.showwarning("Warning", "No branches to load")
-            return
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_load_branch` — выполняет отдельный шаг бизнес-логики.
+    def _load_branch(self):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Load selected branch"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        selection = self.branches_combo.get()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if selection == "No saved branches":  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            messagebox.showwarning("Warning", "No branches to load")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            return  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        branches = self.branch_manager.get_branches_list()
-        values = [f"{b['name']} ({b['created_at'][:10]})" for b in branches]
+        branches = self.branch_manager.get_branches_list()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        values = [f"{b['name']} ({b['created_at'][:10]})" for b in branches]  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        selected_idx = None
-        for i, v in enumerate(values):
-            if v == selection:
-                selected_idx = i
-                break
+        selected_idx = None  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+        for i, v in enumerate(values):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if v == selection:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                selected_idx = i  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                break  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        if selected_idx is None:
-            return
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if selected_idx is None:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            return  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        branch = branches[selected_idx]
-        branch_data = self.branch_manager.load_branch(branch['id'])
-        if not branch_data:
-            messagebox.showerror("Error", "Failed to load branch")
-            return
+        branch = branches[selected_idx]  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        branch_data = self.branch_manager.load_branch(branch['id'])  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if not branch_data:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            messagebox.showerror("Error", "Failed to load branch")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            return  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Restore history
-        for key, history in branch_data.get("providers_history", {}).items():
-            if key in self.providers:
-                self.providers[key].conversation_history = history.copy()
+        # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+        for key, history in branch_data.get("providers_history", {}).items():  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if key in self.providers:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                self.providers[key].conversation_history = history.copy()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Restore chat
-        self.chat_display.configure(state="normal")
-        self.chat_display.delete("1.0", "end")
-        self.chat_display.insert("1.0", branch_data.get("chat_content", ""))
-        self.chat_display.configure(state="disabled")
+        self.chat_display.configure(state="normal")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.chat_display.delete("1.0", "end")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.chat_display.insert("1.0", branch_data.get("chat_content", ""))  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.chat_display.configure(state="disabled")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        self.current_branch_label.configure(text=f"Current: {branch['name']}")
-        messagebox.showinfo("Success", f"Branch '{branch['name']}' loaded!")
+        self.current_branch_label.configure(text=f"Current: {branch['name']}")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        messagebox.showinfo("Success", f"Branch '{branch['name']}' loaded!")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def _delete_branch(self):
-        """Delete selected branch"""
-        selection = self.branches_combo.get()
-        if selection == "No saved branches":
-            return
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_delete_branch` — выполняет отдельный шаг бизнес-логики.
+    def _delete_branch(self):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Delete selected branch"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        selection = self.branches_combo.get()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if selection == "No saved branches":  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            return  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        branches = self.branch_manager.get_branches_list()
-        values = [f"{b['name']} ({b['created_at'][:10]})" for b in branches]
+        branches = self.branch_manager.get_branches_list()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        values = [f"{b['name']} ({b['created_at'][:10]})" for b in branches]  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        selected_idx = None
-        for i, v in enumerate(values):
-            if v == selection:
-                selected_idx = i
-                break
+        selected_idx = None  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+        for i, v in enumerate(values):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if v == selection:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                selected_idx = i  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                break  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        if selected_idx is None:
-            return
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if selected_idx is None:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            return  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        branch = branches[selected_idx]
-        if not messagebox.askyesno("Confirm", f"Delete branch '{branch['name']}'?"):
-            return
+        branch = branches[selected_idx]  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if not messagebox.askyesno("Confirm", f"Delete branch '{branch['name']}'?"):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            return  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        if self.branch_manager.delete_branch(branch['id']):
-            self._refresh_branches_list()
-            messagebox.showinfo("Success", f"Branch deleted")
-        else:
-            messagebox.showerror("Error", "Failed to delete branch")
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if self.branch_manager.delete_branch(branch['id']):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            self._refresh_branches_list()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            messagebox.showinfo("Success", f"Branch deleted")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        else:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            messagebox.showerror("Error", "Failed to delete branch")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
     # ==================== Save Responses ====================
 
-    def _save_responses(self, question: str, responses: Dict[str, Tuple[str, float]]) -> Optional[str]:
-        """Save responses to file"""
-        try:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"ai_responses_{timestamp}.txt"
-            filepath = os.path.join(self.output_dir, filename)
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_save_responses` — выполняет отдельный шаг бизнес-логики.
+    def _save_responses(self, question: str, responses: Dict[str, Tuple[str, float]]) -> Optional[str]:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Save responses to file"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            filename = f"ai_responses_{timestamp}.txt"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            filepath = os.path.join(self.output_dir, filename)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-            with open(filepath, 'w', encoding='utf-8') as f:
-                f.write("=" * 70 + "\n")
-                f.write(f"AI Manager Response Log\n")
-                f.write(f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-                f.write("=" * 70 + "\n\n")
-                f.write(f"Question: {question}\n\n")
-                f.write("-" * 70 + "\n\n")
+            with open(filepath, 'w', encoding='utf-8') as f:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                f.write("=" * 70 + "\n")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                f.write(f"AI Manager Response Log\n")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                f.write(f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                f.write("=" * 70 + "\n\n")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                f.write(f"Question: {question}\n\n")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                f.write("-" * 70 + "\n\n")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-                for name, (response, elapsed) in responses.items():
-                    provider_name = PROVIDER_INFO.get(name, {}).get("name", name)
-                    f.write(f"[{provider_name}] ({elapsed:.1f}s)\n")
-                    f.write("-" * 40 + "\n")
-                    f.write(response + "\n\n")
+                # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+                for name, (response, elapsed) in responses.items():  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    provider_name = PROVIDER_INFO.get(name, {}).get("name", name)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    f.write(f"[{provider_name}] ({elapsed:.1f}s)\n")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    f.write("-" * 40 + "\n")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    f.write(response + "\n\n")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-            return filepath
-        except Exception as e:
-            self.logger.log_error("FileSystem", f"Failed to save responses: {e}")
-            return None
+            return filepath  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except Exception as e:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            self.logger.log_error("FileSystem", f"Failed to save responses: {e}")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            return None  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.

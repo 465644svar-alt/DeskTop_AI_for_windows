@@ -1,3 +1,4 @@
+# НАЗНАЧЕНИЕ ФАЙЛА: Переиспользуемые UI-виджеты и вспомогательные визуальные компоненты.
 """
 Custom UI Widgets for AI Manager
 - APIKeyCard: Card for API key input with model entry
@@ -5,251 +6,292 @@ Custom UI Widgets for AI Manager
 - ProviderMetricsCard: Display provider performance metrics
 """
 
-import customtkinter as ctk
-import webbrowser
-from typing import Callable, Optional
+import customtkinter as ctk  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+import webbrowser  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+from typing import Callable, Optional  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
 
-class ModernSwitch(ctk.CTkFrame):
-    """Modern toggle switch with label"""
+# ЛОГИЧЕСКИЙ БЛОК: класс `ModernSwitch(ctk.CTkFrame)` — объединяет состояние и поведение подсистемы.
+class ModernSwitch(ctk.CTkFrame):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    """Modern toggle switch with label"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def __init__(
-        self,
-        master,
-        text: str,
-        color: str = "#3498db",
-        command: Optional[Callable] = None,
-        **kwargs
-    ):
-        super().__init__(master, fg_color="transparent", **kwargs)
+    # ЛОГИЧЕСКИЙ БЛОК: функция `__init__` — выполняет отдельный шаг бизнес-логики.
+    def __init__(  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        master,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        text: str,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        color: str = "#3498db",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        command: Optional[Callable] = None,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        **kwargs  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    ):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Учебный комментарий: функция `__init__`. Добавьте доменную детализацию при необходимости."""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        super().__init__(master, fg_color="transparent", **kwargs)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        self.switch_var = ctk.BooleanVar(value=True)
-        self.command = command
-        self.color = color
+        self.switch_var = ctk.BooleanVar(value=True)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.command = command  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.color = color  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        self.switch = ctk.CTkSwitch(
-            self,
-            text=text,
-            variable=self.switch_var,
-            onvalue=True,
-            offvalue=False,
-            progress_color=color,
-            command=self._on_change
-        )
-        self.switch.pack(anchor="w")
+        self.switch = ctk.CTkSwitch(  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            self,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            text=text,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            variable=self.switch_var,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            onvalue=True,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            offvalue=False,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            progress_color=color,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            command=self._on_change  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        )  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.switch.pack(anchor="w")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def _on_change(self):
-        if self.command:
-            self.command()
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_on_change` — выполняет отдельный шаг бизнес-логики.
+    def _on_change(self):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Учебный комментарий: функция `_on_change`. Добавьте доменную детализацию при необходимости."""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if self.command:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            self.command()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def get(self) -> bool:
-        return self.switch_var.get()
+    # ЛОГИЧЕСКИЙ БЛОК: функция `get` — выполняет отдельный шаг бизнес-логики.
+    def get(self) -> bool:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Учебный комментарий: функция `get`. Добавьте доменную детализацию при необходимости."""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        return self.switch_var.get()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def set(self, value: bool):
-        self.switch_var.set(value)
+    # ЛОГИЧЕСКИЙ БЛОК: функция `set` — выполняет отдельный шаг бизнес-логики.
+    def set(self, value: bool):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Учебный комментарий: функция `set`. Добавьте доменную детализацию при необходимости."""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.switch_var.set(value)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
 
-class APIKeyCard(ctk.CTkFrame):
-    """Modern card for API key input with model entry"""
+# ЛОГИЧЕСКИЙ БЛОК: класс `APIKeyCard(ctk.CTkFrame)` — объединяет состояние и поведение подсистемы.
+class APIKeyCard(ctk.CTkFrame):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    """Modern card for API key input with model entry"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def __init__(
-        self,
-        master,
-        name: str,
-        color: str,
-        url: str,
-        description: str,
-        on_model_change: Optional[Callable] = None,
-        **kwargs
-    ):
-        super().__init__(master, corner_radius=12, **kwargs)
+    # ЛОГИЧЕСКИЙ БЛОК: функция `__init__` — выполняет отдельный шаг бизнес-логики.
+    def __init__(  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        master,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        name: str,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        color: str,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        url: str,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        description: str,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        on_model_change: Optional[Callable] = None,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        **kwargs  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    ):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Учебный комментарий: функция `__init__`. Добавьте доменную детализацию при необходимости."""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        super().__init__(master, corner_radius=12, **kwargs)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        self.name = name
-        self.url = url
-        self.color = color
-        self.show_key = False
-        self.on_model_change = on_model_change
+        self.name = name  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.url = url  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.color = color  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.show_key = False  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.on_model_change = on_model_change  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Header with color accent
-        header = ctk.CTkFrame(self, fg_color=color, corner_radius=10, height=4)
-        header.pack(fill="x", padx=10, pady=(10, 0))
+        header = ctk.CTkFrame(self, fg_color=color, corner_radius=10, height=4)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        header.pack(fill="x", padx=10, pady=(10, 0))  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Content frame
-        content = ctk.CTkFrame(self, fg_color="transparent")
-        content.pack(fill="x", padx=15, pady=10)
+        content = ctk.CTkFrame(self, fg_color="transparent")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        content.pack(fill="x", padx=15, pady=10)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Title row
-        title_row = ctk.CTkFrame(content, fg_color="transparent")
-        title_row.pack(fill="x")
+        title_row = ctk.CTkFrame(content, fg_color="transparent")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        title_row.pack(fill="x")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        ctk.CTkLabel(
-            title_row, text=name,
-            font=ctk.CTkFont(size=16, weight="bold")
-        ).pack(side="left")
+        ctk.CTkLabel(  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            title_row, text=name,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            font=ctk.CTkFont(size=16, weight="bold")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        ).pack(side="left")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Status indicator
-        self.status_indicator = ctk.CTkLabel(
-            title_row, text="", width=10, height=10,
-            fg_color="gray", corner_radius=5
-        )
-        self.status_indicator.pack(side="right", padx=5)
+        self.status_indicator = ctk.CTkLabel(  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            title_row, text="", width=10, height=10,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            fg_color="gray", corner_radius=5  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        )  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.status_indicator.pack(side="right", padx=5)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Description
-        ctk.CTkLabel(
-            content, text=description,
-            font=ctk.CTkFont(size=11),
-            text_color="gray"
-        ).pack(anchor="w", pady=(2, 8))
+        ctk.CTkLabel(  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            content, text=description,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            font=ctk.CTkFont(size=11),  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            text_color="gray"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        ).pack(anchor="w", pady=(2, 8))  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Model entry
-        model_row = ctk.CTkFrame(content, fg_color="transparent")
-        model_row.pack(fill="x", pady=(0, 8))
+        model_row = ctk.CTkFrame(content, fg_color="transparent")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        model_row.pack(fill="x", pady=(0, 8))  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        ctk.CTkLabel(
-            model_row, text="Model:",
-            font=ctk.CTkFont(size=12)
-        ).pack(side="left", padx=(0, 10))
+        ctk.CTkLabel(  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            model_row, text="Model:",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            font=ctk.CTkFont(size=12)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        ).pack(side="left", padx=(0, 10))  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        self.model_entry = ctk.CTkEntry(
-            model_row, width=240, height=28,
-            placeholder_text="Enter model name..."
-        )
-        self.model_entry.pack(side="left")
-        self.model_entry.bind("<FocusOut>", self._on_model_change)
-        self.model_entry.bind("<Return>", self._on_model_change)
+        self.model_entry = ctk.CTkEntry(  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            model_row, width=240, height=28,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            placeholder_text="Enter model name..."  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        )  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.model_entry.pack(side="left")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.model_entry.bind("<FocusOut>", self._on_model_change)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.model_entry.bind("<Return>", self._on_model_change)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Key input row
-        key_row = ctk.CTkFrame(content, fg_color="transparent")
-        key_row.pack(fill="x")
+        key_row = ctk.CTkFrame(content, fg_color="transparent")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        key_row.pack(fill="x")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        self.key_entry = ctk.CTkEntry(
-            key_row, placeholder_text="Enter API key...",
-            show="*", height=36, corner_radius=8
-        )
-        self.key_entry.pack(side="left", fill="x", expand=True, padx=(0, 8))
+        self.key_entry = ctk.CTkEntry(  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            key_row, placeholder_text="Enter API key...",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            show="*", height=36, corner_radius=8  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        )  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.key_entry.pack(side="left", fill="x", expand=True, padx=(0, 8))  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Paste button
-        ctk.CTkButton(
-            key_row, text="Paste", width=60, height=36,
-            corner_radius=8, fg_color="#2980b9", hover_color="#1f618d",
-            command=self._request_paste
-        ).pack(side="left", padx=(0, 8))
+        ctk.CTkButton(  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            key_row, text="Paste", width=60, height=36,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            corner_radius=8, fg_color="#2980b9", hover_color="#1f618d",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            command=self._request_paste  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        ).pack(side="left", padx=(0, 8))  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Toggle visibility button
-        self.toggle_btn = ctk.CTkButton(
-            key_row, text="Show", width=60, height=36,
-            corner_radius=8, command=self._toggle_visibility
-        )
-        self.toggle_btn.pack(side="left", padx=(0, 8))
+        self.toggle_btn = ctk.CTkButton(  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            key_row, text="Show", width=60, height=36,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            corner_radius=8, command=self._toggle_visibility  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        )  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.toggle_btn.pack(side="left", padx=(0, 8))  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Get key button
-        ctk.CTkButton(
-            key_row, text="Get Key", width=80, height=36,
-            corner_radius=8, fg_color=color, hover_color=self._darken(color),
-            command=lambda: webbrowser.open(url)
-        ).pack(side="left")
+        ctk.CTkButton(  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            key_row, text="Get Key", width=80, height=36,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            corner_radius=8, fg_color=color, hover_color=self._darken(color),  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            command=lambda: webbrowser.open(url)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        ).pack(side="left")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Shortcut bindings handled by app-level clipboard binder
 
-    def _toggle_visibility(self):
-        self.show_key = not self.show_key
-        self.key_entry.configure(show="" if self.show_key else "*")
-        self.toggle_btn.configure(text="Hide" if self.show_key else "Show")
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_toggle_visibility` — выполняет отдельный шаг бизнес-логики.
+    def _toggle_visibility(self):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Учебный комментарий: функция `_toggle_visibility`. Добавьте доменную детализацию при необходимости."""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.show_key = not self.show_key  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.key_entry.configure(show="" if self.show_key else "*")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.toggle_btn.configure(text="Hide" if self.show_key else "Show")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def _request_paste(self):
-        try:
-            self.key_entry.event_generate("<<Paste>>")
-        except Exception:
-            pass
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_request_paste` — выполняет отдельный шаг бизнес-логики.
+    def _request_paste(self):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Учебный комментарий: функция `_request_paste`. Добавьте доменную детализацию при необходимости."""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            self.key_entry.event_generate("<<Paste>>")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except Exception:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            pass  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def _on_model_change(self, _event=None):
-        if self.on_model_change:
-            self.on_model_change(self.get_model())
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_on_model_change` — выполняет отдельный шаг бизнес-логики.
+    def _on_model_change(self, _event=None):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Учебный комментарий: функция `_on_model_change`. Добавьте доменную детализацию при необходимости."""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if self.on_model_change:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            self.on_model_change(self.get_model())  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def _darken(self, hex_color: str) -> str:
-        """Darken a hex color"""
-        hex_color = hex_color.lstrip('#')
-        rgb = tuple(int(hex_color[i:i + 2], 16) for i in (0, 2, 4))
-        darker = tuple(max(0, int(c * 0.8)) for c in rgb)
-        return f"#{darker[0]:02x}{darker[1]:02x}{darker[2]:02x}"
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_darken` — выполняет отдельный шаг бизнес-логики.
+    def _darken(self, hex_color: str) -> str:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Darken a hex color"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        hex_color = hex_color.lstrip('#')  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        rgb = tuple(int(hex_color[i:i + 2], 16) for i in (0, 2, 4))  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        darker = tuple(max(0, int(c * 0.8)) for c in rgb)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        return f"#{darker[0]:02x}{darker[1]:02x}{darker[2]:02x}"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def get_key(self) -> str:
-        return self.key_entry.get().strip()
+    # ЛОГИЧЕСКИЙ БЛОК: функция `get_key` — выполняет отдельный шаг бизнес-логики.
+    def get_key(self) -> str:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Учебный комментарий: функция `get_key`. Добавьте доменную детализацию при необходимости."""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        return self.key_entry.get().strip()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def set_key(self, key: str):
-        self.key_entry.delete(0, "end")
-        if key:
-            self.key_entry.insert(0, key)
+    # ЛОГИЧЕСКИЙ БЛОК: функция `set_key` — выполняет отдельный шаг бизнес-логики.
+    def set_key(self, key: str):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Учебный комментарий: функция `set_key`. Добавьте доменную детализацию при необходимости."""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.key_entry.delete(0, "end")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if key:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            self.key_entry.insert(0, key)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def get_model(self) -> str:
-        if self.model_entry:
-            return self.model_entry.get().strip()
-        return ""
+    # ЛОГИЧЕСКИЙ БЛОК: функция `get_model` — выполняет отдельный шаг бизнес-логики.
+    def get_model(self) -> str:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Учебный комментарий: функция `get_model`. Добавьте доменную детализацию при необходимости."""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if self.model_entry:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            return self.model_entry.get().strip()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        return ""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def set_model(self, model: str):
-        if self.model_entry:
-            self.model_entry.delete(0, "end")
-            if model:
-                self.model_entry.insert(0, model)
+    # ЛОГИЧЕСКИЙ БЛОК: функция `set_model` — выполняет отдельный шаг бизнес-логики.
+    def set_model(self, model: str):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Учебный комментарий: функция `set_model`. Добавьте доменную детализацию при необходимости."""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if self.model_entry:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            self.model_entry.delete(0, "end")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if model:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                self.model_entry.insert(0, model)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def set_status(self, connected: bool):
-        color = "#27ae60" if connected else "#e74c3c"
-        self.status_indicator.configure(fg_color=color)
+    # ЛОГИЧЕСКИЙ БЛОК: функция `set_status` — выполняет отдельный шаг бизнес-логики.
+    def set_status(self, connected: bool):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Учебный комментарий: функция `set_status`. Добавьте доменную детализацию при необходимости."""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        color = "#27ae60" if connected else "#e74c3c"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.status_indicator.configure(fg_color=color)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
 
-class ProviderMetricsCard(ctk.CTkFrame):
-    """Card displaying provider performance metrics"""
+# ЛОГИЧЕСКИЙ БЛОК: класс `ProviderMetricsCard(ctk.CTkFrame)` — объединяет состояние и поведение подсистемы.
+class ProviderMetricsCard(ctk.CTkFrame):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    """Card displaying provider performance metrics"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def __init__(self, master, provider_name: str, color: str = "#3498db", **kwargs):
-        super().__init__(master, corner_radius=10, **kwargs)
+    # ЛОГИЧЕСКИЙ БЛОК: функция `__init__` — выполняет отдельный шаг бизнес-логики.
+    def __init__(self, master, provider_name: str, color: str = "#3498db", **kwargs):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Учебный комментарий: функция `__init__`. Добавьте доменную детализацию при необходимости."""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        super().__init__(master, corner_radius=10, **kwargs)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        self.provider_name = provider_name
+        self.provider_name = provider_name  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Header
-        header = ctk.CTkFrame(self, fg_color=color, corner_radius=8, height=3)
-        header.pack(fill="x", padx=8, pady=(8, 4))
+        header = ctk.CTkFrame(self, fg_color=color, corner_radius=8, height=3)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        header.pack(fill="x", padx=8, pady=(8, 4))  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Provider name
-        ctk.CTkLabel(
-            self, text=provider_name,
-            font=ctk.CTkFont(size=13, weight="bold")
-        ).pack(anchor="w", padx=10)
+        ctk.CTkLabel(  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            self, text=provider_name,  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            font=ctk.CTkFont(size=13, weight="bold")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        ).pack(anchor="w", padx=10)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Metrics frame
-        metrics_frame = ctk.CTkFrame(self, fg_color="transparent")
-        metrics_frame.pack(fill="x", padx=10, pady=(4, 8))
+        metrics_frame = ctk.CTkFrame(self, fg_color="transparent")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        metrics_frame.pack(fill="x", padx=10, pady=(4, 8))  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Requests label
-        self.requests_label = ctk.CTkLabel(
-            metrics_frame, text="Requests: 0",
-            font=ctk.CTkFont(size=11), text_color="gray"
-        )
-        self.requests_label.pack(anchor="w")
+        self.requests_label = ctk.CTkLabel(  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            metrics_frame, text="Requests: 0",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            font=ctk.CTkFont(size=11), text_color="gray"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        )  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.requests_label.pack(anchor="w")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Success rate label
-        self.success_label = ctk.CTkLabel(
-            metrics_frame, text="Success: 0%",
-            font=ctk.CTkFont(size=11), text_color="gray"
-        )
-        self.success_label.pack(anchor="w")
+        self.success_label = ctk.CTkLabel(  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            metrics_frame, text="Success: 0%",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            font=ctk.CTkFont(size=11), text_color="gray"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        )  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.success_label.pack(anchor="w")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
         # Avg time label
-        self.time_label = ctk.CTkLabel(
-            metrics_frame, text="Avg time: 0s",
-            font=ctk.CTkFont(size=11), text_color="gray"
-        )
-        self.time_label.pack(anchor="w")
+        self.time_label = ctk.CTkLabel(  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            metrics_frame, text="Avg time: 0s",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            font=ctk.CTkFont(size=11), text_color="gray"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        )  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.time_label.pack(anchor="w")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def update_metrics(self, metrics: dict):
-        """Update displayed metrics"""
-        self.requests_label.configure(text=f"Requests: {metrics.get('total_requests', 0)}")
+    # ЛОГИЧЕСКИЙ БЛОК: функция `update_metrics` — выполняет отдельный шаг бизнес-логики.
+    def update_metrics(self, metrics: dict):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Update displayed metrics"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.requests_label.configure(text=f"Requests: {metrics.get('total_requests', 0)}")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        success_rate = metrics.get('success_rate', 0)
-        success_color = "#27ae60" if success_rate >= 90 else "#f39c12" if success_rate >= 70 else "#e74c3c"
-        self.success_label.configure(
-            text=f"Success: {success_rate:.1f}%",
-            text_color=success_color
-        )
+        success_rate = metrics.get('success_rate', 0)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        success_color = "#27ae60" if success_rate >= 90 else "#f39c12" if success_rate >= 70 else "#e74c3c"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.success_label.configure(  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            text=f"Success: {success_rate:.1f}%",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            text_color=success_color  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        )  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        avg_time = metrics.get('avg_response_time', 0)
-        self.time_label.configure(text=f"Avg time: {avg_time:.2f}s")
+        avg_time = metrics.get('avg_response_time', 0)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.time_label.configure(text=f"Avg time: {avg_time:.2f}s")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.

@@ -1,198 +1,249 @@
+# НАЗНАЧЕНИЕ ФАЙЛА: Утилиты безопасности: хранение ключей и защитные операции.
 """
 Secure API Key Storage using system keyring
 Falls back to encrypted file storage if keyring unavailable
 """
 
-import json
-import os
-import logging
-import base64
-import hashlib
-from typing import Optional, Dict
+import json  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+import os  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+import logging  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+import base64  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+import hashlib  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+from typing import Optional, Dict  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
 # Try to import keyring
-try:
-    import keyring
-    KEYRING_AVAILABLE = True
-except ImportError:
-    KEYRING_AVAILABLE = False
-    logger.warning("keyring not available, using fallback storage")
+# ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+try:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    import keyring  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    KEYRING_AVAILABLE = True  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+# ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+except ImportError:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    KEYRING_AVAILABLE = False  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    logger.warning("keyring not available, using fallback storage")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
 
-class SecureKeyStorage:
-    """Secure storage for API keys using system keyring or encrypted fallback"""
+# ЛОГИЧЕСКИЙ БЛОК: класс `SecureKeyStorage` — объединяет состояние и поведение подсистемы.
+class SecureKeyStorage:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    """Secure storage for API keys using system keyring or encrypted fallback"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    SERVICE_NAME = "AIManager"
-    FALLBACK_FILE = "config_secure.dat"
+    SERVICE_NAME = "AIManager"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    FALLBACK_FILE = "config_secure.dat"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def __init__(self, config_dir: str = "."):
-        self.config_dir = config_dir
-        self.fallback_path = os.path.join(config_dir, self.FALLBACK_FILE)
-        self._machine_key = self._get_machine_key()
+    # ЛОГИЧЕСКИЙ БЛОК: функция `__init__` — выполняет отдельный шаг бизнес-логики.
+    def __init__(self, config_dir: str = "."):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Учебный комментарий: функция `__init__`. Добавьте доменную детализацию при необходимости."""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.config_dir = config_dir  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self.fallback_path = os.path.join(config_dir, self.FALLBACK_FILE)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        self._machine_key = self._get_machine_key()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def _get_machine_key(self) -> bytes:
-        """Get a machine-specific key for fallback encryption"""
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_get_machine_key` — выполняет отдельный шаг бизнес-логики.
+    def _get_machine_key(self) -> bytes:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Get a machine-specific key for fallback encryption"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
         # Use combination of username and machine-specific data
-        import platform
-        machine_id = f"{platform.node()}-{os.getlogin() if hasattr(os, 'getlogin') else 'user'}"
-        return hashlib.sha256(machine_id.encode()).digest()
+        import platform  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        machine_id = f"{platform.node()}-{os.getlogin() if hasattr(os, 'getlogin') else 'user'}"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        return hashlib.sha256(machine_id.encode()).digest()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def _simple_encrypt(self, data: str) -> str:
-        """Simple XOR encryption with machine key (fallback only)"""
-        key = self._machine_key
-        encrypted = bytearray()
-        for i, char in enumerate(data.encode('utf-8')):
-            encrypted.append(char ^ key[i % len(key)])
-        return base64.b64encode(encrypted).decode('ascii')
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_simple_encrypt` — выполняет отдельный шаг бизнес-логики.
+    def _simple_encrypt(self, data: str) -> str:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Simple XOR encryption with machine key (fallback only)"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        key = self._machine_key  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        encrypted = bytearray()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+        for i, char in enumerate(data.encode('utf-8')):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            encrypted.append(char ^ key[i % len(key)])  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        return base64.b64encode(encrypted).decode('ascii')  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def _simple_decrypt(self, data: str) -> str:
-        """Simple XOR decryption with machine key (fallback only)"""
-        key = self._machine_key
-        encrypted = base64.b64decode(data.encode('ascii'))
-        decrypted = bytearray()
-        for i, byte in enumerate(encrypted):
-            decrypted.append(byte ^ key[i % len(key)])
-        return decrypted.decode('utf-8')
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_simple_decrypt` — выполняет отдельный шаг бизнес-логики.
+    def _simple_decrypt(self, data: str) -> str:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Simple XOR decryption with machine key (fallback only)"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        key = self._machine_key  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        encrypted = base64.b64decode(data.encode('ascii'))  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        decrypted = bytearray()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+        for i, byte in enumerate(encrypted):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            decrypted.append(byte ^ key[i % len(key)])  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        return decrypted.decode('utf-8')  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def set_key(self, provider: str, api_key: str) -> bool:
-        """Store API key securely"""
-        if not api_key:
-            return self.delete_key(provider)
+    # ЛОГИЧЕСКИЙ БЛОК: функция `set_key` — выполняет отдельный шаг бизнес-логики.
+    def set_key(self, provider: str, api_key: str) -> bool:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Store API key securely"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if not api_key:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            return self.delete_key(provider)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        try:
-            if KEYRING_AVAILABLE:
-                keyring.set_password(self.SERVICE_NAME, provider, api_key)
-                logger.info(f"Stored key for {provider} in system keyring")
-            else:
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if KEYRING_AVAILABLE:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                keyring.set_password(self.SERVICE_NAME, provider, api_key)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                logger.info(f"Stored key for {provider} in system keyring")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            else:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
                 # Fallback to encrypted file
-                self._save_to_fallback(provider, api_key)
-                logger.info(f"Stored key for {provider} in encrypted file")
-            return True
-        except Exception as e:
-            logger.error(f"Failed to store key for {provider}: {e}")
-            return False
+                self._save_to_fallback(provider, api_key)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                logger.info(f"Stored key for {provider} in encrypted file")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            return True  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except Exception as e:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            logger.error(f"Failed to store key for {provider}: {e}")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            return False  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def get_key(self, provider: str) -> Optional[str]:
-        """Retrieve API key"""
-        try:
-            if KEYRING_AVAILABLE:
-                key = keyring.get_password(self.SERVICE_NAME, provider)
-                if key:
-                    return key
+    # ЛОГИЧЕСКИЙ БЛОК: функция `get_key` — выполняет отдельный шаг бизнес-логики.
+    def get_key(self, provider: str) -> Optional[str]:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Retrieve API key"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if KEYRING_AVAILABLE:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                key = keyring.get_password(self.SERVICE_NAME, provider)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                if key:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    return key  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
             # Try fallback
-            return self._load_from_fallback(provider)
-        except Exception as e:
-            logger.error(f"Failed to retrieve key for {provider}: {e}")
-            return None
+            return self._load_from_fallback(provider)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except Exception as e:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            logger.error(f"Failed to retrieve key for {provider}: {e}")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            return None  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def delete_key(self, provider: str) -> bool:
-        """Delete stored API key"""
-        try:
-            if KEYRING_AVAILABLE:
-                try:
-                    keyring.delete_password(self.SERVICE_NAME, provider)
-                except keyring.errors.PasswordDeleteError:
-                    pass  # Key didn't exist
+    # ЛОГИЧЕСКИЙ БЛОК: функция `delete_key` — выполняет отдельный шаг бизнес-логики.
+    def delete_key(self, provider: str) -> bool:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Delete stored API key"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if KEYRING_AVAILABLE:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+                try:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    keyring.delete_password(self.SERVICE_NAME, provider)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+                except keyring.errors.PasswordDeleteError:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    pass  # Key didn't exist  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
             # Also remove from fallback
-            self._delete_from_fallback(provider)
-            return True
-        except Exception as e:
-            logger.error(f"Failed to delete key for {provider}: {e}")
-            return False
+            self._delete_from_fallback(provider)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            return True  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except Exception as e:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            logger.error(f"Failed to delete key for {provider}: {e}")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            return False  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def _save_to_fallback(self, provider: str, api_key: str):
-        """Save to encrypted fallback file"""
-        data = self._load_fallback_data()
-        data[provider] = self._simple_encrypt(api_key)
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_save_to_fallback` — выполняет отдельный шаг бизнес-логики.
+    def _save_to_fallback(self, provider: str, api_key: str):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Save to encrypted fallback file"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        data = self._load_fallback_data()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        data[provider] = self._simple_encrypt(api_key)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        with open(self.fallback_path, 'w', encoding='utf-8') as f:
-            json.dump(data, f)
+        with open(self.fallback_path, 'w', encoding='utf-8') as f:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            json.dump(data, f)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def _load_from_fallback(self, provider: str) -> Optional[str]:
-        """Load from encrypted fallback file"""
-        data = self._load_fallback_data()
-        encrypted = data.get(provider)
-        if encrypted:
-            try:
-                return self._simple_decrypt(encrypted)
-            except Exception:
-                return None
-        return None
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_load_from_fallback` — выполняет отдельный шаг бизнес-логики.
+    def _load_from_fallback(self, provider: str) -> Optional[str]:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Load from encrypted fallback file"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        data = self._load_fallback_data()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        encrypted = data.get(provider)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if encrypted:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+            try:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                return self._simple_decrypt(encrypted)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+            except Exception:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                return None  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        return None  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def _delete_from_fallback(self, provider: str):
-        """Delete from fallback file"""
-        data = self._load_fallback_data()
-        if provider in data:
-            del data[provider]
-            with open(self.fallback_path, 'w', encoding='utf-8') as f:
-                json.dump(data, f)
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_delete_from_fallback` — выполняет отдельный шаг бизнес-логики.
+    def _delete_from_fallback(self, provider: str):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Delete from fallback file"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        data = self._load_fallback_data()  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if provider in data:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            del data[provider]  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            with open(self.fallback_path, 'w', encoding='utf-8') as f:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                json.dump(data, f)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def _load_fallback_data(self) -> Dict[str, str]:
-        """Load fallback data file"""
-        if os.path.exists(self.fallback_path):
-            try:
-                with open(self.fallback_path, 'r', encoding='utf-8') as f:
-                    return json.load(f)
-            except Exception:
-                return {}
-        return {}
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_load_fallback_data` — выполняет отдельный шаг бизнес-логики.
+    def _load_fallback_data(self) -> Dict[str, str]:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Load fallback data file"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if os.path.exists(self.fallback_path):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+            try:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                with open(self.fallback_path, 'r', encoding='utf-8') as f:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    return json.load(f)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+            except Exception:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                return {}  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        return {}  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def get_all_keys(self) -> Dict[str, str]:
-        """Get all stored keys"""
-        providers = ["openai", "anthropic", "gemini", "deepseek", "groq", "mistral"]
-        keys = {}
-        for provider in providers:
-            key = self.get_key(provider)
-            if key:
-                keys[provider] = key
-        return keys
+    # ЛОГИЧЕСКИЙ БЛОК: функция `get_all_keys` — выполняет отдельный шаг бизнес-логики.
+    def get_all_keys(self) -> Dict[str, str]:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Get all stored keys"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        providers = ["openai", "anthropic", "gemini", "deepseek", "groq", "mistral"]  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        keys = {}  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+        for provider in providers:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            key = self.get_key(provider)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if key:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                keys[provider] = key  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        return keys  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-    def migrate_from_config(self, config_path: str) -> int:
-        """Migrate keys from plain config.json to secure storage"""
-        migrated = 0
-        if not os.path.exists(config_path):
-            return migrated
+    # ЛОГИЧЕСКИЙ БЛОК: функция `migrate_from_config` — выполняет отдельный шаг бизнес-логики.
+    def migrate_from_config(self, config_path: str) -> int:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        """Migrate keys from plain config.json to secure storage"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        migrated = 0  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if not os.path.exists(config_path):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            return migrated  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        try:
-            with open(config_path, 'r', encoding='utf-8') as f:
-                config = json.load(f)
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            with open(config_path, 'r', encoding='utf-8') as f:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                config = json.load(f)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-            key_mappings = {
-                "openai_key": "openai",
-                "anthropic_key": "anthropic",
-                "gemini_key": "gemini",
-                "deepseek_key": "deepseek",
-                "groq_key": "groq",
-                "mistral_key": "mistral"
-            }
+            key_mappings = {  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                "openai_key": "openai",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                "anthropic_key": "anthropic",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                "gemini_key": "gemini",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                "deepseek_key": "deepseek",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                "groq_key": "groq",  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                "mistral_key": "mistral"  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            }  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-            for config_key, provider in key_mappings.items():
-                if config_key in config and config[config_key]:
-                    if self.set_key(provider, config[config_key]):
-                        migrated += 1
+            # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+            for config_key, provider in key_mappings.items():  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                if config_key in config and config[config_key]:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                    # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                    if self.set_key(provider, config[config_key]):  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                        migrated += 1  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
                         # Remove from plain config
-                        config[config_key] = ""
+                        config[config_key] = ""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
             # Save config without keys
-            with open(config_path, 'w', encoding='utf-8') as f:
-                json.dump(config, f, indent=2)
+            with open(config_path, 'w', encoding='utf-8') as f:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+                json.dump(config, f, indent=2)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-            logger.info(f"Migrated {migrated} keys to secure storage")
-        except Exception as e:
-            logger.error(f"Migration failed: {e}")
+            logger.info(f"Migrated {migrated} keys to secure storage")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except Exception as e:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+            logger.error(f"Migration failed: {e}")  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
-        return migrated
+        return migrated  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
 
 # Singleton instance
-_storage_instance: Optional[SecureKeyStorage] = None
+_storage_instance: Optional[SecureKeyStorage] = None  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
 
 
-def get_key_storage(config_dir: str = ".") -> SecureKeyStorage:
-    """Get or create key storage instance"""
-    global _storage_instance
-    if _storage_instance is None:
-        _storage_instance = SecureKeyStorage(config_dir)
-    return _storage_instance
+# ЛОГИЧЕСКИЙ БЛОК: функция `get_key_storage` — выполняет отдельный шаг бизнес-логики.
+def get_key_storage(config_dir: str = ".") -> SecureKeyStorage:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    """Get or create key storage instance"""  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    global _storage_instance  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+    if _storage_instance is None:  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+        _storage_instance = SecureKeyStorage(config_dir)  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.
+    return _storage_instance  # ПОЯСНЕНИЕ: строка участвует в реализации текущего шага логики.

@@ -1,3 +1,4 @@
+# НАЗНАЧЕНИЕ ФАЙЛА: Основной GUI-модуль приложения: окно, обработчики, интеграция провайдеров и пользовательские сценарии.
 """
 AI Manager Desktop Application v10.0
 Modern Neural Network Manager for Windows
@@ -20,1095 +21,1337 @@ Features:
 - Error logging
 """
 
-import customtkinter as ctk
-from tkinter import filedialog, messagebox
-import tkinter as tk
-import threading
-import os
-import sys
-import json
-import contextlib
-import requests
-import time
-import logging
-from datetime import datetime
-from typing import Dict, Optional, List, Tuple
-from concurrent.futures import ThreadPoolExecutor, as_completed
-import webbrowser
-from collections import deque
-import base64
-import hashlib
+import customtkinter as ctk  # ПОЯСНЕНИЕ: импортируется модуль customtkinter as ctk.
+from tkinter import filedialog, messagebox  # ПОЯСНЕНИЕ: импортируются внешние зависимости для работы модуля.
+import tkinter as tk  # ПОЯСНЕНИЕ: импортируется модуль tkinter as tk.
+import threading  # ПОЯСНЕНИЕ: импортируется модуль threading.
+import os  # ПОЯСНЕНИЕ: импортируется модуль os.
+import sys  # ПОЯСНЕНИЕ: импортируется модуль sys.
+import json  # ПОЯСНЕНИЕ: импортируется модуль json.
+import contextlib  # ПОЯСНЕНИЕ: импортируется модуль contextlib.
+import requests  # ПОЯСНЕНИЕ: импортируется модуль requests.
+import time  # ПОЯСНЕНИЕ: импортируется модуль time.
+import logging  # ПОЯСНЕНИЕ: импортируется модуль logging.
+from datetime import datetime  # ПОЯСНЕНИЕ: импортируются внешние зависимости для работы модуля.
+from typing import Dict, Optional, List, Tuple  # ПОЯСНЕНИЕ: импортируются внешние зависимости для работы модуля.
+from concurrent.futures import ThreadPoolExecutor, as_completed  # ПОЯСНЕНИЕ: импортируются внешние зависимости для работы модуля.
+import webbrowser  # ПОЯСНЕНИЕ: импортируется модуль webbrowser.
+from collections import deque  # ПОЯСНЕНИЕ: импортируются внешние зависимости для работы модуля.
+import base64  # ПОЯСНЕНИЕ: импортируется модуль base64.
+import hashlib  # ПОЯСНЕНИЕ: импортируется модуль hashlib.
 
 # Try to import keyring for secure storage
-try:
-    import keyring
-    KEYRING_AVAILABLE = True
-except ImportError:
-    KEYRING_AVAILABLE = False
+# ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+    import keyring  # ПОЯСНЕНИЕ: импортируется модуль keyring.
+    KEYRING_AVAILABLE = True  # ПОЯСНЕНИЕ: обновляется значение переменной KEYRING_AVAILABLE.
+# ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+except ImportError:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+    KEYRING_AVAILABLE = False  # ПОЯСНЕНИЕ: обновляется значение переменной KEYRING_AVAILABLE.
 
 # App info
-APP_VERSION = "11.0"
-APP_NAME = "AI Manager"
+APP_VERSION = "11.0"  # ПОЯСНЕНИЕ: обновляется значение переменной APP_VERSION.
+APP_NAME = "AI Manager"  # ПОЯСНЕНИЕ: обновляется значение переменной APP_NAME.
 
 
 # ==================== Secure Key Storage ====================
 
-class SecureKeyStorage:
-    """Secure storage for API keys using system keyring or encrypted fallback"""
+# ЛОГИЧЕСКИЙ БЛОК: класс `SecureKeyStorage` — объединяет состояние и поведение подсистемы.
+class SecureKeyStorage:  # ПОЯСНЕНИЕ: объявляется класс SecureKeyStorage.
+    """Secure storage for API keys using system keyring or encrypted fallback"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
 
-    SERVICE_NAME = "AIManager"
-    FALLBACK_FILE = "config_secure.dat"
+    SERVICE_NAME = "AIManager"  # ПОЯСНЕНИЕ: обновляется значение переменной SERVICE_NAME.
+    FALLBACK_FILE = "config_secure.dat"  # ПОЯСНЕНИЕ: обновляется значение переменной FALLBACK_FILE.
 
-    def __init__(self, config_dir: str = "."):
-        self.config_dir = config_dir
-        self.fallback_path = os.path.join(config_dir, self.FALLBACK_FILE)
-        self._machine_key = self._get_machine_key()
+    # ЛОГИЧЕСКИЙ БЛОК: функция `__init__` — выполняет отдельный шаг бизнес-логики.
+    def __init__(self, config_dir: str = "."):  # ПОЯСНЕНИЕ: объявляется функция __init__ с параметрами из сигнатуры.
+        """Описание: функция `__init__`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        self.config_dir = config_dir  # ПОЯСНЕНИЕ: обновляется значение переменной self.config_dir.
+        self.fallback_path = os.path.join(config_dir, self.FALLBACK_FILE)  # ПОЯСНЕНИЕ: обновляется значение переменной self.fallback_path.
+        self._machine_key = self._get_machine_key()  # ПОЯСНЕНИЕ: обновляется значение переменной self._machine_key.
 
-    def _get_machine_key(self) -> bytes:
-        """Get a machine-specific key for fallback encryption"""
-        import platform
-        try:
-            user = os.getlogin()
-        except Exception:
-            user = os.environ.get('USER', os.environ.get('USERNAME', 'user'))
-        machine_id = f"{platform.node()}-{user}"
-        return hashlib.sha256(machine_id.encode()).digest()
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_get_machine_key` — выполняет отдельный шаг бизнес-логики.
+    def _get_machine_key(self) -> bytes:  # ПОЯСНЕНИЕ: объявляется функция _get_machine_key с параметрами из сигнатуры.
+        """Get a machine-specific key for fallback encryption"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        import platform  # ПОЯСНЕНИЕ: импортируется модуль platform.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+            user = os.getlogin()  # ПОЯСНЕНИЕ: обновляется значение переменной user.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except Exception:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+            user = os.environ.get('USER', os.environ.get('USERNAME', 'user'))  # ПОЯСНЕНИЕ: обновляется значение переменной user.
+        machine_id = f"{platform.node()}-{user}"  # ПОЯСНЕНИЕ: обновляется значение переменной machine_id.
+        return hashlib.sha256(machine_id.encode()).digest()  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
-    def _simple_encrypt(self, data: str) -> str:
-        """Simple XOR encryption with machine key"""
-        key = self._machine_key
-        encrypted = bytearray()
-        for i, char in enumerate(data.encode('utf-8')):
-            encrypted.append(char ^ key[i % len(key)])
-        return base64.b64encode(encrypted).decode('ascii')
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_simple_encrypt` — выполняет отдельный шаг бизнес-логики.
+    def _simple_encrypt(self, data: str) -> str:  # ПОЯСНЕНИЕ: объявляется функция _simple_encrypt с параметрами из сигнатуры.
+        """Simple XOR encryption with machine key"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        key = self._machine_key  # ПОЯСНЕНИЕ: обновляется значение переменной key.
+        encrypted = bytearray()  # ПОЯСНЕНИЕ: обновляется значение переменной encrypted.
+        # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+        for i, char in enumerate(data.encode('utf-8')):  # ПОЯСНЕНИЕ: запускается цикл for по коллекции.
+            encrypted.append(char ^ key[i % len(key)])  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        return base64.b64encode(encrypted).decode('ascii')  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
-    def _simple_decrypt(self, data: str) -> str:
-        """Simple XOR decryption with machine key"""
-        key = self._machine_key
-        encrypted = base64.b64decode(data.encode('ascii'))
-        decrypted = bytearray()
-        for i, byte in enumerate(encrypted):
-            decrypted.append(byte ^ key[i % len(key)])
-        return decrypted.decode('utf-8')
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_simple_decrypt` — выполняет отдельный шаг бизнес-логики.
+    def _simple_decrypt(self, data: str) -> str:  # ПОЯСНЕНИЕ: объявляется функция _simple_decrypt с параметрами из сигнатуры.
+        """Simple XOR decryption with machine key"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        key = self._machine_key  # ПОЯСНЕНИЕ: обновляется значение переменной key.
+        encrypted = base64.b64decode(data.encode('ascii'))  # ПОЯСНЕНИЕ: обновляется значение переменной encrypted.
+        decrypted = bytearray()  # ПОЯСНЕНИЕ: обновляется значение переменной decrypted.
+        # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+        for i, byte in enumerate(encrypted):  # ПОЯСНЕНИЕ: запускается цикл for по коллекции.
+            decrypted.append(byte ^ key[i % len(key)])  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        return decrypted.decode('utf-8')  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
-    def set_key(self, provider: str, api_key: str) -> bool:
-        """Store API key securely"""
-        if not api_key:
-            return self.delete_key(provider)
-        try:
-            if KEYRING_AVAILABLE:
-                keyring.set_password(self.SERVICE_NAME, provider, api_key)
-            else:
-                self._save_to_fallback(provider, api_key)
-            return True
-        except Exception as e:
-            logging.error(f"Failed to store key for {provider}: {e}")
-            return False
+    # ЛОГИЧЕСКИЙ БЛОК: функция `set_key` — выполняет отдельный шаг бизнес-логики.
+    def set_key(self, provider: str, api_key: str) -> bool:  # ПОЯСНЕНИЕ: объявляется функция set_key с параметрами из сигнатуры.
+        """Store API key securely"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if not api_key:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            return self.delete_key(provider)  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if KEYRING_AVAILABLE:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                keyring.set_password(self.SERVICE_NAME, provider, api_key)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            else:  # ПОЯСНЕНИЕ: выполняется альтернативная ветка else.
+                self._save_to_fallback(provider, api_key)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            return True  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except Exception as e:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+            logging.error(f"Failed to store key for {provider}: {e}")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            return False  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
-    def get_key(self, provider: str) -> Optional[str]:
-        """Retrieve API key"""
-        try:
-            if KEYRING_AVAILABLE:
-                key = keyring.get_password(self.SERVICE_NAME, provider)
-                if key:
-                    return key
-            return self._load_from_fallback(provider)
-        except Exception as e:
-            logging.error(f"Failed to retrieve key for {provider}: {e}")
-            return None
+    # ЛОГИЧЕСКИЙ БЛОК: функция `get_key` — выполняет отдельный шаг бизнес-логики.
+    def get_key(self, provider: str) -> Optional[str]:  # ПОЯСНЕНИЕ: объявляется функция get_key с параметрами из сигнатуры.
+        """Retrieve API key"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if KEYRING_AVAILABLE:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                key = keyring.get_password(self.SERVICE_NAME, provider)  # ПОЯСНЕНИЕ: обновляется значение переменной key.
+                # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                if key:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                    return key  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+            return self._load_from_fallback(provider)  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except Exception as e:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+            logging.error(f"Failed to retrieve key for {provider}: {e}")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            return None  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
-    def delete_key(self, provider: str) -> bool:
-        """Delete stored API key"""
-        try:
-            if KEYRING_AVAILABLE:
-                try:
-                    keyring.delete_password(self.SERVICE_NAME, provider)
-                except Exception:
-                    pass
-            self._delete_from_fallback(provider)
-            return True
-        except Exception:
-            return False
+    # ЛОГИЧЕСКИЙ БЛОК: функция `delete_key` — выполняет отдельный шаг бизнес-логики.
+    def delete_key(self, provider: str) -> bool:  # ПОЯСНЕНИЕ: объявляется функция delete_key с параметрами из сигнатуры.
+        """Delete stored API key"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if KEYRING_AVAILABLE:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+                try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+                    keyring.delete_password(self.SERVICE_NAME, provider)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+                except Exception:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+                    pass  # ПОЯСНЕНИЕ: оставляется пустая заглушка без действий.
+            self._delete_from_fallback(provider)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            return True  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except Exception:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+            return False  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
-    def _save_to_fallback(self, provider: str, api_key: str):
-        """Save to encrypted fallback file"""
-        data = self._load_fallback_data()
-        data[provider] = self._simple_encrypt(api_key)
-        with open(self.fallback_path, 'w', encoding='utf-8') as f:
-            json.dump(data, f)
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_save_to_fallback` — выполняет отдельный шаг бизнес-логики.
+    def _save_to_fallback(self, provider: str, api_key: str):  # ПОЯСНЕНИЕ: объявляется функция _save_to_fallback с параметрами из сигнатуры.
+        """Save to encrypted fallback file"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        data = self._load_fallback_data()  # ПОЯСНЕНИЕ: обновляется значение переменной data.
+        data[provider] = self._simple_encrypt(api_key)  # ПОЯСНЕНИЕ: обновляется значение переменной data[provider].
+        with open(self.fallback_path, 'w', encoding='utf-8') as f:  # ПОЯСНЕНИЕ: открывается контекстный менеджер для ресурса.
+            json.dump(data, f)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def _load_from_fallback(self, provider: str) -> Optional[str]:
-        """Load from encrypted fallback file"""
-        data = self._load_fallback_data()
-        encrypted = data.get(provider)
-        if encrypted:
-            try:
-                return self._simple_decrypt(encrypted)
-            except Exception:
-                return None
-        return None
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_load_from_fallback` — выполняет отдельный шаг бизнес-логики.
+    def _load_from_fallback(self, provider: str) -> Optional[str]:  # ПОЯСНЕНИЕ: объявляется функция _load_from_fallback с параметрами из сигнатуры.
+        """Load from encrypted fallback file"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        data = self._load_fallback_data()  # ПОЯСНЕНИЕ: обновляется значение переменной data.
+        encrypted = data.get(provider)  # ПОЯСНЕНИЕ: обновляется значение переменной encrypted.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if encrypted:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+            try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+                return self._simple_decrypt(encrypted)  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+            # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+            except Exception:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+                return None  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+        return None  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
-    def _delete_from_fallback(self, provider: str):
-        """Delete from fallback file"""
-        data = self._load_fallback_data()
-        if provider in data:
-            del data[provider]
-            with open(self.fallback_path, 'w', encoding='utf-8') as f:
-                json.dump(data, f)
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_delete_from_fallback` — выполняет отдельный шаг бизнес-логики.
+    def _delete_from_fallback(self, provider: str):  # ПОЯСНЕНИЕ: объявляется функция _delete_from_fallback с параметрами из сигнатуры.
+        """Delete from fallback file"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        data = self._load_fallback_data()  # ПОЯСНЕНИЕ: обновляется значение переменной data.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if provider in data:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            del data[provider]  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            with open(self.fallback_path, 'w', encoding='utf-8') as f:  # ПОЯСНЕНИЕ: открывается контекстный менеджер для ресурса.
+                json.dump(data, f)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def _load_fallback_data(self) -> Dict[str, str]:
-        """Load fallback data file"""
-        if os.path.exists(self.fallback_path):
-            try:
-                with open(self.fallback_path, 'r', encoding='utf-8') as f:
-                    return json.load(f)
-            except Exception:
-                return {}
-        return {}
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_load_fallback_data` — выполняет отдельный шаг бизнес-логики.
+    def _load_fallback_data(self) -> Dict[str, str]:  # ПОЯСНЕНИЕ: объявляется функция _load_fallback_data с параметрами из сигнатуры.
+        """Load fallback data file"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if os.path.exists(self.fallback_path):  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+            try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+                with open(self.fallback_path, 'r', encoding='utf-8') as f:  # ПОЯСНЕНИЕ: открывается контекстный менеджер для ресурса.
+                    return json.load(f)  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+            # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+            except Exception:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+                return {}  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+        return {}  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
-    def migrate_from_plain_config(self, config_path: str) -> int:
-        """Migrate keys from plain config.json to secure storage"""
-        migrated = 0
-        if not os.path.exists(config_path):
-            return migrated
-        try:
-            with open(config_path, 'r', encoding='utf-8') as f:
-                config = json.load(f)
+    # ЛОГИЧЕСКИЙ БЛОК: функция `migrate_from_plain_config` — выполняет отдельный шаг бизнес-логики.
+    def migrate_from_plain_config(self, config_path: str) -> int:  # ПОЯСНЕНИЕ: объявляется функция migrate_from_plain_config с параметрами из сигнатуры.
+        """Migrate keys from plain config.json to secure storage"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        migrated = 0  # ПОЯСНЕНИЕ: обновляется значение переменной migrated.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if not os.path.exists(config_path):  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            return migrated  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+            with open(config_path, 'r', encoding='utf-8') as f:  # ПОЯСНЕНИЕ: открывается контекстный менеджер для ресурса.
+                config = json.load(f)  # ПОЯСНЕНИЕ: обновляется значение переменной config.
 
-            key_mappings = {
-                "openai_key": "openai",
-                "anthropic_key": "anthropic",
-                "gemini_key": "gemini",
-                "deepseek_key": "deepseek",
-                "groq_key": "groq",
-                "mistral_key": "mistral"
-            }
+            key_mappings = {  # ПОЯСНЕНИЕ: обновляется значение переменной key_mappings.
+                "openai_key": "openai",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                "anthropic_key": "anthropic",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                "gemini_key": "gemini",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                "deepseek_key": "deepseek",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                "groq_key": "groq",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                "mistral_key": "mistral"  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            }  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-            for config_key, provider in key_mappings.items():
-                if config_key in config and config[config_key]:
-                    if self.set_key(provider, config[config_key]):
-                        migrated += 1
-                        config[config_key] = ""  # Remove from plain config
+            # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+            for config_key, provider in key_mappings.items():  # ПОЯСНЕНИЕ: запускается цикл for по коллекции.
+                # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                if config_key in config and config[config_key]:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                    # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                    if self.set_key(provider, config[config_key]):  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                        migrated += 1  # ПОЯСНЕНИЕ: обновляется значение переменной migrated +.
+                        config[config_key] = ""  # Remove from plain config  # ПОЯСНЕНИЕ: обновляется значение переменной config[config_key].
 
             # Save config without keys
-            with open(config_path, 'w', encoding='utf-8') as f:
-                json.dump(config, f, indent=2)
+            with open(config_path, 'w', encoding='utf-8') as f:  # ПОЯСНЕНИЕ: открывается контекстный менеджер для ресурса.
+                json.dump(config, f, indent=2)  # ПОЯСНЕНИЕ: обновляется значение переменной json.dump(config, f, indent.
 
-            if migrated > 0:
-                logging.info(f"Migrated {migrated} keys to secure storage")
-        except Exception as e:
-            logging.error(f"Migration failed: {e}")
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if migrated > 0:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                logging.info(f"Migrated {migrated} keys to secure storage")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except Exception as e:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+            logging.error(f"Migration failed: {e}")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-        return migrated
+        return migrated  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
 
 # Global secure storage instance
-secure_storage = SecureKeyStorage()
+secure_storage = SecureKeyStorage()  # ПОЯСНЕНИЕ: обновляется значение переменной secure_storage.
 
 
 # ==================== Logging System ====================
 
-class AppLogger:
-    """Application logger for responses and errors"""
+# ЛОГИЧЕСКИЙ БЛОК: класс `AppLogger` — объединяет состояние и поведение подсистемы.
+class AppLogger:  # ПОЯСНЕНИЕ: объявляется класс AppLogger.
+    """Application logger for responses and errors"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
 
-    def __init__(self, log_dir: str = "logs"):
-        self.log_dir = log_dir
-        self.responses_log: deque = deque(maxlen=1000)  # Last 1000 responses
-        self.errors_log: deque = deque(maxlen=500)  # Last 500 errors
-        self.session_start = datetime.now()
+    # ЛОГИЧЕСКИЙ БЛОК: функция `__init__` — выполняет отдельный шаг бизнес-логики.
+    def __init__(self, log_dir: str = "logs"):  # ПОЯСНЕНИЕ: объявляется функция __init__ с параметрами из сигнатуры.
+        """Описание: функция `__init__`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        self.log_dir = log_dir  # ПОЯСНЕНИЕ: обновляется значение переменной self.log_dir.
+        self.responses_log: deque = deque(maxlen=1000)  # Last 1000 responses  # ПОЯСНЕНИЕ: обновляется значение переменной self.responses_log: deque.
+        self.errors_log: deque = deque(maxlen=500)  # Last 500 errors  # ПОЯСНЕНИЕ: обновляется значение переменной self.errors_log: deque.
+        self.session_start = datetime.now()  # ПОЯСНЕНИЕ: обновляется значение переменной self.session_start.
 
         # Create log directory
-        os.makedirs(log_dir, exist_ok=True)
+        os.makedirs(log_dir, exist_ok=True)  # ПОЯСНЕНИЕ: обновляется значение переменной os.makedirs(log_dir, exist_ok.
 
         # Setup file logging
-        self._setup_file_logging()
+        self._setup_file_logging()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def _setup_file_logging(self):
-        """Setup file-based logging"""
-        log_file = os.path.join(
-            self.log_dir,
-            f"app_{self.session_start.strftime('%Y%m%d_%H%M%S')}.log"
-        )
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_setup_file_logging` — выполняет отдельный шаг бизнес-логики.
+    def _setup_file_logging(self):  # ПОЯСНЕНИЕ: объявляется функция _setup_file_logging с параметрами из сигнатуры.
+        """Setup file-based logging"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        log_file = os.path.join(  # ПОЯСНЕНИЕ: обновляется значение переменной log_file.
+            self.log_dir,  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            f"app_{self.session_start.strftime('%Y%m%d_%H%M%S')}.log"  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        )  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-        logging.basicConfig(
-            level=logging.INFO,
-            format='%(asctime)s | %(levelname)s | %(message)s',
-            handlers=[
-                logging.FileHandler(log_file, encoding='utf-8'),
-                logging.StreamHandler()
-            ]
-        )
-        self.logger = logging.getLogger(__name__)
+        logging.basicConfig(  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            level=logging.INFO,  # ПОЯСНЕНИЕ: обновляется значение переменной level.
+            format='%(asctime)s | %(levelname)s | %(message)s',  # ПОЯСНЕНИЕ: обновляется значение переменной format.
+            handlers=[  # ПОЯСНЕНИЕ: обновляется значение переменной handlers.
+                logging.FileHandler(log_file, encoding='utf-8'),  # ПОЯСНЕНИЕ: обновляется значение переменной logging.FileHandler(log_file, encoding.
+                logging.StreamHandler()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            ]  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        )  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self.logger = logging.getLogger(__name__)  # ПОЯСНЕНИЕ: обновляется значение переменной self.logger.
 
-    def log_response(self, provider: str, question: str, response: str, elapsed: float, success: bool = True):
-        """Log AI response"""
-        entry = {
-            "timestamp": datetime.now().isoformat(),
-            "provider": provider,
-            "question": question[:500],  # Truncate for log
-            "response": response,
-            "elapsed_time": elapsed,
-            "success": success
-        }
-        self.responses_log.append(entry)
+    # ЛОГИЧЕСКИЙ БЛОК: функция `log_response` — выполняет отдельный шаг бизнес-логики.
+    def log_response(self, provider: str, question: str, response: str, elapsed: float, success: bool = True):  # ПОЯСНЕНИЕ: объявляется функция log_response с параметрами из сигнатуры.
+        """Log AI response"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        entry = {  # ПОЯСНЕНИЕ: обновляется значение переменной entry.
+            "timestamp": datetime.now().isoformat(),  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            "provider": provider,  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            "question": question[:500],  # Truncate for log  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            "response": response,  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            "elapsed_time": elapsed,  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            "success": success  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        }  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self.responses_log.append(entry)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-        status = "SUCCESS" if success else "FAILED"
-        self.logger.info(f"[{provider}] {status} | {elapsed:.2f}s | Q: {question[:100]}...")
+        status = "SUCCESS" if success else "FAILED"  # ПОЯСНЕНИЕ: обновляется значение переменной status.
+        self.logger.info(f"[{provider}] {status} | {elapsed:.2f}s | Q: {question[:100]}...")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def log_error(self, provider: str, error: str, details: str = ""):
-        """Log error"""
-        entry = {
-            "timestamp": datetime.now().isoformat(),
-            "provider": provider,
-            "error": error,
-            "details": details
-        }
-        self.errors_log.append(entry)
-        self.logger.error(f"[{provider}] {error} | {details}")
+    # ЛОГИЧЕСКИЙ БЛОК: функция `log_error` — выполняет отдельный шаг бизнес-логики.
+    def log_error(self, provider: str, error: str, details: str = ""):  # ПОЯСНЕНИЕ: объявляется функция log_error с параметрами из сигнатуры.
+        """Log error"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        entry = {  # ПОЯСНЕНИЕ: обновляется значение переменной entry.
+            "timestamp": datetime.now().isoformat(),  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            "provider": provider,  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            "error": error,  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            "details": details  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        }  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self.errors_log.append(entry)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self.logger.error(f"[{provider}] {error} | {details}")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def log_connection_test(self, provider: str, success: bool, message: str = ""):
-        """Log connection test"""
-        status = "CONNECTED" if success else "FAILED"
-        self.logger.info(f"[CONNECTION] {provider}: {status} {message}")
+    # ЛОГИЧЕСКИЙ БЛОК: функция `log_connection_test` — выполняет отдельный шаг бизнес-логики.
+    def log_connection_test(self, provider: str, success: bool, message: str = ""):  # ПОЯСНЕНИЕ: объявляется функция log_connection_test с параметрами из сигнатуры.
+        """Log connection test"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        status = "CONNECTED" if success else "FAILED"  # ПОЯСНЕНИЕ: обновляется значение переменной status.
+        self.logger.info(f"[CONNECTION] {provider}: {status} {message}")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def get_responses_log(self) -> List[dict]:
-        """Get all response logs"""
-        return list(self.responses_log)
+    # ЛОГИЧЕСКИЙ БЛОК: функция `get_responses_log` — выполняет отдельный шаг бизнес-логики.
+    def get_responses_log(self) -> List[dict]:  # ПОЯСНЕНИЕ: объявляется функция get_responses_log с параметрами из сигнатуры.
+        """Get all response logs"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        return list(self.responses_log)  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
-    def get_errors_log(self) -> List[dict]:
-        """Get all error logs"""
-        return list(self.errors_log)
+    # ЛОГИЧЕСКИЙ БЛОК: функция `get_errors_log` — выполняет отдельный шаг бизнес-логики.
+    def get_errors_log(self) -> List[dict]:  # ПОЯСНЕНИЕ: объявляется функция get_errors_log с параметрами из сигнатуры.
+        """Get all error logs"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        return list(self.errors_log)  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
-    def export_logs(self, filepath: str, log_type: str = "all") -> bool:
-        """Export logs to file"""
-        try:
-            with open(filepath, 'w', encoding='utf-8') as f:
-                f.write("=" * 70 + "\n")
-                f.write(f"AI MANAGER LOGS EXPORT\n")
-                f.write(f"Session started: {self.session_start.strftime('%Y-%m-%d %H:%M:%S')}\n")
-                f.write(f"Exported: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-                f.write("=" * 70 + "\n\n")
+    # ЛОГИЧЕСКИЙ БЛОК: функция `export_logs` — выполняет отдельный шаг бизнес-логики.
+    def export_logs(self, filepath: str, log_type: str = "all") -> bool:  # ПОЯСНЕНИЕ: объявляется функция export_logs с параметрами из сигнатуры.
+        """Export logs to file"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+            with open(filepath, 'w', encoding='utf-8') as f:  # ПОЯСНЕНИЕ: открывается контекстный менеджер для ресурса.
+                f.write("=" * 70 + "\n")  # ПОЯСНЕНИЕ: обновляется значение переменной f.write(".
+                f.write(f"AI MANAGER LOGS EXPORT\n")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                f.write(f"Session started: {self.session_start.strftime('%Y-%m-%d %H:%M:%S')}\n")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                f.write(f"Exported: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                f.write("=" * 70 + "\n\n")  # ПОЯСНЕНИЕ: обновляется значение переменной f.write(".
 
-                if log_type in ["all", "responses"]:
-                    f.write("\n" + "=" * 70 + "\n")
-                    f.write("RESPONSES LOG\n")
-                    f.write("=" * 70 + "\n\n")
-                    for entry in self.responses_log:
-                        f.write(f"[{entry['timestamp']}] {entry['provider']}\n")
-                        f.write(f"Question: {entry['question']}\n")
-                        f.write(f"Response ({entry['elapsed_time']:.2f}s):\n")
-                        f.write(f"{entry['response']}\n")
-                        f.write("-" * 50 + "\n\n")
+                # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                if log_type in ["all", "responses"]:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                    f.write("\n" + "=" * 70 + "\n")  # ПОЯСНЕНИЕ: обновляется значение переменной f.write("\n" + ".
+                    f.write("RESPONSES LOG\n")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                    f.write("=" * 70 + "\n\n")  # ПОЯСНЕНИЕ: обновляется значение переменной f.write(".
+                    # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+                    for entry in self.responses_log:  # ПОЯСНЕНИЕ: запускается цикл for по коллекции.
+                        f.write(f"[{entry['timestamp']}] {entry['provider']}\n")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                        f.write(f"Question: {entry['question']}\n")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                        f.write(f"Response ({entry['elapsed_time']:.2f}s):\n")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                        f.write(f"{entry['response']}\n")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                        f.write("-" * 50 + "\n\n")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-                if log_type in ["all", "errors"]:
-                    f.write("\n" + "=" * 70 + "\n")
-                    f.write("ERRORS LOG\n")
-                    f.write("=" * 70 + "\n\n")
-                    for entry in self.errors_log:
-                        f.write(f"[{entry['timestamp']}] {entry['provider']}\n")
-                        f.write(f"Error: {entry['error']}\n")
-                        if entry['details']:
-                            f.write(f"Details: {entry['details']}\n")
-                        f.write("-" * 50 + "\n\n")
+                # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                if log_type in ["all", "errors"]:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                    f.write("\n" + "=" * 70 + "\n")  # ПОЯСНЕНИЕ: обновляется значение переменной f.write("\n" + ".
+                    f.write("ERRORS LOG\n")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                    f.write("=" * 70 + "\n\n")  # ПОЯСНЕНИЕ: обновляется значение переменной f.write(".
+                    # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+                    for entry in self.errors_log:  # ПОЯСНЕНИЕ: запускается цикл for по коллекции.
+                        f.write(f"[{entry['timestamp']}] {entry['provider']}\n")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                        f.write(f"Error: {entry['error']}\n")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                        if entry['details']:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                            f.write(f"Details: {entry['details']}\n")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                        f.write("-" * 50 + "\n\n")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-                f.write("\n" + "=" * 70 + "\n")
-                f.write(f"Total responses: {len(self.responses_log)}\n")
-                f.write(f"Total errors: {len(self.errors_log)}\n")
-                f.write("=" * 70 + "\n")
+                f.write("\n" + "=" * 70 + "\n")  # ПОЯСНЕНИЕ: обновляется значение переменной f.write("\n" + ".
+                f.write(f"Total responses: {len(self.responses_log)}\n")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                f.write(f"Total errors: {len(self.errors_log)}\n")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                f.write("=" * 70 + "\n")  # ПОЯСНЕНИЕ: обновляется значение переменной f.write(".
 
-            return True
-        except Exception as e:
-            self.logger.error(f"Failed to export logs: {e}")
-            return False
+            return True  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except Exception as e:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+            self.logger.error(f"Failed to export logs: {e}")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            return False  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
-    def clear_logs(self):
-        """Clear in-memory logs"""
-        self.responses_log.clear()
-        self.errors_log.clear()
+    # ЛОГИЧЕСКИЙ БЛОК: функция `clear_logs` — выполняет отдельный шаг бизнес-логики.
+    def clear_logs(self):  # ПОЯСНЕНИЕ: объявляется функция clear_logs с параметрами из сигнатуры.
+        """Clear in-memory logs"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        self.responses_log.clear()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self.errors_log.clear()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
 
 # Global logger instance
-app_logger = AppLogger()
+app_logger = AppLogger()  # ПОЯСНЕНИЕ: обновляется значение переменной app_logger.
 
 
 # ==================== Conversation Branch Manager ====================
 
-class ConversationBranchManager:
-    """Manager for conversation branches (save/load/switch/delete)"""
+# ЛОГИЧЕСКИЙ БЛОК: класс `ConversationBranchManager` — объединяет состояние и поведение подсистемы.
+class ConversationBranchManager:  # ПОЯСНЕНИЕ: объявляется класс ConversationBranchManager.
+    """Manager for conversation branches (save/load/switch/delete)"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
 
-    def __init__(self, save_dir: str = "branches"):
-        self.save_dir = save_dir
-        self.branches_file = os.path.join(save_dir, "branches.json")
-        self.branches: List[dict] = []
-        self.current_branch_id: Optional[str] = None
-        os.makedirs(save_dir, exist_ok=True)
-        self._load_branches_index()
+    # ЛОГИЧЕСКИЙ БЛОК: функция `__init__` — выполняет отдельный шаг бизнес-логики.
+    def __init__(self, save_dir: str = "branches"):  # ПОЯСНЕНИЕ: объявляется функция __init__ с параметрами из сигнатуры.
+        """Описание: функция `__init__`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        self.save_dir = save_dir  # ПОЯСНЕНИЕ: обновляется значение переменной self.save_dir.
+        self.branches_file = os.path.join(save_dir, "branches.json")  # ПОЯСНЕНИЕ: обновляется значение переменной self.branches_file.
+        self.branches: List[dict] = []  # ПОЯСНЕНИЕ: обновляется значение переменной self.branches: List[dict].
+        self.current_branch_id: Optional[str] = None  # ПОЯСНЕНИЕ: обновляется значение переменной self.current_branch_id: Optional[str].
+        os.makedirs(save_dir, exist_ok=True)  # ПОЯСНЕНИЕ: обновляется значение переменной os.makedirs(save_dir, exist_ok.
+        self._load_branches_index()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def _load_branches_index(self):
-        """Load branches index from file"""
-        try:
-            if os.path.exists(self.branches_file):
-                with open(self.branches_file, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                    self.branches = data.get("branches", [])
-                    self.current_branch_id = data.get("current_branch_id")
-        except Exception as e:
-            logging.error(f"Failed to load branches index: {e}")
-            self.branches = []
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_load_branches_index` — выполняет отдельный шаг бизнес-логики.
+    def _load_branches_index(self):  # ПОЯСНЕНИЕ: объявляется функция _load_branches_index с параметрами из сигнатуры.
+        """Load branches index from file"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if os.path.exists(self.branches_file):  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                with open(self.branches_file, 'r', encoding='utf-8') as f:  # ПОЯСНЕНИЕ: открывается контекстный менеджер для ресурса.
+                    data = json.load(f)  # ПОЯСНЕНИЕ: обновляется значение переменной data.
+                    self.branches = data.get("branches", [])  # ПОЯСНЕНИЕ: обновляется значение переменной self.branches.
+                    self.current_branch_id = data.get("current_branch_id")  # ПОЯСНЕНИЕ: обновляется значение переменной self.current_branch_id.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except Exception as e:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+            logging.error(f"Failed to load branches index: {e}")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            self.branches = []  # ПОЯСНЕНИЕ: обновляется значение переменной self.branches.
 
-    def _save_branches_index(self):
-        """Save branches index to file"""
-        try:
-            with open(self.branches_file, 'w', encoding='utf-8') as f:
-                json.dump({
-                    "branches": self.branches,
-                    "current_branch_id": self.current_branch_id
-                }, f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            logging.error(f"Failed to save branches index: {e}")
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_save_branches_index` — выполняет отдельный шаг бизнес-логики.
+    def _save_branches_index(self):  # ПОЯСНЕНИЕ: объявляется функция _save_branches_index с параметрами из сигнатуры.
+        """Save branches index to file"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+            with open(self.branches_file, 'w', encoding='utf-8') as f:  # ПОЯСНЕНИЕ: открывается контекстный менеджер для ресурса.
+                json.dump({  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                    "branches": self.branches,  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                    "current_branch_id": self.current_branch_id  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                }, f, ensure_ascii=False, indent=2)  # ПОЯСНЕНИЕ: обновляется значение переменной }, f, ensure_ascii.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except Exception as e:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+            logging.error(f"Failed to save branches index: {e}")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def create_branch(self, name: str, providers_history: Dict[str, List[dict]],
-                      chat_content: str = "") -> str:
-        """Create a new branch from current state"""
-        branch_id = datetime.now().strftime("%Y%m%d_%H%M%S_") + str(len(self.branches))
+    # ЛОГИЧЕСКИЙ БЛОК: функция `create_branch` — выполняет отдельный шаг бизнес-логики.
+    def create_branch(self, name: str, providers_history: Dict[str, List[dict]],  # ПОЯСНЕНИЕ: объявляется функция create_branch с параметрами из сигнатуры.
+                      chat_content: str = "") -> str:  # ПОЯСНЕНИЕ: обновляется значение переменной chat_content: str.
+        """Create a new branch from current state"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        branch_id = datetime.now().strftime("%Y%m%d_%H%M%S_") + str(len(self.branches))  # ПОЯСНЕНИЕ: обновляется значение переменной branch_id.
 
-        branch = {
-            "id": branch_id,
-            "name": name,
-            "created_at": datetime.now().isoformat(),
-            "message_count": sum(len(h) for h in providers_history.values())
-        }
+        branch = {  # ПОЯСНЕНИЕ: обновляется значение переменной branch.
+            "id": branch_id,  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            "name": name,  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            "created_at": datetime.now().isoformat(),  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            "message_count": sum(len(h) for h in providers_history.values())  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        }  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
         # Save branch data to separate file
-        branch_data = {
-            "id": branch_id,
-            "name": name,
-            "created_at": branch["created_at"],
-            "providers_history": providers_history,
-            "chat_content": chat_content
-        }
+        branch_data = {  # ПОЯСНЕНИЕ: обновляется значение переменной branch_data.
+            "id": branch_id,  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            "name": name,  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            "created_at": branch["created_at"],  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            "providers_history": providers_history,  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            "chat_content": chat_content  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        }  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-        branch_file = os.path.join(self.save_dir, f"branch_{branch_id}.json")
-        try:
-            with open(branch_file, 'w', encoding='utf-8') as f:
-                json.dump(branch_data, f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            logging.error(f"Failed to save branch data: {e}")
-            return ""
+        branch_file = os.path.join(self.save_dir, f"branch_{branch_id}.json")  # ПОЯСНЕНИЕ: обновляется значение переменной branch_file.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+            with open(branch_file, 'w', encoding='utf-8') as f:  # ПОЯСНЕНИЕ: открывается контекстный менеджер для ресурса.
+                json.dump(branch_data, f, ensure_ascii=False, indent=2)  # ПОЯСНЕНИЕ: обновляется значение переменной json.dump(branch_data, f, ensure_ascii.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except Exception as e:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+            logging.error(f"Failed to save branch data: {e}")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            return ""  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
-        self.branches.append(branch)
-        self.current_branch_id = branch_id
-        self._save_branches_index()
+        self.branches.append(branch)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self.current_branch_id = branch_id  # ПОЯСНЕНИЕ: обновляется значение переменной self.current_branch_id.
+        self._save_branches_index()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-        return branch_id
+        return branch_id  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
-    def load_branch(self, branch_id: str) -> Optional[dict]:
-        """Load branch data by ID"""
-        branch_file = os.path.join(self.save_dir, f"branch_{branch_id}.json")
-        try:
-            if os.path.exists(branch_file):
-                with open(branch_file, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                    self.current_branch_id = branch_id
-                    self._save_branches_index()
-                    return data
-        except Exception as e:
-            logging.error(f"Failed to load branch: {e}")
-        return None
+    # ЛОГИЧЕСКИЙ БЛОК: функция `load_branch` — выполняет отдельный шаг бизнес-логики.
+    def load_branch(self, branch_id: str) -> Optional[dict]:  # ПОЯСНЕНИЕ: объявляется функция load_branch с параметрами из сигнатуры.
+        """Load branch data by ID"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        branch_file = os.path.join(self.save_dir, f"branch_{branch_id}.json")  # ПОЯСНЕНИЕ: обновляется значение переменной branch_file.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if os.path.exists(branch_file):  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                with open(branch_file, 'r', encoding='utf-8') as f:  # ПОЯСНЕНИЕ: открывается контекстный менеджер для ресурса.
+                    data = json.load(f)  # ПОЯСНЕНИЕ: обновляется значение переменной data.
+                    self.current_branch_id = branch_id  # ПОЯСНЕНИЕ: обновляется значение переменной self.current_branch_id.
+                    self._save_branches_index()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                    return data  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except Exception as e:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+            logging.error(f"Failed to load branch: {e}")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        return None  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
-    def delete_branch(self, branch_id: str) -> bool:
-        """Delete a branch"""
-        branch_file = os.path.join(self.save_dir, f"branch_{branch_id}.json")
-        try:
-            if os.path.exists(branch_file):
-                os.remove(branch_file)
+    # ЛОГИЧЕСКИЙ БЛОК: функция `delete_branch` — выполняет отдельный шаг бизнес-логики.
+    def delete_branch(self, branch_id: str) -> bool:  # ПОЯСНЕНИЕ: объявляется функция delete_branch с параметрами из сигнатуры.
+        """Delete a branch"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        branch_file = os.path.join(self.save_dir, f"branch_{branch_id}.json")  # ПОЯСНЕНИЕ: обновляется значение переменной branch_file.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if os.path.exists(branch_file):  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                os.remove(branch_file)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-            self.branches = [b for b in self.branches if b["id"] != branch_id]
+            self.branches = [b for b in self.branches if b["id"] != branch_id]  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-            if self.current_branch_id == branch_id:
-                self.current_branch_id = None
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if self.current_branch_id == branch_id:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                self.current_branch_id = None  # ПОЯСНЕНИЕ: обновляется значение переменной self.current_branch_id.
 
-            self._save_branches_index()
-            return True
-        except Exception as e:
-            logging.error(f"Failed to delete branch: {e}")
-            return False
+            self._save_branches_index()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            return True  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except Exception as e:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+            logging.error(f"Failed to delete branch: {e}")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            return False  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
-    def get_branches_list(self) -> List[dict]:
-        """Get list of all branches"""
-        return self.branches.copy()
+    # ЛОГИЧЕСКИЙ БЛОК: функция `get_branches_list` — выполняет отдельный шаг бизнес-логики.
+    def get_branches_list(self) -> List[dict]:  # ПОЯСНЕНИЕ: объявляется функция get_branches_list с параметрами из сигнатуры.
+        """Get list of all branches"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        return self.branches.copy()  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
-    def rename_branch(self, branch_id: str, new_name: str) -> bool:
-        """Rename a branch"""
-        for branch in self.branches:
-            if branch["id"] == branch_id:
-                branch["name"] = new_name
-                self._save_branches_index()
+    # ЛОГИЧЕСКИЙ БЛОК: функция `rename_branch` — выполняет отдельный шаг бизнес-логики.
+    def rename_branch(self, branch_id: str, new_name: str) -> bool:  # ПОЯСНЕНИЕ: объявляется функция rename_branch с параметрами из сигнатуры.
+        """Rename a branch"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+        for branch in self.branches:  # ПОЯСНЕНИЕ: запускается цикл for по коллекции.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if branch["id"] == branch_id:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                branch["name"] = new_name  # ПОЯСНЕНИЕ: обновляется значение переменной branch["name"].
+                self._save_branches_index()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
                 # Update branch file
-                branch_file = os.path.join(self.save_dir, f"branch_{branch_id}.json")
-                try:
-                    if os.path.exists(branch_file):
-                        with open(branch_file, 'r', encoding='utf-8') as f:
-                            data = json.load(f)
-                        data["name"] = new_name
-                        with open(branch_file, 'w', encoding='utf-8') as f:
-                            json.dump(data, f, ensure_ascii=False, indent=2)
-                except:
-                    pass
-                return True
-        return False
+                branch_file = os.path.join(self.save_dir, f"branch_{branch_id}.json")  # ПОЯСНЕНИЕ: обновляется значение переменной branch_file.
+                # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+                try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+                    # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                    if os.path.exists(branch_file):  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                        with open(branch_file, 'r', encoding='utf-8') as f:  # ПОЯСНЕНИЕ: открывается контекстный менеджер для ресурса.
+                            data = json.load(f)  # ПОЯСНЕНИЕ: обновляется значение переменной data.
+                        data["name"] = new_name  # ПОЯСНЕНИЕ: обновляется значение переменной data["name"].
+                        with open(branch_file, 'w', encoding='utf-8') as f:  # ПОЯСНЕНИЕ: открывается контекстный менеджер для ресурса.
+                            json.dump(data, f, ensure_ascii=False, indent=2)  # ПОЯСНЕНИЕ: обновляется значение переменной json.dump(data, f, ensure_ascii.
+                except:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+                    pass  # ПОЯСНЕНИЕ: оставляется пустая заглушка без действий.
+                return True  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+        return False  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
 
 # Global branch manager instance
-branch_manager = ConversationBranchManager()
+branch_manager = ConversationBranchManager()  # ПОЯСНЕНИЕ: обновляется значение переменной branch_manager.
 
 # Theme settings
-ctk.set_appearance_mode("dark")
-ctk.set_default_color_theme("blue")
+ctk.set_appearance_mode("dark")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+ctk.set_default_color_theme("blue")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
 
 # ==================== AI Providers ====================
 
-class AIProvider:
-    """Base class for AI providers"""
+# ЛОГИЧЕСКИЙ БЛОК: класс `AIProvider` — объединяет состояние и поведение подсистемы.
+class AIProvider:  # ПОЯСНЕНИЕ: объявляется класс AIProvider.
+    """Base class for AI providers"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
 
-    def __init__(self, name: str, api_key: str = "", color: str = "#3498db"):
-        self.name = name
-        self.api_key = api_key
-        self.color = color
-        self.is_connected = False
-        self.enabled = True
-        self.conversation_history: List[dict] = []  # Store conversation history
-        self.max_history = 20  # Max messages to keep
+    # ЛОГИЧЕСКИЙ БЛОК: функция `__init__` — выполняет отдельный шаг бизнес-логики.
+    def __init__(self, name: str, api_key: str = "", color: str = "#3498db"):  # ПОЯСНЕНИЕ: объявляется функция __init__ с параметрами из сигнатуры.
+        """Описание: функция `__init__`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        self.name = name  # ПОЯСНЕНИЕ: обновляется значение переменной self.name.
+        self.api_key = api_key  # ПОЯСНЕНИЕ: обновляется значение переменной self.api_key.
+        self.color = color  # ПОЯСНЕНИЕ: обновляется значение переменной self.color.
+        self.is_connected = False  # ПОЯСНЕНИЕ: обновляется значение переменной self.is_connected.
+        self.enabled = True  # ПОЯСНЕНИЕ: обновляется значение переменной self.enabled.
+        self.conversation_history: List[dict] = []  # Store conversation history  # ПОЯСНЕНИЕ: обновляется значение переменной self.conversation_history: List[dict].
+        self.max_history = 20  # Max messages to keep  # ПОЯСНЕНИЕ: обновляется значение переменной self.max_history.
 
-    def test_connection(self) -> bool:
-        raise NotImplementedError
+    # ЛОГИЧЕСКИЙ БЛОК: функция `test_connection` — выполняет отдельный шаг бизнес-логики.
+    def test_connection(self) -> bool:  # ПОЯСНЕНИЕ: объявляется функция test_connection с параметрами из сигнатуры.
+        """Описание: функция `test_connection`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        raise NotImplementedError  # ПОЯСНЕНИЕ: генерируется исключение для обработки ошибки.
 
-    def query(self, question: str) -> Tuple[str, float]:
-        """Returns (response, time_taken)"""
-        raise NotImplementedError
+    # ЛОГИЧЕСКИЙ БЛОК: функция `query` — выполняет отдельный шаг бизнес-логики.
+    def query(self, question: str) -> Tuple[str, float]:  # ПОЯСНЕНИЕ: объявляется функция query с параметрами из сигнатуры.
+        """Returns (response, time_taken)"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        raise NotImplementedError  # ПОЯСНЕНИЕ: генерируется исключение для обработки ошибки.
 
-    def clear_history(self):
-        """Clear conversation history"""
-        self.conversation_history = []
+    # ЛОГИЧЕСКИЙ БЛОК: функция `clear_history` — выполняет отдельный шаг бизнес-логики.
+    def clear_history(self):  # ПОЯСНЕНИЕ: объявляется функция clear_history с параметрами из сигнатуры.
+        """Clear conversation history"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        self.conversation_history = []  # ПОЯСНЕНИЕ: обновляется значение переменной self.conversation_history.
 
-    def add_to_history(self, role: str, content: str):
-        """Add message to history"""
-        self.conversation_history.append({"role": role, "content": content})
+    # ЛОГИЧЕСКИЙ БЛОК: функция `add_to_history` — выполняет отдельный шаг бизнес-логики.
+    def add_to_history(self, role: str, content: str):  # ПОЯСНЕНИЕ: объявляется функция add_to_history с параметрами из сигнатуры.
+        """Add message to history"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        self.conversation_history.append({"role": role, "content": content})  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
         # Keep only last N messages
-        if len(self.conversation_history) > self.max_history:
-            self.conversation_history = self.conversation_history[-self.max_history:]
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if len(self.conversation_history) > self.max_history:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            self.conversation_history = self.conversation_history[-self.max_history:]  # ПОЯСНЕНИЕ: обновляется значение переменной self.conversation_history.
 
 
-class OpenAIProvider(AIProvider):
-    """OpenAI GPT provider"""
+# ЛОГИЧЕСКИЙ БЛОК: класс `OpenAIProvider(AIProvider)` — объединяет состояние и поведение подсистемы.
+class OpenAIProvider(AIProvider):  # ПОЯСНЕНИЕ: объявляется класс OpenAIProvider.
+    """OpenAI GPT provider"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
 
-    def __init__(self, api_key: str = ""):
-        super().__init__("OpenAI GPT", api_key, "#10a37f")
-        self.base_url = "https://api.openai.com/v1"
-        self.model = "gpt-4o-mini"
+    # ЛОГИЧЕСКИЙ БЛОК: функция `__init__` — выполняет отдельный шаг бизнес-логики.
+    def __init__(self, api_key: str = ""):  # ПОЯСНЕНИЕ: объявляется функция __init__ с параметрами из сигнатуры.
+        """Описание: функция `__init__`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        super().__init__("OpenAI GPT", api_key, "#10a37f")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self.base_url = "https://api.openai.com/v1"  # ПОЯСНЕНИЕ: обновляется значение переменной self.base_url.
+        self.model = "gpt-4o-mini"  # ПОЯСНЕНИЕ: обновляется значение переменной self.model.
 
-    def test_connection(self) -> bool:
-        if not self.api_key:
-            return False
-        try:
-            headers = {"Authorization": f"Bearer {self.api_key}"}
-            response = requests.get(f"{self.base_url}/models", headers=headers, timeout=10)
-            self.is_connected = response.status_code == 200
-            return self.is_connected
-        except:
-            self.is_connected = False
-            return False
+    # ЛОГИЧЕСКИЙ БЛОК: функция `test_connection` — выполняет отдельный шаг бизнес-логики.
+    def test_connection(self) -> bool:  # ПОЯСНЕНИЕ: объявляется функция test_connection с параметрами из сигнатуры.
+        """Описание: функция `test_connection`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if not self.api_key:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            return False  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+            headers = {"Authorization": f"Bearer {self.api_key}"}  # ПОЯСНЕНИЕ: обновляется значение переменной headers.
+            response = requests.get(f"{self.base_url}/models", headers=headers, timeout=10)  # ПОЯСНЕНИЕ: обновляется значение переменной response.
+            self.is_connected = response.status_code == 200  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            return self.is_connected  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+        except:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+            self.is_connected = False  # ПОЯСНЕНИЕ: обновляется значение переменной self.is_connected.
+            return False  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
-    def query(self, question: str) -> Tuple[str, float]:
-        if not self.api_key:
-            return "Error: Enter OpenAI API key", 0
+    # ЛОГИЧЕСКИЙ БЛОК: функция `query` — выполняет отдельный шаг бизнес-логики.
+    def query(self, question: str) -> Tuple[str, float]:  # ПОЯСНЕНИЕ: объявляется функция query с параметрами из сигнатуры.
+        """Описание: функция `query`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if not self.api_key:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            return "Error: Enter OpenAI API key", 0  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
         # Add user message to history
-        self.add_to_history("user", question)
+        self.add_to_history("user", question)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-        start_time = time.time()
-        try:
-            headers = {
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json"
-            }
+        start_time = time.time()  # ПОЯСНЕНИЕ: обновляется значение переменной start_time.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+            headers = {  # ПОЯСНЕНИЕ: обновляется значение переменной headers.
+                "Authorization": f"Bearer {self.api_key}",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                "Content-Type": "application/json"  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            }  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
             # Build messages with history
-            messages = [{"role": "system", "content": "You are a helpful assistant."}]
-            messages.extend(self.conversation_history)
+            messages = [{"role": "system", "content": "You are a helpful assistant."}]  # ПОЯСНЕНИЕ: обновляется значение переменной messages.
+            messages.extend(self.conversation_history)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-            data = {
-                "model": self.model,
-                "messages": messages,
-                "max_tokens": 4000,
-                "temperature": 0.7
-            }
-            response = requests.post(
-                f"{self.base_url}/chat/completions",
-                headers=headers,
-                json=data,
-                timeout=120
-            )
-            elapsed = time.time() - start_time
+            data = {  # ПОЯСНЕНИЕ: обновляется значение переменной data.
+                "model": self.model,  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                "messages": messages,  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                "max_tokens": 4000,  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                "temperature": 0.7  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            }  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            response = requests.post(  # ПОЯСНЕНИЕ: обновляется значение переменной response.
+                f"{self.base_url}/chat/completions",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                headers=headers,  # ПОЯСНЕНИЕ: обновляется значение переменной headers.
+                json=data,  # ПОЯСНЕНИЕ: обновляется значение переменной json.
+                timeout=120  # ПОЯСНЕНИЕ: обновляется значение переменной timeout.
+            )  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            elapsed = time.time() - start_time  # ПОЯСНЕНИЕ: обновляется значение переменной elapsed.
 
-            if response.status_code == 200:
-                assistant_response = response.json()["choices"][0]["message"]["content"]
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if response.status_code == 200:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                assistant_response = response.json()["choices"][0]["message"]["content"]  # ПОЯСНЕНИЕ: обновляется значение переменной assistant_response.
                 # Add assistant response to history
-                self.add_to_history("assistant", assistant_response)
-                return assistant_response, elapsed
-            elif response.status_code == 401:
-                return "Error: Invalid OpenAI API key", elapsed
-            elif response.status_code == 429:
-                return "Error: OpenAI rate limit exceeded", elapsed
-            else:
-                return f"Error OpenAI: {response.status_code}", elapsed
-        except requests.exceptions.Timeout:
-            return "Error: OpenAI request timeout", time.time() - start_time
-        except Exception as e:
-            return f"Error OpenAI: {str(e)}", time.time() - start_time
+                self.add_to_history("assistant", assistant_response)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                return assistant_response, elapsed  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            elif response.status_code == 401:  # ПОЯСНЕНИЕ: проверяется дополнительное условие elif.
+                return "Error: Invalid OpenAI API key", elapsed  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            elif response.status_code == 429:  # ПОЯСНЕНИЕ: проверяется дополнительное условие elif.
+                return "Error: OpenAI rate limit exceeded", elapsed  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            else:  # ПОЯСНЕНИЕ: выполняется альтернативная ветка else.
+                return f"Error OpenAI: {response.status_code}", elapsed  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except requests.exceptions.Timeout:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+            return "Error: OpenAI request timeout", time.time() - start_time  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except Exception as e:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+            return f"Error OpenAI: {str(e)}", time.time() - start_time  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
 
-class AnthropicProvider(AIProvider):
-    """Anthropic Claude provider"""
+# ЛОГИЧЕСКИЙ БЛОК: класс `AnthropicProvider(AIProvider)` — объединяет состояние и поведение подсистемы.
+class AnthropicProvider(AIProvider):  # ПОЯСНЕНИЕ: объявляется класс AnthropicProvider.
+    """Anthropic Claude provider"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
 
-    def __init__(self, api_key: str = ""):
-        super().__init__("Anthropic Claude", api_key, "#cc785c")
-        self.base_url = "https://api.anthropic.com/v1"
-        self.model = "claude-3-haiku-20240307"
+    # ЛОГИЧЕСКИЙ БЛОК: функция `__init__` — выполняет отдельный шаг бизнес-логики.
+    def __init__(self, api_key: str = ""):  # ПОЯСНЕНИЕ: объявляется функция __init__ с параметрами из сигнатуры.
+        """Описание: функция `__init__`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        super().__init__("Anthropic Claude", api_key, "#cc785c")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self.base_url = "https://api.anthropic.com/v1"  # ПОЯСНЕНИЕ: обновляется значение переменной self.base_url.
+        self.model = "claude-3-haiku-20240307"  # ПОЯСНЕНИЕ: обновляется значение переменной self.model.
 
-    def test_connection(self) -> bool:
-        if not self.api_key:
-            return False
-        try:
-            headers = {
-                "x-api-key": self.api_key,
-                "anthropic-version": "2023-06-01"
-            }
-            data = {
-                "model": self.model,
-                "max_tokens": 10,
-                "messages": [{"role": "user", "content": "Hi"}]
-            }
-            response = requests.post(
-                f"{self.base_url}/messages",
-                headers=headers,
-                json=data,
-                timeout=15
-            )
-            self.is_connected = response.status_code == 200
-            return self.is_connected
-        except:
-            self.is_connected = False
-            return False
+    # ЛОГИЧЕСКИЙ БЛОК: функция `test_connection` — выполняет отдельный шаг бизнес-логики.
+    def test_connection(self) -> bool:  # ПОЯСНЕНИЕ: объявляется функция test_connection с параметрами из сигнатуры.
+        """Описание: функция `test_connection`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if not self.api_key:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            return False  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+            headers = {  # ПОЯСНЕНИЕ: обновляется значение переменной headers.
+                "x-api-key": self.api_key,  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                "anthropic-version": "2023-06-01"  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            }  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            data = {  # ПОЯСНЕНИЕ: обновляется значение переменной data.
+                "model": self.model,  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                "max_tokens": 10,  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                "messages": [{"role": "user", "content": "Hi"}]  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            }  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            response = requests.post(  # ПОЯСНЕНИЕ: обновляется значение переменной response.
+                f"{self.base_url}/messages",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                headers=headers,  # ПОЯСНЕНИЕ: обновляется значение переменной headers.
+                json=data,  # ПОЯСНЕНИЕ: обновляется значение переменной json.
+                timeout=15  # ПОЯСНЕНИЕ: обновляется значение переменной timeout.
+            )  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            self.is_connected = response.status_code == 200  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            return self.is_connected  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+        except:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+            self.is_connected = False  # ПОЯСНЕНИЕ: обновляется значение переменной self.is_connected.
+            return False  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
-    def query(self, question: str) -> Tuple[str, float]:
-        if not self.api_key:
-            return "Error: Enter Anthropic API key", 0
-
-        # Add user message to history
-        self.add_to_history("user", question)
-
-        start_time = time.time()
-        try:
-            headers = {
-                "x-api-key": self.api_key,
-                "anthropic-version": "2023-06-01",
-                "Content-Type": "application/json"
-            }
-            data = {
-                "model": self.model,
-                "max_tokens": 4000,
-                "messages": self.conversation_history.copy()
-            }
-            response = requests.post(
-                f"{self.base_url}/messages",
-                headers=headers,
-                json=data,
-                timeout=120
-            )
-            elapsed = time.time() - start_time
-
-            if response.status_code == 200:
-                assistant_response = response.json()["content"][0]["text"]
-                self.add_to_history("assistant", assistant_response)
-                return assistant_response, elapsed
-            elif response.status_code == 401:
-                return "Error: Invalid Anthropic API key", elapsed
-            elif response.status_code == 429:
-                return "Error: Anthropic rate limit exceeded", elapsed
-            else:
-                return f"Error Anthropic: {response.status_code}", elapsed
-        except requests.exceptions.Timeout:
-            return "Error: Anthropic request timeout", time.time() - start_time
-        except Exception as e:
-            return f"Error Anthropic: {str(e)}", time.time() - start_time
-
-
-class GeminiProvider(AIProvider):
-    """Google Gemini provider"""
-
-    def __init__(self, api_key: str = ""):
-        super().__init__("Gemini", api_key, "#4285f4")
-        self.base_url = "https://generativelanguage.googleapis.com/v1beta"
-        self.model = "gemini-1.5-flash"
-
-    def test_connection(self) -> bool:
-        if not self.api_key:
-            return False
-        try:
-            url = f"{self.base_url}/models?key={self.api_key}"
-            response = requests.get(url, timeout=10)
-            self.is_connected = response.status_code == 200
-            return self.is_connected
-        except:
-            self.is_connected = False
-            return False
-
-    def query(self, question: str) -> Tuple[str, float]:
-        if not self.api_key:
-            return "Error: Enter Gemini API key", 0
+    # ЛОГИЧЕСКИЙ БЛОК: функция `query` — выполняет отдельный шаг бизнес-логики.
+    def query(self, question: str) -> Tuple[str, float]:  # ПОЯСНЕНИЕ: объявляется функция query с параметрами из сигнатуры.
+        """Описание: функция `query`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if not self.api_key:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            return "Error: Enter Anthropic API key", 0  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
         # Add user message to history
-        self.add_to_history("user", question)
+        self.add_to_history("user", question)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-        start_time = time.time()
-        try:
-            url = f"{self.base_url}/models/{self.model}:generateContent?key={self.api_key}"
-            headers = {"Content-Type": "application/json"}
+        start_time = time.time()  # ПОЯСНЕНИЕ: обновляется значение переменной start_time.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+            headers = {  # ПОЯСНЕНИЕ: обновляется значение переменной headers.
+                "x-api-key": self.api_key,  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                "anthropic-version": "2023-06-01",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                "Content-Type": "application/json"  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            }  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            data = {  # ПОЯСНЕНИЕ: обновляется значение переменной data.
+                "model": self.model,  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                "max_tokens": 4000,  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                "messages": self.conversation_history.copy()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            }  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            response = requests.post(  # ПОЯСНЕНИЕ: обновляется значение переменной response.
+                f"{self.base_url}/messages",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                headers=headers,  # ПОЯСНЕНИЕ: обновляется значение переменной headers.
+                json=data,  # ПОЯСНЕНИЕ: обновляется значение переменной json.
+                timeout=120  # ПОЯСНЕНИЕ: обновляется значение переменной timeout.
+            )  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            elapsed = time.time() - start_time  # ПОЯСНЕНИЕ: обновляется значение переменной elapsed.
+
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if response.status_code == 200:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                assistant_response = response.json()["content"][0]["text"]  # ПОЯСНЕНИЕ: обновляется значение переменной assistant_response.
+                self.add_to_history("assistant", assistant_response)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                return assistant_response, elapsed  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            elif response.status_code == 401:  # ПОЯСНЕНИЕ: проверяется дополнительное условие elif.
+                return "Error: Invalid Anthropic API key", elapsed  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            elif response.status_code == 429:  # ПОЯСНЕНИЕ: проверяется дополнительное условие elif.
+                return "Error: Anthropic rate limit exceeded", elapsed  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            else:  # ПОЯСНЕНИЕ: выполняется альтернативная ветка else.
+                return f"Error Anthropic: {response.status_code}", elapsed  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except requests.exceptions.Timeout:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+            return "Error: Anthropic request timeout", time.time() - start_time  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except Exception as e:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+            return f"Error Anthropic: {str(e)}", time.time() - start_time  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+
+
+# ЛОГИЧЕСКИЙ БЛОК: класс `GeminiProvider(AIProvider)` — объединяет состояние и поведение подсистемы.
+class GeminiProvider(AIProvider):  # ПОЯСНЕНИЕ: объявляется класс GeminiProvider.
+    """Google Gemini provider"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+
+    # ЛОГИЧЕСКИЙ БЛОК: функция `__init__` — выполняет отдельный шаг бизнес-логики.
+    def __init__(self, api_key: str = ""):  # ПОЯСНЕНИЕ: объявляется функция __init__ с параметрами из сигнатуры.
+        """Описание: функция `__init__`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        super().__init__("Gemini", api_key, "#4285f4")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self.base_url = "https://generativelanguage.googleapis.com/v1beta"  # ПОЯСНЕНИЕ: обновляется значение переменной self.base_url.
+        self.model = "gemini-1.5-flash"  # ПОЯСНЕНИЕ: обновляется значение переменной self.model.
+
+    # ЛОГИЧЕСКИЙ БЛОК: функция `test_connection` — выполняет отдельный шаг бизнес-логики.
+    def test_connection(self) -> bool:  # ПОЯСНЕНИЕ: объявляется функция test_connection с параметрами из сигнатуры.
+        """Описание: функция `test_connection`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if not self.api_key:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            return False  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+            url = f"{self.base_url}/models?key={self.api_key}"  # ПОЯСНЕНИЕ: обновляется значение переменной url.
+            response = requests.get(url, timeout=10)  # ПОЯСНЕНИЕ: обновляется значение переменной response.
+            self.is_connected = response.status_code == 200  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            return self.is_connected  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+        except:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+            self.is_connected = False  # ПОЯСНЕНИЕ: обновляется значение переменной self.is_connected.
+            return False  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+
+    # ЛОГИЧЕСКИЙ БЛОК: функция `query` — выполняет отдельный шаг бизнес-логики.
+    def query(self, question: str) -> Tuple[str, float]:  # ПОЯСНЕНИЕ: объявляется функция query с параметрами из сигнатуры.
+        """Описание: функция `query`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if not self.api_key:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            return "Error: Enter Gemini API key", 0  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+
+        # Add user message to history
+        self.add_to_history("user", question)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+
+        start_time = time.time()  # ПОЯСНЕНИЕ: обновляется значение переменной start_time.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+            url = f"{self.base_url}/models/{self.model}:generateContent?key={self.api_key}"  # ПОЯСНЕНИЕ: обновляется значение переменной url.
+            headers = {"Content-Type": "application/json"}  # ПОЯСНЕНИЕ: обновляется значение переменной headers.
 
             # Build contents from history for Gemini format
-            contents = []
-            for msg in self.conversation_history:
-                role = "user" if msg["role"] == "user" else "model"
-                contents.append({"role": role, "parts": [{"text": msg["content"]}]})
+            contents = []  # ПОЯСНЕНИЕ: обновляется значение переменной contents.
+            # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+            for msg in self.conversation_history:  # ПОЯСНЕНИЕ: запускается цикл for по коллекции.
+                role = "user" if msg["role"] == "user" else "model"  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                contents.append({"role": role, "parts": [{"text": msg["content"]}]})  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-            data = {
-                "contents": contents,
-                "generationConfig": {"temperature": 0.7, "maxOutputTokens": 4000}
-            }
-            response = requests.post(url, headers=headers, json=data, timeout=120)
-            elapsed = time.time() - start_time
+            data = {  # ПОЯСНЕНИЕ: обновляется значение переменной data.
+                "contents": contents,  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                "generationConfig": {"temperature": 0.7, "maxOutputTokens": 4000}  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            }  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            response = requests.post(url, headers=headers, json=data, timeout=120)  # ПОЯСНЕНИЕ: обновляется значение переменной response.
+            elapsed = time.time() - start_time  # ПОЯСНЕНИЕ: обновляется значение переменной elapsed.
 
-            if response.status_code == 200:
-                result = response.json()
-                if "candidates" in result and len(result["candidates"]) > 0:
-                    assistant_response = result["candidates"][0]["content"]["parts"][0]["text"]
-                    self.add_to_history("assistant", assistant_response)
-                    return assistant_response, elapsed
-                return "Error: Empty response from Gemini", elapsed
-            elif response.status_code == 403:
-                return "Error: Invalid Gemini API key", elapsed
-            elif response.status_code == 429:
-                return "Error: Gemini rate limit exceeded", elapsed
-            else:
-                return f"Error Gemini: {response.status_code}", elapsed
-        except requests.exceptions.Timeout:
-            return "Error: Gemini request timeout", time.time() - start_time
-        except Exception as e:
-            return f"Error Gemini: {str(e)}", time.time() - start_time
-
-
-class DeepSeekProvider(AIProvider):
-    """DeepSeek provider"""
-
-    def __init__(self, api_key: str = ""):
-        super().__init__("DeepSeek", api_key, "#5436da")
-        self.base_url = "https://api.deepseek.com/v1"
-        self.model = "deepseek-chat"
-
-    def test_connection(self) -> bool:
-        if not self.api_key:
-            return False
-        try:
-            headers = {"Authorization": f"Bearer {self.api_key}"}
-            response = requests.get(f"{self.base_url}/models", headers=headers, timeout=10)
-            self.is_connected = response.status_code == 200
-            return self.is_connected
-        except:
-            self.is_connected = False
-            return False
-
-    def query(self, question: str) -> Tuple[str, float]:
-        if not self.api_key:
-            return "Error: Enter DeepSeek API key", 0
-
-        # Add user message to history
-        self.add_to_history("user", question)
-
-        start_time = time.time()
-        try:
-            headers = {
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json"
-            }
-
-            # Build messages with history
-            messages = [{"role": "system", "content": "You are a helpful assistant."}]
-            messages.extend(self.conversation_history)
-
-            data = {
-                "model": self.model,
-                "messages": messages,
-                "max_tokens": 4000,
-                "temperature": 0.7
-            }
-            response = requests.post(
-                f"{self.base_url}/chat/completions",
-                headers=headers,
-                json=data,
-                timeout=120
-            )
-            elapsed = time.time() - start_time
-
-            if response.status_code == 200:
-                assistant_response = response.json()["choices"][0]["message"]["content"]
-                self.add_to_history("assistant", assistant_response)
-                return assistant_response, elapsed
-            elif response.status_code == 401:
-                return "Error: Invalid DeepSeek API key", elapsed
-            elif response.status_code == 402:
-                return "Error: Insufficient DeepSeek balance", elapsed
-            elif response.status_code == 429:
-                return "Error: DeepSeek rate limit exceeded", elapsed
-            else:
-                return f"Error DeepSeek: {response.status_code}", elapsed
-        except requests.exceptions.Timeout:
-            return "Error: DeepSeek request timeout", time.time() - start_time
-        except Exception as e:
-            return f"Error DeepSeek: {str(e)}", time.time() - start_time
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if response.status_code == 200:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                result = response.json()  # ПОЯСНЕНИЕ: обновляется значение переменной result.
+                # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                if "candidates" in result and len(result["candidates"]) > 0:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                    assistant_response = result["candidates"][0]["content"]["parts"][0]["text"]  # ПОЯСНЕНИЕ: обновляется значение переменной assistant_response.
+                    self.add_to_history("assistant", assistant_response)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                    return assistant_response, elapsed  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+                return "Error: Empty response from Gemini", elapsed  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            elif response.status_code == 403:  # ПОЯСНЕНИЕ: проверяется дополнительное условие elif.
+                return "Error: Invalid Gemini API key", elapsed  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            elif response.status_code == 429:  # ПОЯСНЕНИЕ: проверяется дополнительное условие elif.
+                return "Error: Gemini rate limit exceeded", elapsed  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            else:  # ПОЯСНЕНИЕ: выполняется альтернативная ветка else.
+                return f"Error Gemini: {response.status_code}", elapsed  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except requests.exceptions.Timeout:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+            return "Error: Gemini request timeout", time.time() - start_time  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except Exception as e:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+            return f"Error Gemini: {str(e)}", time.time() - start_time  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
 
-class GroqProvider(AIProvider):
-    """Groq provider"""
+# ЛОГИЧЕСКИЙ БЛОК: класс `DeepSeekProvider(AIProvider)` — объединяет состояние и поведение подсистемы.
+class DeepSeekProvider(AIProvider):  # ПОЯСНЕНИЕ: объявляется класс DeepSeekProvider.
+    """DeepSeek provider"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
 
-    def __init__(self, api_key: str = ""):
-        super().__init__("Groq", api_key, "#f55036")
-        self.base_url = "https://api.groq.com/openai/v1"
-        self.model = "llama-3.3-70b-versatile"
+    # ЛОГИЧЕСКИЙ БЛОК: функция `__init__` — выполняет отдельный шаг бизнес-логики.
+    def __init__(self, api_key: str = ""):  # ПОЯСНЕНИЕ: объявляется функция __init__ с параметрами из сигнатуры.
+        """Описание: функция `__init__`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        super().__init__("DeepSeek", api_key, "#5436da")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self.base_url = "https://api.deepseek.com/v1"  # ПОЯСНЕНИЕ: обновляется значение переменной self.base_url.
+        self.model = "deepseek-chat"  # ПОЯСНЕНИЕ: обновляется значение переменной self.model.
 
-    def test_connection(self) -> bool:
-        if not self.api_key:
-            return False
-        try:
-            headers = {"Authorization": f"Bearer {self.api_key}"}
-            response = requests.get(f"{self.base_url}/models", headers=headers, timeout=10)
-            self.is_connected = response.status_code == 200
-            return self.is_connected
-        except:
-            self.is_connected = False
-            return False
+    # ЛОГИЧЕСКИЙ БЛОК: функция `test_connection` — выполняет отдельный шаг бизнес-логики.
+    def test_connection(self) -> bool:  # ПОЯСНЕНИЕ: объявляется функция test_connection с параметрами из сигнатуры.
+        """Описание: функция `test_connection`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if not self.api_key:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            return False  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+            headers = {"Authorization": f"Bearer {self.api_key}"}  # ПОЯСНЕНИЕ: обновляется значение переменной headers.
+            response = requests.get(f"{self.base_url}/models", headers=headers, timeout=10)  # ПОЯСНЕНИЕ: обновляется значение переменной response.
+            self.is_connected = response.status_code == 200  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            return self.is_connected  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+        except:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+            self.is_connected = False  # ПОЯСНЕНИЕ: обновляется значение переменной self.is_connected.
+            return False  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
-    def query(self, question: str) -> Tuple[str, float]:
-        if not self.api_key:
-            return "Error: Enter Groq API key", 0
+    # ЛОГИЧЕСКИЙ БЛОК: функция `query` — выполняет отдельный шаг бизнес-логики.
+    def query(self, question: str) -> Tuple[str, float]:  # ПОЯСНЕНИЕ: объявляется функция query с параметрами из сигнатуры.
+        """Описание: функция `query`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if not self.api_key:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            return "Error: Enter DeepSeek API key", 0  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
         # Add user message to history
-        self.add_to_history("user", question)
+        self.add_to_history("user", question)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-        start_time = time.time()
-        try:
-            headers = {
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json"
-            }
+        start_time = time.time()  # ПОЯСНЕНИЕ: обновляется значение переменной start_time.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+            headers = {  # ПОЯСНЕНИЕ: обновляется значение переменной headers.
+                "Authorization": f"Bearer {self.api_key}",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                "Content-Type": "application/json"  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            }  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
             # Build messages with history
-            messages = [{"role": "system", "content": "You are a helpful assistant."}]
-            messages.extend(self.conversation_history)
+            messages = [{"role": "system", "content": "You are a helpful assistant."}]  # ПОЯСНЕНИЕ: обновляется значение переменной messages.
+            messages.extend(self.conversation_history)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-            data = {
-                "model": self.model,
-                "messages": messages,
-                "max_tokens": 4000,
-                "temperature": 0.7
-            }
-            response = requests.post(
-                f"{self.base_url}/chat/completions",
-                headers=headers,
-                json=data,
-                timeout=120
-            )
-            elapsed = time.time() - start_time
+            data = {  # ПОЯСНЕНИЕ: обновляется значение переменной data.
+                "model": self.model,  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                "messages": messages,  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                "max_tokens": 4000,  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                "temperature": 0.7  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            }  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            response = requests.post(  # ПОЯСНЕНИЕ: обновляется значение переменной response.
+                f"{self.base_url}/chat/completions",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                headers=headers,  # ПОЯСНЕНИЕ: обновляется значение переменной headers.
+                json=data,  # ПОЯСНЕНИЕ: обновляется значение переменной json.
+                timeout=120  # ПОЯСНЕНИЕ: обновляется значение переменной timeout.
+            )  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            elapsed = time.time() - start_time  # ПОЯСНЕНИЕ: обновляется значение переменной elapsed.
 
-            if response.status_code == 200:
-                assistant_response = response.json()["choices"][0]["message"]["content"]
-                self.add_to_history("assistant", assistant_response)
-                return assistant_response, elapsed
-            elif response.status_code == 401:
-                return "Error: Invalid Groq API key", elapsed
-            elif response.status_code == 429:
-                return "Error: Groq rate limit exceeded", elapsed
-            else:
-                return f"Error Groq: {response.status_code}", elapsed
-        except requests.exceptions.Timeout:
-            return "Error: Groq request timeout", time.time() - start_time
-        except Exception as e:
-            return f"Error Groq: {str(e)}", time.time() - start_time
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if response.status_code == 200:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                assistant_response = response.json()["choices"][0]["message"]["content"]  # ПОЯСНЕНИЕ: обновляется значение переменной assistant_response.
+                self.add_to_history("assistant", assistant_response)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                return assistant_response, elapsed  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            elif response.status_code == 401:  # ПОЯСНЕНИЕ: проверяется дополнительное условие elif.
+                return "Error: Invalid DeepSeek API key", elapsed  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            elif response.status_code == 402:  # ПОЯСНЕНИЕ: проверяется дополнительное условие elif.
+                return "Error: Insufficient DeepSeek balance", elapsed  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            elif response.status_code == 429:  # ПОЯСНЕНИЕ: проверяется дополнительное условие elif.
+                return "Error: DeepSeek rate limit exceeded", elapsed  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            else:  # ПОЯСНЕНИЕ: выполняется альтернативная ветка else.
+                return f"Error DeepSeek: {response.status_code}", elapsed  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except requests.exceptions.Timeout:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+            return "Error: DeepSeek request timeout", time.time() - start_time  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except Exception as e:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+            return f"Error DeepSeek: {str(e)}", time.time() - start_time  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
 
-class MistralProvider(AIProvider):
-    """Mistral AI provider"""
+# ЛОГИЧЕСКИЙ БЛОК: класс `GroqProvider(AIProvider)` — объединяет состояние и поведение подсистемы.
+class GroqProvider(AIProvider):  # ПОЯСНЕНИЕ: объявляется класс GroqProvider.
+    """Groq provider"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
 
-    def __init__(self, api_key: str = ""):
-        super().__init__("Mistral AI", api_key, "#ff7000")
-        self.base_url = "https://api.mistral.ai/v1"
-        self.model = "mistral-small-latest"
+    # ЛОГИЧЕСКИЙ БЛОК: функция `__init__` — выполняет отдельный шаг бизнес-логики.
+    def __init__(self, api_key: str = ""):  # ПОЯСНЕНИЕ: объявляется функция __init__ с параметрами из сигнатуры.
+        """Описание: функция `__init__`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        super().__init__("Groq", api_key, "#f55036")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self.base_url = "https://api.groq.com/openai/v1"  # ПОЯСНЕНИЕ: обновляется значение переменной self.base_url.
+        self.model = "llama-3.3-70b-versatile"  # ПОЯСНЕНИЕ: обновляется значение переменной self.model.
 
-    def test_connection(self) -> bool:
-        if not self.api_key:
-            return False
-        try:
-            headers = {"Authorization": f"Bearer {self.api_key}"}
-            response = requests.get(f"{self.base_url}/models", headers=headers, timeout=10)
-            self.is_connected = response.status_code == 200
-            return self.is_connected
-        except:
-            self.is_connected = False
-            return False
+    # ЛОГИЧЕСКИЙ БЛОК: функция `test_connection` — выполняет отдельный шаг бизнес-логики.
+    def test_connection(self) -> bool:  # ПОЯСНЕНИЕ: объявляется функция test_connection с параметрами из сигнатуры.
+        """Описание: функция `test_connection`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if not self.api_key:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            return False  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+            headers = {"Authorization": f"Bearer {self.api_key}"}  # ПОЯСНЕНИЕ: обновляется значение переменной headers.
+            response = requests.get(f"{self.base_url}/models", headers=headers, timeout=10)  # ПОЯСНЕНИЕ: обновляется значение переменной response.
+            self.is_connected = response.status_code == 200  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            return self.is_connected  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+        except:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+            self.is_connected = False  # ПОЯСНЕНИЕ: обновляется значение переменной self.is_connected.
+            return False  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
-    def query(self, question: str) -> Tuple[str, float]:
-        if not self.api_key:
-            return "Error: Enter Mistral AI API key", 0
+    # ЛОГИЧЕСКИЙ БЛОК: функция `query` — выполняет отдельный шаг бизнес-логики.
+    def query(self, question: str) -> Tuple[str, float]:  # ПОЯСНЕНИЕ: объявляется функция query с параметрами из сигнатуры.
+        """Описание: функция `query`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if not self.api_key:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            return "Error: Enter Groq API key", 0  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
         # Add user message to history
-        self.add_to_history("user", question)
+        self.add_to_history("user", question)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-        start_time = time.time()
-        try:
-            headers = {
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json"
-            }
+        start_time = time.time()  # ПОЯСНЕНИЕ: обновляется значение переменной start_time.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+            headers = {  # ПОЯСНЕНИЕ: обновляется значение переменной headers.
+                "Authorization": f"Bearer {self.api_key}",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                "Content-Type": "application/json"  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            }  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
             # Build messages with history
-            messages = self.conversation_history.copy()
+            messages = [{"role": "system", "content": "You are a helpful assistant."}]  # ПОЯСНЕНИЕ: обновляется значение переменной messages.
+            messages.extend(self.conversation_history)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-            data = {
-                "model": self.model,
-                "messages": messages,
-                "max_tokens": 4000,
-                "temperature": 0.7
-            }
-            response = requests.post(
-                f"{self.base_url}/chat/completions",
-                headers=headers,
-                json=data,
-                timeout=120
-            )
-            elapsed = time.time() - start_time
+            data = {  # ПОЯСНЕНИЕ: обновляется значение переменной data.
+                "model": self.model,  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                "messages": messages,  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                "max_tokens": 4000,  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                "temperature": 0.7  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            }  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            response = requests.post(  # ПОЯСНЕНИЕ: обновляется значение переменной response.
+                f"{self.base_url}/chat/completions",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                headers=headers,  # ПОЯСНЕНИЕ: обновляется значение переменной headers.
+                json=data,  # ПОЯСНЕНИЕ: обновляется значение переменной json.
+                timeout=120  # ПОЯСНЕНИЕ: обновляется значение переменной timeout.
+            )  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            elapsed = time.time() - start_time  # ПОЯСНЕНИЕ: обновляется значение переменной elapsed.
 
-            if response.status_code == 200:
-                assistant_response = response.json()["choices"][0]["message"]["content"]
-                self.add_to_history("assistant", assistant_response)
-                return assistant_response, elapsed
-            elif response.status_code == 401:
-                return "Error: Invalid Mistral AI API key", elapsed
-            elif response.status_code == 429:
-                return "Error: Mistral AI rate limit exceeded", elapsed
-            else:
-                return f"Error Mistral AI: {response.status_code}", elapsed
-        except requests.exceptions.Timeout:
-            return "Error: Mistral AI request timeout", time.time() - start_time
-        except Exception as e:
-            return f"Error Mistral AI: {str(e)}", time.time() - start_time
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if response.status_code == 200:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                assistant_response = response.json()["choices"][0]["message"]["content"]  # ПОЯСНЕНИЕ: обновляется значение переменной assistant_response.
+                self.add_to_history("assistant", assistant_response)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                return assistant_response, elapsed  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            elif response.status_code == 401:  # ПОЯСНЕНИЕ: проверяется дополнительное условие elif.
+                return "Error: Invalid Groq API key", elapsed  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            elif response.status_code == 429:  # ПОЯСНЕНИЕ: проверяется дополнительное условие elif.
+                return "Error: Groq rate limit exceeded", elapsed  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            else:  # ПОЯСНЕНИЕ: выполняется альтернативная ветка else.
+                return f"Error Groq: {response.status_code}", elapsed  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except requests.exceptions.Timeout:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+            return "Error: Groq request timeout", time.time() - start_time  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except Exception as e:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+            return f"Error Groq: {str(e)}", time.time() - start_time  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+
+
+# ЛОГИЧЕСКИЙ БЛОК: класс `MistralProvider(AIProvider)` — объединяет состояние и поведение подсистемы.
+class MistralProvider(AIProvider):  # ПОЯСНЕНИЕ: объявляется класс MistralProvider.
+    """Mistral AI provider"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+
+    # ЛОГИЧЕСКИЙ БЛОК: функция `__init__` — выполняет отдельный шаг бизнес-логики.
+    def __init__(self, api_key: str = ""):  # ПОЯСНЕНИЕ: объявляется функция __init__ с параметрами из сигнатуры.
+        """Описание: функция `__init__`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        super().__init__("Mistral AI", api_key, "#ff7000")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self.base_url = "https://api.mistral.ai/v1"  # ПОЯСНЕНИЕ: обновляется значение переменной self.base_url.
+        self.model = "mistral-small-latest"  # ПОЯСНЕНИЕ: обновляется значение переменной self.model.
+
+    # ЛОГИЧЕСКИЙ БЛОК: функция `test_connection` — выполняет отдельный шаг бизнес-логики.
+    def test_connection(self) -> bool:  # ПОЯСНЕНИЕ: объявляется функция test_connection с параметрами из сигнатуры.
+        """Описание: функция `test_connection`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if not self.api_key:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            return False  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+            headers = {"Authorization": f"Bearer {self.api_key}"}  # ПОЯСНЕНИЕ: обновляется значение переменной headers.
+            response = requests.get(f"{self.base_url}/models", headers=headers, timeout=10)  # ПОЯСНЕНИЕ: обновляется значение переменной response.
+            self.is_connected = response.status_code == 200  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            return self.is_connected  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+        except:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+            self.is_connected = False  # ПОЯСНЕНИЕ: обновляется значение переменной self.is_connected.
+            return False  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+
+    # ЛОГИЧЕСКИЙ БЛОК: функция `query` — выполняет отдельный шаг бизнес-логики.
+    def query(self, question: str) -> Tuple[str, float]:  # ПОЯСНЕНИЕ: объявляется функция query с параметрами из сигнатуры.
+        """Описание: функция `query`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if not self.api_key:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            return "Error: Enter Mistral AI API key", 0  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+
+        # Add user message to history
+        self.add_to_history("user", question)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+
+        start_time = time.time()  # ПОЯСНЕНИЕ: обновляется значение переменной start_time.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+            headers = {  # ПОЯСНЕНИЕ: обновляется значение переменной headers.
+                "Authorization": f"Bearer {self.api_key}",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                "Content-Type": "application/json"  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            }  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+
+            # Build messages with history
+            messages = self.conversation_history.copy()  # ПОЯСНЕНИЕ: обновляется значение переменной messages.
+
+            data = {  # ПОЯСНЕНИЕ: обновляется значение переменной data.
+                "model": self.model,  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                "messages": messages,  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                "max_tokens": 4000,  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                "temperature": 0.7  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            }  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            response = requests.post(  # ПОЯСНЕНИЕ: обновляется значение переменной response.
+                f"{self.base_url}/chat/completions",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                headers=headers,  # ПОЯСНЕНИЕ: обновляется значение переменной headers.
+                json=data,  # ПОЯСНЕНИЕ: обновляется значение переменной json.
+                timeout=120  # ПОЯСНЕНИЕ: обновляется значение переменной timeout.
+            )  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            elapsed = time.time() - start_time  # ПОЯСНЕНИЕ: обновляется значение переменной elapsed.
+
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if response.status_code == 200:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                assistant_response = response.json()["choices"][0]["message"]["content"]  # ПОЯСНЕНИЕ: обновляется значение переменной assistant_response.
+                self.add_to_history("assistant", assistant_response)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                return assistant_response, elapsed  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            elif response.status_code == 401:  # ПОЯСНЕНИЕ: проверяется дополнительное условие elif.
+                return "Error: Invalid Mistral AI API key", elapsed  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            elif response.status_code == 429:  # ПОЯСНЕНИЕ: проверяется дополнительное условие elif.
+                return "Error: Mistral AI rate limit exceeded", elapsed  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            else:  # ПОЯСНЕНИЕ: выполняется альтернативная ветка else.
+                return f"Error Mistral AI: {response.status_code}", elapsed  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except requests.exceptions.Timeout:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+            return "Error: Mistral AI request timeout", time.time() - start_time  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except Exception as e:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+            return f"Error Mistral AI: {str(e)}", time.time() - start_time  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
 
 # ==================== UI Components ====================
 
-class ModernSwitch(ctk.CTkFrame):
-    """Modern toggle switch with label"""
+# ЛОГИЧЕСКИЙ БЛОК: класс `ModernSwitch(ctk.CTkFrame)` — объединяет состояние и поведение подсистемы.
+class ModernSwitch(ctk.CTkFrame):  # ПОЯСНЕНИЕ: объявляется класс ModernSwitch.
+    """Modern toggle switch with label"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
 
-    def __init__(self, master, text: str, color: str = "#3498db", command=None, **kwargs):
-        super().__init__(master, fg_color="transparent", **kwargs)
+    # ЛОГИЧЕСКИЙ БЛОК: функция `__init__` — выполняет отдельный шаг бизнес-логики.
+    def __init__(self, master, text: str, color: str = "#3498db", command=None, **kwargs):  # ПОЯСНЕНИЕ: объявляется функция __init__ с параметрами из сигнатуры.
+        """Описание: функция `__init__`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        super().__init__(master, fg_color="transparent", **kwargs)  # ПОЯСНЕНИЕ: обновляется значение переменной super().__init__(master, fg_color.
 
-        self.color = color
-        self.command = command
+        self.color = color  # ПОЯСНЕНИЕ: обновляется значение переменной self.color.
+        self.command = command  # ПОЯСНЕНИЕ: обновляется значение переменной self.command.
 
         # Status indicator
-        self.indicator = ctk.CTkLabel(
-            self, text="", width=12, height=12,
-            fg_color="gray", corner_radius=6
-        )
-        self.indicator.pack(side="left", padx=(0, 8))
+        self.indicator = ctk.CTkLabel(  # ПОЯСНЕНИЕ: обновляется значение переменной self.indicator.
+            self, text="", width=12, height=12,  # ПОЯСНЕНИЕ: обновляется значение переменной self, text.
+            fg_color="gray", corner_radius=6  # ПОЯСНЕНИЕ: обновляется значение переменной fg_color.
+        )  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self.indicator.pack(side="left", padx=(0, 8))  # ПОЯСНЕНИЕ: обновляется значение переменной self.indicator.pack(side.
 
         # Label
-        self.label = ctk.CTkLabel(self, text=text, font=ctk.CTkFont(size=13))
-        self.label.pack(side="left", fill="x", expand=True)
+        self.label = ctk.CTkLabel(self, text=text, font=ctk.CTkFont(size=13))  # ПОЯСНЕНИЕ: обновляется значение переменной self.label.
+        self.label.pack(side="left", fill="x", expand=True)  # ПОЯСНЕНИЕ: обновляется значение переменной self.label.pack(side.
 
         # Switch
-        self.switch_var = ctk.BooleanVar(value=True)
-        self.switch = ctk.CTkSwitch(
-            self, text="", variable=self.switch_var,
-            command=self._on_toggle, width=40,
-            progress_color=color
-        )
-        self.switch.pack(side="right")
+        self.switch_var = ctk.BooleanVar(value=True)  # ПОЯСНЕНИЕ: обновляется значение переменной self.switch_var.
+        self.switch = ctk.CTkSwitch(  # ПОЯСНЕНИЕ: обновляется значение переменной self.switch.
+            self, text="", variable=self.switch_var,  # ПОЯСНЕНИЕ: обновляется значение переменной self, text.
+            command=self._on_toggle, width=40,  # ПОЯСНЕНИЕ: обновляется значение переменной command.
+            progress_color=color  # ПОЯСНЕНИЕ: обновляется значение переменной progress_color.
+        )  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self.switch.pack(side="right")  # ПОЯСНЕНИЕ: обновляется значение переменной self.switch.pack(side.
 
-    def _on_toggle(self):
-        if self.command:
-            self.command()
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_on_toggle` — выполняет отдельный шаг бизнес-логики.
+    def _on_toggle(self):  # ПОЯСНЕНИЕ: объявляется функция _on_toggle с параметрами из сигнатуры.
+        """Описание: функция `_on_toggle`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if self.command:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            self.command()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def get(self) -> bool:
-        return self.switch_var.get()
+    # ЛОГИЧЕСКИЙ БЛОК: функция `get` — выполняет отдельный шаг бизнес-логики.
+    def get(self) -> bool:  # ПОЯСНЕНИЕ: объявляется функция get с параметрами из сигнатуры.
+        """Описание: функция `get`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        return self.switch_var.get()  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
-    def set(self, value: bool):
-        self.switch_var.set(value)
+    # ЛОГИЧЕСКИЙ БЛОК: функция `set` — выполняет отдельный шаг бизнес-логики.
+    def set(self, value: bool):  # ПОЯСНЕНИЕ: объявляется функция set с параметрами из сигнатуры.
+        """Описание: функция `set`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        self.switch_var.set(value)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def set_status(self, connected: bool):
-        color = "#2ecc71" if connected else "#e74c3c"
-        self.indicator.configure(fg_color=color)
+    # ЛОГИЧЕСКИЙ БЛОК: функция `set_status` — выполняет отдельный шаг бизнес-логики.
+    def set_status(self, connected: bool):  # ПОЯСНЕНИЕ: объявляется функция set_status с параметрами из сигнатуры.
+        """Описание: функция `set_status`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        color = "#2ecc71" if connected else "#e74c3c"  # ПОЯСНЕНИЕ: обновляется значение переменной color.
+        self.indicator.configure(fg_color=color)  # ПОЯСНЕНИЕ: обновляется значение переменной self.indicator.configure(fg_color.
 
 
-class APIKeyCard(ctk.CTkFrame):
-    """Modern card for API key input with model entry"""
+# ЛОГИЧЕСКИЙ БЛОК: класс `APIKeyCard(ctk.CTkFrame)` — объединяет состояние и поведение подсистемы.
+class APIKeyCard(ctk.CTkFrame):  # ПОЯСНЕНИЕ: объявляется класс APIKeyCard.
+    """Modern card for API key input with model entry"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
 
-    def __init__(self, master, name: str, color: str, url: str, description: str, **kwargs):
-        super().__init__(master, corner_radius=12, **kwargs)
+    # ЛОГИЧЕСКИЙ БЛОК: функция `__init__` — выполняет отдельный шаг бизнес-логики.
+    def __init__(self, master, name: str, color: str, url: str, description: str, **kwargs):  # ПОЯСНЕНИЕ: объявляется функция __init__ с параметрами из сигнатуры.
+        """Описание: функция `__init__`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        super().__init__(master, corner_radius=12, **kwargs)  # ПОЯСНЕНИЕ: обновляется значение переменной super().__init__(master, corner_radius.
 
-        self.name = name
-        self.url = url
-        self.show_key = False
+        self.name = name  # ПОЯСНЕНИЕ: обновляется значение переменной self.name.
+        self.url = url  # ПОЯСНЕНИЕ: обновляется значение переменной self.url.
+        self.show_key = False  # ПОЯСНЕНИЕ: обновляется значение переменной self.show_key.
 
         # Header with color accent
-        header = ctk.CTkFrame(self, fg_color=color, corner_radius=10, height=4)
-        header.pack(fill="x", padx=10, pady=(10, 0))
+        header = ctk.CTkFrame(self, fg_color=color, corner_radius=10, height=4)  # ПОЯСНЕНИЕ: обновляется значение переменной header.
+        header.pack(fill="x", padx=10, pady=(10, 0))  # ПОЯСНЕНИЕ: обновляется значение переменной header.pack(fill.
 
         # Content frame
-        content = ctk.CTkFrame(self, fg_color="transparent")
-        content.pack(fill="x", padx=15, pady=10)
+        content = ctk.CTkFrame(self, fg_color="transparent")  # ПОЯСНЕНИЕ: обновляется значение переменной content.
+        content.pack(fill="x", padx=15, pady=10)  # ПОЯСНЕНИЕ: обновляется значение переменной content.pack(fill.
 
         # Title row
-        title_row = ctk.CTkFrame(content, fg_color="transparent")
-        title_row.pack(fill="x")
+        title_row = ctk.CTkFrame(content, fg_color="transparent")  # ПОЯСНЕНИЕ: обновляется значение переменной title_row.
+        title_row.pack(fill="x")  # ПОЯСНЕНИЕ: обновляется значение переменной title_row.pack(fill.
 
-        ctk.CTkLabel(
-            title_row, text=name,
-            font=ctk.CTkFont(size=16, weight="bold")
-        ).pack(side="left")
+        ctk.CTkLabel(  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            title_row, text=name,  # ПОЯСНЕНИЕ: обновляется значение переменной title_row, text.
+            font=ctk.CTkFont(size=16, weight="bold")  # ПОЯСНЕНИЕ: обновляется значение переменной font.
+        ).pack(side="left")  # ПОЯСНЕНИЕ: обновляется значение переменной ).pack(side.
 
         # Status indicator
-        self.status_indicator = ctk.CTkLabel(
-            title_row, text="", width=10, height=10,
-            fg_color="gray", corner_radius=5
-        )
-        self.status_indicator.pack(side="right", padx=5)
+        self.status_indicator = ctk.CTkLabel(  # ПОЯСНЕНИЕ: обновляется значение переменной self.status_indicator.
+            title_row, text="", width=10, height=10,  # ПОЯСНЕНИЕ: обновляется значение переменной title_row, text.
+            fg_color="gray", corner_radius=5  # ПОЯСНЕНИЕ: обновляется значение переменной fg_color.
+        )  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self.status_indicator.pack(side="right", padx=5)  # ПОЯСНЕНИЕ: обновляется значение переменной self.status_indicator.pack(side.
 
         # Description
-        ctk.CTkLabel(
-            content, text=description,
-            font=ctk.CTkFont(size=11),
-            text_color="gray"
-        ).pack(anchor="w", pady=(2, 8))
+        ctk.CTkLabel(  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            content, text=description,  # ПОЯСНЕНИЕ: обновляется значение переменной content, text.
+            font=ctk.CTkFont(size=11),  # ПОЯСНЕНИЕ: обновляется значение переменной font.
+            text_color="gray"  # ПОЯСНЕНИЕ: обновляется значение переменной text_color.
+        ).pack(anchor="w", pady=(2, 8))  # ПОЯСНЕНИЕ: обновляется значение переменной ).pack(anchor.
 
         # Model entry row
-        model_row = ctk.CTkFrame(content, fg_color="transparent")
-        model_row.pack(fill="x", pady=(0, 8))
+        model_row = ctk.CTkFrame(content, fg_color="transparent")  # ПОЯСНЕНИЕ: обновляется значение переменной model_row.
+        model_row.pack(fill="x", pady=(0, 8))  # ПОЯСНЕНИЕ: обновляется значение переменной model_row.pack(fill.
 
-        ctk.CTkLabel(
-            model_row, text="Model:",
-            font=ctk.CTkFont(size=12)
-        ).pack(side="left", padx=(0, 10))
+        ctk.CTkLabel(  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            model_row, text="Model:",  # ПОЯСНЕНИЕ: обновляется значение переменной model_row, text.
+            font=ctk.CTkFont(size=12)  # ПОЯСНЕНИЕ: обновляется значение переменной font.
+        ).pack(side="left", padx=(0, 10))  # ПОЯСНЕНИЕ: обновляется значение переменной ).pack(side.
 
-        self.model_entry = ctk.CTkEntry(
-            model_row, width=240, height=28,
-            placeholder_text="Enter model name..."
-        )
-        self.model_entry.pack(side="left")
+        self.model_entry = ctk.CTkEntry(  # ПОЯСНЕНИЕ: обновляется значение переменной self.model_entry.
+            model_row, width=240, height=28,  # ПОЯСНЕНИЕ: обновляется значение переменной model_row, width.
+            placeholder_text="Enter model name..."  # ПОЯСНЕНИЕ: обновляется значение переменной placeholder_text.
+        )  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self.model_entry.pack(side="left")  # ПОЯСНЕНИЕ: обновляется значение переменной self.model_entry.pack(side.
 
         # Key input row
-        key_row = ctk.CTkFrame(content, fg_color="transparent")
-        key_row.pack(fill="x")
+        key_row = ctk.CTkFrame(content, fg_color="transparent")  # ПОЯСНЕНИЕ: обновляется значение переменной key_row.
+        key_row.pack(fill="x")  # ПОЯСНЕНИЕ: обновляется значение переменной key_row.pack(fill.
 
-        self.key_entry = ctk.CTkEntry(
-            key_row, placeholder_text="Enter API key...",
-            show="*", height=36, corner_radius=8
-        )
-        self.key_entry.pack(side="left", fill="x", expand=True, padx=(0, 8))
+        self.key_entry = ctk.CTkEntry(  # ПОЯСНЕНИЕ: обновляется значение переменной self.key_entry.
+            key_row, placeholder_text="Enter API key...",  # ПОЯСНЕНИЕ: обновляется значение переменной key_row, placeholder_text.
+            show="*", height=36, corner_radius=8  # ПОЯСНЕНИЕ: обновляется значение переменной show.
+        )  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self.key_entry.pack(side="left", fill="x", expand=True, padx=(0, 8))  # ПОЯСНЕНИЕ: обновляется значение переменной self.key_entry.pack(side.
 
         # Paste button
-        ctk.CTkButton(
-            key_row, text="Paste", width=60, height=36,
-            corner_radius=8, fg_color="#2980b9", hover_color="#1f618d",
-            command=self._request_paste
-        ).pack(side="left", padx=(0, 8))
+        ctk.CTkButton(  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            key_row, text="Paste", width=60, height=36,  # ПОЯСНЕНИЕ: обновляется значение переменной key_row, text.
+            corner_radius=8, fg_color="#2980b9", hover_color="#1f618d",  # ПОЯСНЕНИЕ: обновляется значение переменной corner_radius.
+            command=self._request_paste  # ПОЯСНЕНИЕ: обновляется значение переменной command.
+        ).pack(side="left", padx=(0, 8))  # ПОЯСНЕНИЕ: обновляется значение переменной ).pack(side.
 
         # Toggle visibility button
-        self.toggle_btn = ctk.CTkButton(
-            key_row, text="Show", width=60, height=36,
-            corner_radius=8, command=self._toggle_visibility
-        )
-        self.toggle_btn.pack(side="left", padx=(0, 8))
+        self.toggle_btn = ctk.CTkButton(  # ПОЯСНЕНИЕ: обновляется значение переменной self.toggle_btn.
+            key_row, text="Show", width=60, height=36,  # ПОЯСНЕНИЕ: обновляется значение переменной key_row, text.
+            corner_radius=8, command=self._toggle_visibility  # ПОЯСНЕНИЕ: обновляется значение переменной corner_radius.
+        )  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self.toggle_btn.pack(side="left", padx=(0, 8))  # ПОЯСНЕНИЕ: обновляется значение переменной self.toggle_btn.pack(side.
 
         # Get key button
-        ctk.CTkButton(
-            key_row, text="Get Key", width=80, height=36,
-            corner_radius=8, fg_color=color, hover_color=self._darken(color),
-            command=lambda: webbrowser.open(url)
-        ).pack(side="left")
+        ctk.CTkButton(  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            key_row, text="Get Key", width=80, height=36,  # ПОЯСНЕНИЕ: обновляется значение переменной key_row, text.
+            corner_radius=8, fg_color=color, hover_color=self._darken(color),  # ПОЯСНЕНИЕ: обновляется значение переменной corner_radius.
+            command=lambda: webbrowser.open(url)  # ПОЯСНЕНИЕ: обновляется значение переменной command.
+        ).pack(side="left")  # ПОЯСНЕНИЕ: обновляется значение переменной ).pack(side.
 
-    def _toggle_visibility(self):
-        self.show_key = not self.show_key
-        self.key_entry.configure(show="" if self.show_key else "*")
-        self.toggle_btn.configure(text="Hide" if self.show_key else "Show")
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_toggle_visibility` — выполняет отдельный шаг бизнес-логики.
+    def _toggle_visibility(self):  # ПОЯСНЕНИЕ: объявляется функция _toggle_visibility с параметрами из сигнатуры.
+        """Описание: функция `_toggle_visibility`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        self.show_key = not self.show_key  # ПОЯСНЕНИЕ: обновляется значение переменной self.show_key.
+        self.key_entry.configure(show="" if self.show_key else "*")  # ПОЯСНЕНИЕ: обновляется значение переменной self.key_entry.configure(show.
+        self.toggle_btn.configure(text="Hide" if self.show_key else "Show")  # ПОЯСНЕНИЕ: обновляется значение переменной self.toggle_btn.configure(text.
 
-    def _request_paste(self):
-        try:
-            self.key_entry.event_generate("<<Paste>>")
-        except Exception:
-            pass
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_request_paste` — выполняет отдельный шаг бизнес-логики.
+    def _request_paste(self):  # ПОЯСНЕНИЕ: объявляется функция _request_paste с параметрами из сигнатуры.
+        """Описание: функция `_request_paste`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+            self.key_entry.event_generate("<<Paste>>")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except Exception:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+            pass  # ПОЯСНЕНИЕ: оставляется пустая заглушка без действий.
 
-    def _darken(self, hex_color: str) -> str:
-        """Darken a hex color"""
-        hex_color = hex_color.lstrip('#')
-        rgb = tuple(int(hex_color[i:i + 2], 16) for i in (0, 2, 4))
-        darker = tuple(max(0, int(c * 0.8)) for c in rgb)
-        return f"#{darker[0]:02x}{darker[1]:02x}{darker[2]:02x}"
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_darken` — выполняет отдельный шаг бизнес-логики.
+    def _darken(self, hex_color: str) -> str:  # ПОЯСНЕНИЕ: объявляется функция _darken с параметрами из сигнатуры.
+        """Darken a hex color"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        hex_color = hex_color.lstrip('#')  # ПОЯСНЕНИЕ: обновляется значение переменной hex_color.
+        rgb = tuple(int(hex_color[i:i + 2], 16) for i in (0, 2, 4))  # ПОЯСНЕНИЕ: обновляется значение переменной rgb.
+        darker = tuple(max(0, int(c * 0.8)) for c in rgb)  # ПОЯСНЕНИЕ: обновляется значение переменной darker.
+        return f"#{darker[0]:02x}{darker[1]:02x}{darker[2]:02x}"  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
-    def get_key(self) -> str:
-        return self.key_entry.get()
+    # ЛОГИЧЕСКИЙ БЛОК: функция `get_key` — выполняет отдельный шаг бизнес-логики.
+    def get_key(self) -> str:  # ПОЯСНЕНИЕ: объявляется функция get_key с параметрами из сигнатуры.
+        """Описание: функция `get_key`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        return self.key_entry.get()  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
-    def set_key(self, key: str):
-        self.key_entry.delete(0, "end")
-        self.key_entry.insert(0, key)
+    # ЛОГИЧЕСКИЙ БЛОК: функция `set_key` — выполняет отдельный шаг бизнес-логики.
+    def set_key(self, key: str):  # ПОЯСНЕНИЕ: объявляется функция set_key с параметрами из сигнатуры.
+        """Описание: функция `set_key`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        self.key_entry.delete(0, "end")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self.key_entry.insert(0, key)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def get_model(self) -> str:
-        return self.model_entry.get().strip()
+    # ЛОГИЧЕСКИЙ БЛОК: функция `get_model` — выполняет отдельный шаг бизнес-логики.
+    def get_model(self) -> str:  # ПОЯСНЕНИЕ: объявляется функция get_model с параметрами из сигнатуры.
+        """Описание: функция `get_model`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        return self.model_entry.get().strip()  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
-    def set_model(self, model: str):
-        self.model_entry.delete(0, "end")
-        if model:
-            self.model_entry.insert(0, model)
+    # ЛОГИЧЕСКИЙ БЛОК: функция `set_model` — выполняет отдельный шаг бизнес-логики.
+    def set_model(self, model: str):  # ПОЯСНЕНИЕ: объявляется функция set_model с параметрами из сигнатуры.
+        """Описание: функция `set_model`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        self.model_entry.delete(0, "end")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if model:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            self.model_entry.insert(0, model)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def set_status(self, connected: bool):
-        color = "#2ecc71" if connected else "#e74c3c"
-        self.status_indicator.configure(fg_color=color)
+    # ЛОГИЧЕСКИЙ БЛОК: функция `set_status` — выполняет отдельный шаг бизнес-логики.
+    def set_status(self, connected: bool):  # ПОЯСНЕНИЕ: объявляется функция set_status с параметрами из сигнатуры.
+        """Описание: функция `set_status`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        color = "#2ecc71" if connected else "#e74c3c"  # ПОЯСНЕНИЕ: обновляется значение переменной color.
+        self.status_indicator.configure(fg_color=color)  # ПОЯСНЕНИЕ: обновляется значение переменной self.status_indicator.configure(fg_color.
 
 
 # ==================== Main Application ====================
 
-class AIManagerApp(ctk.CTk):
-    """Main application window"""
+# ЛОГИЧЕСКИЙ БЛОК: класс `AIManagerApp(ctk.CTk)` — объединяет состояние и поведение подсистемы.
+class AIManagerApp(ctk.CTk):  # ПОЯСНЕНИЕ: объявляется класс AIManagerApp.
+    """Main application window"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
 
-    PROVIDER_INFO = [
-        ("OpenAI GPT", "openai", "#10a37f", "https://platform.openai.com/api-keys",
-         "Enter model name manually"),
-        ("Anthropic Claude", "anthropic", "#cc785c", "https://console.anthropic.com/",
-         "Enter model name manually"),
-        ("Gemini", "gemini", "#4285f4", "https://aistudio.google.com/apikey",
-         "Enter model name manually"),
-        ("DeepSeek", "deepseek", "#5436da", "https://platform.deepseek.com/",
-         "Enter model name manually"),
-        ("Groq", "groq", "#f55036", "https://console.groq.com/keys",
-         "Enter model name manually"),
-        ("Mistral AI", "mistral", "#ff7000", "https://console.mistral.ai/api-keys/",
-         "Enter model name manually")
-    ]
+    PROVIDER_INFO = [  # ПОЯСНЕНИЕ: обновляется значение переменной PROVIDER_INFO.
+        ("OpenAI GPT", "openai", "#10a37f", "https://platform.openai.com/api-keys",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+         "Enter model name manually"),  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        ("Anthropic Claude", "anthropic", "#cc785c", "https://console.anthropic.com/",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+         "Enter model name manually"),  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        ("Gemini", "gemini", "#4285f4", "https://aistudio.google.com/apikey",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+         "Enter model name manually"),  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        ("DeepSeek", "deepseek", "#5436da", "https://platform.deepseek.com/",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+         "Enter model name manually"),  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        ("Groq", "groq", "#f55036", "https://console.groq.com/keys",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+         "Enter model name manually"),  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        ("Mistral AI", "mistral", "#ff7000", "https://console.mistral.ai/api-keys/",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+         "Enter model name manually")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+    ]  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
     # Default prompts for each AI provider
-    DEFAULT_PROMPTS = {
-        "openai": """System:
+    DEFAULT_PROMPTS = {  # ПОЯСНЕНИЕ: обновляется значение переменной DEFAULT_PROMPTS.
+        "openai": """System:  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
 Ты — Senior Software Engineer + Tech Lead. Твоя задача — помогать писать, отлаживать и улучшать код, максимально практично и проверяемо.
 
 Принципы:
@@ -1139,7 +1382,7 @@ class AIManagerApp(ctk.CTk):
 Ограничения: {CONSTRAINTS}
 Среда/версии: {ENV}""",
 
-        "anthropic": """System:
+        "anthropic": """System:  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
 Ты — "Agentic Coding Assistant": действуешь как опытный инженер, который умеет планировать, аккуратно вносить правки и использовать инструменты (если они доступны в окружении).
 
 Как ты работаешь:
@@ -1164,7 +1407,7 @@ class AIManagerApp(ctk.CTk):
 Плейсхолдеры:
 {REPO_MAP} {ERROR_LOGS} {TASK} {CONSTRAINTS} {RUNTIME}""",
 
-        "gemini": """System instruction:
+        "gemini": """System instruction:  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
 Ты — инженер-ассистент по разработке. Твоя цель — выдавать надежный, воспроизводимый результат по коду: от анализа до готового решения.
 
 Политика точности:
@@ -1191,7 +1434,7 @@ class AIManagerApp(ctk.CTk):
 • Проверка
 • Улучшения""",
 
-        "deepseek": """User prompt (мастер-настройка):
+        "deepseek": """User prompt (мастер-настройка):  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
 Ты — Senior Software Engineer. Делай только то, что я прошу, без лишнего рефакторинга.
 
 Задача: {TASK}
@@ -1214,7 +1457,7 @@ class AIManagerApp(ctk.CTk):
 
 Форматируй код в тройных бэктиках. Не выдумывай API/файлы — если чего-то нет в контексте, спроси или обозначь допущение.""",
 
-        "groq": """System:
+        "groq": """System:  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
 Ты — "Production Code Assistant" для быстрых итераций: выдавай точные правки, которые легко применить и проверить.
 
 Role:
@@ -1241,7 +1484,7 @@ Expected output:
 • How to verify
 • Notes (risks, trade-offs)""",
 
-        "mistral": """System:
+        "mistral": """System:  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
 Ты — инженер-ассистент по коду, ориентированный на безопасные и поддерживаемые изменения.
 
 Поведение:
@@ -1262,2127 +1505,2439 @@ Expected output:
 • Implementation (diff)
 • Verification
 • Follow-ups"""
-    }
+    }  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def __init__(self):
-        super().__init__()
+    # ЛОГИЧЕСКИЙ БЛОК: функция `__init__` — выполняет отдельный шаг бизнес-логики.
+    def __init__(self):  # ПОЯСНЕНИЕ: объявляется функция __init__ с параметрами из сигнатуры.
+        """Описание: функция `__init__`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        super().__init__()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-        self.title(f"{APP_NAME} v{APP_VERSION}")
-        self.geometry("1200x800")
-        self.minsize(1000, 700)
+        self.title(f"{APP_NAME} v{APP_VERSION}")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self.geometry("1200x800")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self.minsize(1000, 700)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
         # Config
-        self.config_file = "config.json"
-        self.config = self._load_config()
-        self.output_dir = self.config.get("output_dir", os.path.expanduser("~/Documents"))
+        self.config_file = "config.json"  # ПОЯСНЕНИЕ: обновляется значение переменной self.config_file.
+        self.config = self._load_config()  # ПОЯСНЕНИЕ: обновляется значение переменной self.config.
+        self.output_dir = self.config.get("output_dir", os.path.expanduser("~/Documents"))  # ПОЯСНЕНИЕ: обновляется значение переменной self.output_dir.
 
         # Initialize providers
-        self.providers: Dict[str, AIProvider] = {}
-        self._init_providers()
+        self.providers: Dict[str, AIProvider] = {}  # ПОЯСНЕНИЕ: обновляется значение переменной self.providers: Dict[str, AIProvider].
+        self._init_providers()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
         # UI variables
-        self.api_cards: Dict[str, APIKeyCard] = {}
-        self.provider_switches: Dict[str, ModernSwitch] = {}
-        self.is_processing = False
+        self.api_cards: Dict[str, APIKeyCard] = {}  # ПОЯСНЕНИЕ: обновляется значение переменной self.api_cards: Dict[str, APIKeyCard].
+        self.provider_switches: Dict[str, ModernSwitch] = {}  # ПОЯСНЕНИЕ: обновляется значение переменной self.provider_switches: Dict[str, ModernSwitch].
+        self.is_processing = False  # ПОЯСНЕНИЕ: обновляется значение переменной self.is_processing.
 
         # Create UI
-        self._create_ui()
+        self._create_ui()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
         # Load config to UI
-        self._load_config_to_ui()
+        self._load_config_to_ui()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
         # Check connections in background
-        self.after(500, self._check_connections_background)
+        self.after(500, self._check_connections_background)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def _load_config(self) -> dict:
-        """Load configuration (keys from secure storage)"""
-        default_config = {
-            "api_keys": {
-                "openai": "", "anthropic": "", "gemini": "",
-                "deepseek": "", "groq": "", "mistral": ""
-            },
-            "models": {
-                "openai": "", "anthropic": "", "gemini": "",
-                "deepseek": "", "groq": "", "mistral": ""
-            },
-            "output_dir": os.path.expanduser("~/Documents"),
-            "theme": "dark"
-        }
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_load_config` — выполняет отдельный шаг бизнес-логики.
+    def _load_config(self) -> dict:  # ПОЯСНЕНИЕ: объявляется функция _load_config с параметрами из сигнатуры.
+        """Load configuration (keys from secure storage)"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        default_config = {  # ПОЯСНЕНИЕ: обновляется значение переменной default_config.
+            "api_keys": {  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                "openai": "", "anthropic": "", "gemini": "",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                "deepseek": "", "groq": "", "mistral": ""  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            },  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            "models": {  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                "openai": "", "anthropic": "", "gemini": "",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                "deepseek": "", "groq": "", "mistral": ""  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            },  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            "output_dir": os.path.expanduser("~/Documents"),  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            "theme": "dark"  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        }  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
         # Migrate old plain config if exists
-        if os.path.exists(self.config_file):
-            secure_storage.migrate_from_plain_config(self.config_file)
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if os.path.exists(self.config_file):  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            secure_storage.migrate_from_plain_config(self.config_file)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
         # Load non-sensitive config
-        if os.path.exists(self.config_file):
-            try:
-                with open(self.config_file, 'r', encoding='utf-8') as f:
-                    loaded = json.load(f)
-                    for key in default_config:
-                        if key in loaded and key != "api_keys":
-                            default_config[key] = loaded[key]
-            except:
-                pass
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if os.path.exists(self.config_file):  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+            try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+                with open(self.config_file, 'r', encoding='utf-8') as f:  # ПОЯСНЕНИЕ: открывается контекстный менеджер для ресурса.
+                    loaded = json.load(f)  # ПОЯСНЕНИЕ: обновляется значение переменной loaded.
+                    # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+                    for key in default_config:  # ПОЯСНЕНИЕ: запускается цикл for по коллекции.
+                        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                        if key in loaded and key != "api_keys":  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                            default_config[key] = loaded[key]  # ПОЯСНЕНИЕ: обновляется значение переменной default_config[key].
+            except:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+                pass  # ПОЯСНЕНИЕ: оставляется пустая заглушка без действий.
 
         # Load keys from secure storage
-        for provider in default_config["api_keys"]:
-            key = secure_storage.get_key(provider)
-            if key:
-                default_config["api_keys"][provider] = key
+        # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+        for provider in default_config["api_keys"]:  # ПОЯСНЕНИЕ: запускается цикл for по коллекции.
+            key = secure_storage.get_key(provider)  # ПОЯСНЕНИЕ: обновляется значение переменной key.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if key:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                default_config["api_keys"][provider] = key  # ПОЯСНЕНИЕ: обновляется значение переменной default_config["api_keys"][provider].
 
-        return default_config
+        return default_config  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
-    def _save_config(self):
-        """Save configuration (keys to secure storage)"""
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_save_config` — выполняет отдельный шаг бизнес-логики.
+    def _save_config(self):  # ПОЯСНЕНИЕ: объявляется функция _save_config с параметрами из сигнатуры.
+        """Save configuration (keys to secure storage)"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
         # Save keys to secure storage
-        for provider, api_key in self.config["api_keys"].items():
-            secure_storage.set_key(provider, api_key)
+        # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+        for provider, api_key in self.config["api_keys"].items():  # ПОЯСНЕНИЕ: запускается цикл for по коллекции.
+            secure_storage.set_key(provider, api_key)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
         # Save non-sensitive config (without keys)
-        safe_config = {
-            "output_dir": self.config.get("output_dir", ""),
-            "theme": self.config.get("theme", "dark"),
-            "models": self.config.get("models", {}),
-            "api_keys": {}  # Empty - keys are in secure storage
-        }
-        try:
-            with open(self.config_file, 'w', encoding='utf-8') as f:
-                json.dump(safe_config, f, ensure_ascii=False, indent=2)
-        except:
-            pass
+        safe_config = {  # ПОЯСНЕНИЕ: обновляется значение переменной safe_config.
+            "output_dir": self.config.get("output_dir", ""),  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            "theme": self.config.get("theme", "dark"),  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            "models": self.config.get("models", {}),  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            "api_keys": {}  # Empty - keys are in secure storage  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        }  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+            with open(self.config_file, 'w', encoding='utf-8') as f:  # ПОЯСНЕНИЕ: открывается контекстный менеджер для ресурса.
+                json.dump(safe_config, f, ensure_ascii=False, indent=2)  # ПОЯСНЕНИЕ: обновляется значение переменной json.dump(safe_config, f, ensure_ascii.
+        except:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+            pass  # ПОЯСНЕНИЕ: оставляется пустая заглушка без действий.
 
-    def _init_providers(self):
-        """Initialize AI providers"""
-        self.providers = {
-            "OpenAI GPT": OpenAIProvider(self.config["api_keys"].get("openai", "")),
-            "Anthropic Claude": AnthropicProvider(self.config["api_keys"].get("anthropic", "")),
-            "Gemini": GeminiProvider(self.config["api_keys"].get("gemini", "")),
-            "DeepSeek": DeepSeekProvider(self.config["api_keys"].get("deepseek", "")),
-            "Groq": GroqProvider(self.config["api_keys"].get("groq", "")),
-            "Mistral AI": MistralProvider(self.config["api_keys"].get("mistral", ""))
-        }
-        key_map = {
-            "OpenAI GPT": "openai",
-            "Anthropic Claude": "anthropic",
-            "Gemini": "gemini",
-            "DeepSeek": "deepseek",
-            "Groq": "groq",
-            "Mistral AI": "mistral"
-        }
-        for name, key in key_map.items():
-            model_name = self.config.get("models", {}).get(key, "")
-            if model_name and name in self.providers:
-                self.providers[name].model = model_name
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_init_providers` — выполняет отдельный шаг бизнес-логики.
+    def _init_providers(self):  # ПОЯСНЕНИЕ: объявляется функция _init_providers с параметрами из сигнатуры.
+        """Initialize AI providers"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        self.providers = {  # ПОЯСНЕНИЕ: обновляется значение переменной self.providers.
+            "OpenAI GPT": OpenAIProvider(self.config["api_keys"].get("openai", "")),  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            "Anthropic Claude": AnthropicProvider(self.config["api_keys"].get("anthropic", "")),  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            "Gemini": GeminiProvider(self.config["api_keys"].get("gemini", "")),  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            "DeepSeek": DeepSeekProvider(self.config["api_keys"].get("deepseek", "")),  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            "Groq": GroqProvider(self.config["api_keys"].get("groq", "")),  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            "Mistral AI": MistralProvider(self.config["api_keys"].get("mistral", ""))  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        }  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        key_map = {  # ПОЯСНЕНИЕ: обновляется значение переменной key_map.
+            "OpenAI GPT": "openai",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            "Anthropic Claude": "anthropic",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            "Gemini": "gemini",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            "DeepSeek": "deepseek",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            "Groq": "groq",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            "Mistral AI": "mistral"  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        }  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+        for name, key in key_map.items():  # ПОЯСНЕНИЕ: запускается цикл for по коллекции.
+            model_name = self.config.get("models", {}).get(key, "")  # ПОЯСНЕНИЕ: обновляется значение переменной model_name.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if model_name and name in self.providers:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                self.providers[name].model = model_name  # ПОЯСНЕНИЕ: обновляется значение переменной self.providers[name].model.
 
-    def _create_ui(self):
-        """Create main UI"""
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_create_ui` — выполняет отдельный шаг бизнес-логики.
+    def _create_ui(self):  # ПОЯСНЕНИЕ: объявляется функция _create_ui с параметрами из сигнатуры.
+        """Create main UI"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
         # Configure grid
-        self.grid_columnconfigure(1, weight=1)
-        self.grid_rowconfigure(0, weight=1)
+        self.grid_columnconfigure(1, weight=1)  # ПОЯСНЕНИЕ: обновляется значение переменной self.grid_columnconfigure(1, weight.
+        self.grid_rowconfigure(0, weight=1)  # ПОЯСНЕНИЕ: обновляется значение переменной self.grid_rowconfigure(0, weight.
 
         # Left sidebar
-        self._create_sidebar()
+        self._create_sidebar()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
         # Main content
-        self._create_main_content()
+        self._create_main_content()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def _create_sidebar(self):
-        """Create left sidebar"""
-        sidebar = ctk.CTkFrame(self, width=280, corner_radius=0)
-        sidebar.grid(row=0, column=0, sticky="nsew")
-        sidebar.grid_propagate(False)
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_create_sidebar` — выполняет отдельный шаг бизнес-логики.
+    def _create_sidebar(self):  # ПОЯСНЕНИЕ: объявляется функция _create_sidebar с параметрами из сигнатуры.
+        """Create left sidebar"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        sidebar = ctk.CTkFrame(self, width=280, corner_radius=0)  # ПОЯСНЕНИЕ: обновляется значение переменной sidebar.
+        sidebar.grid(row=0, column=0, sticky="nsew")  # ПОЯСНЕНИЕ: обновляется значение переменной sidebar.grid(row.
+        sidebar.grid_propagate(False)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
         # Logo/Title
-        logo_frame = ctk.CTkFrame(sidebar, fg_color="transparent")
-        logo_frame.pack(fill="x", padx=20, pady=20)
+        logo_frame = ctk.CTkFrame(sidebar, fg_color="transparent")  # ПОЯСНЕНИЕ: обновляется значение переменной logo_frame.
+        logo_frame.pack(fill="x", padx=20, pady=20)  # ПОЯСНЕНИЕ: обновляется значение переменной logo_frame.pack(fill.
 
-        ctk.CTkLabel(
-            logo_frame, text=APP_NAME,
-            font=ctk.CTkFont(size=24, weight="bold")
-        ).pack(anchor="w")
+        ctk.CTkLabel(  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            logo_frame, text=APP_NAME,  # ПОЯСНЕНИЕ: обновляется значение переменной logo_frame, text.
+            font=ctk.CTkFont(size=24, weight="bold")  # ПОЯСНЕНИЕ: обновляется значение переменной font.
+        ).pack(anchor="w")  # ПОЯСНЕНИЕ: обновляется значение переменной ).pack(anchor.
 
-        ctk.CTkLabel(
-            logo_frame, text=f"v{APP_VERSION}",
-            font=ctk.CTkFont(size=12),
-            text_color="gray"
-        ).pack(anchor="w")
+        ctk.CTkLabel(  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            logo_frame, text=f"v{APP_VERSION}",  # ПОЯСНЕНИЕ: обновляется значение переменной logo_frame, text.
+            font=ctk.CTkFont(size=12),  # ПОЯСНЕНИЕ: обновляется значение переменной font.
+            text_color="gray"  # ПОЯСНЕНИЕ: обновляется значение переменной text_color.
+        ).pack(anchor="w")  # ПОЯСНЕНИЕ: обновляется значение переменной ).pack(anchor.
 
         # Divider
-        ctk.CTkFrame(sidebar, height=2, fg_color="gray30").pack(fill="x", padx=20, pady=10)
+        ctk.CTkFrame(sidebar, height=2, fg_color="gray30").pack(fill="x", padx=20, pady=10)  # ПОЯСНЕНИЕ: обновляется значение переменной ctk.CTkFrame(sidebar, height.
 
         # AI Selection section
-        ctk.CTkLabel(
-            sidebar, text="Active AI Providers",
-            font=ctk.CTkFont(size=14, weight="bold")
-        ).pack(anchor="w", padx=20, pady=(10, 15))
+        ctk.CTkLabel(  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            sidebar, text="Active AI Providers",  # ПОЯСНЕНИЕ: обновляется значение переменной sidebar, text.
+            font=ctk.CTkFont(size=14, weight="bold")  # ПОЯСНЕНИЕ: обновляется значение переменной font.
+        ).pack(anchor="w", padx=20, pady=(10, 15))  # ПОЯСНЕНИЕ: обновляется значение переменной ).pack(anchor.
 
         # Provider switches
-        switches_frame = ctk.CTkFrame(sidebar, fg_color="transparent")
-        switches_frame.pack(fill="x", padx=20)
+        switches_frame = ctk.CTkFrame(sidebar, fg_color="transparent")  # ПОЯСНЕНИЕ: обновляется значение переменной switches_frame.
+        switches_frame.pack(fill="x", padx=20)  # ПОЯСНЕНИЕ: обновляется значение переменной switches_frame.pack(fill.
 
-        for name, key, color, url, desc in self.PROVIDER_INFO:
-            switch = ModernSwitch(switches_frame, text=name, color=color)
-            switch.pack(fill="x", pady=4)
-            self.provider_switches[name] = switch
+        # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+        for name, key, color, url, desc in self.PROVIDER_INFO:  # ПОЯСНЕНИЕ: запускается цикл for по коллекции.
+            switch = ModernSwitch(switches_frame, text=name, color=color)  # ПОЯСНЕНИЕ: обновляется значение переменной switch.
+            switch.pack(fill="x", pady=4)  # ПОЯСНЕНИЕ: обновляется значение переменной switch.pack(fill.
+            self.provider_switches[name] = switch  # ПОЯСНЕНИЕ: обновляется значение переменной self.provider_switches[name].
 
         # Select/Deselect all buttons
-        btn_frame = ctk.CTkFrame(sidebar, fg_color="transparent")
-        btn_frame.pack(fill="x", padx=20, pady=15)
+        btn_frame = ctk.CTkFrame(sidebar, fg_color="transparent")  # ПОЯСНЕНИЕ: обновляется значение переменной btn_frame.
+        btn_frame.pack(fill="x", padx=20, pady=15)  # ПОЯСНЕНИЕ: обновляется значение переменной btn_frame.pack(fill.
 
-        ctk.CTkButton(
-            btn_frame, text="Select All", height=32,
-            corner_radius=8, fg_color="gray30",
-            command=self._select_all_providers
-        ).pack(side="left", fill="x", expand=True, padx=(0, 5))
+        ctk.CTkButton(  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            btn_frame, text="Select All", height=32,  # ПОЯСНЕНИЕ: обновляется значение переменной btn_frame, text.
+            corner_radius=8, fg_color="gray30",  # ПОЯСНЕНИЕ: обновляется значение переменной corner_radius.
+            command=self._select_all_providers  # ПОЯСНЕНИЕ: обновляется значение переменной command.
+        ).pack(side="left", fill="x", expand=True, padx=(0, 5))  # ПОЯСНЕНИЕ: обновляется значение переменной ).pack(side.
 
-        ctk.CTkButton(
-            btn_frame, text="Deselect All", height=32,
-            corner_radius=8, fg_color="gray30",
-            command=self._deselect_all_providers
-        ).pack(side="left", fill="x", expand=True, padx=(5, 0))
+        ctk.CTkButton(  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            btn_frame, text="Deselect All", height=32,  # ПОЯСНЕНИЕ: обновляется значение переменной btn_frame, text.
+            corner_radius=8, fg_color="gray30",  # ПОЯСНЕНИЕ: обновляется значение переменной corner_radius.
+            command=self._deselect_all_providers  # ПОЯСНЕНИЕ: обновляется значение переменной command.
+        ).pack(side="left", fill="x", expand=True, padx=(5, 0))  # ПОЯСНЕНИЕ: обновляется значение переменной ).pack(side.
 
         # Connection test buttons
-        test_frame = ctk.CTkFrame(sidebar, fg_color="transparent")
-        test_frame.pack(fill="x", padx=20, pady=(10, 0))
+        test_frame = ctk.CTkFrame(sidebar, fg_color="transparent")  # ПОЯСНЕНИЕ: обновляется значение переменной test_frame.
+        test_frame.pack(fill="x", padx=20, pady=(10, 0))  # ПОЯСНЕНИЕ: обновляется значение переменной test_frame.pack(fill.
 
-        ctk.CTkButton(
-            test_frame, text="Test Connections",
-            height=36, corner_radius=8,
-            fg_color="#27ae60", hover_color="#1e8449",
-            command=self._test_all_connections
-        ).pack(fill="x", pady=(0, 5))
+        ctk.CTkButton(  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            test_frame, text="Test Connections",  # ПОЯСНЕНИЕ: обновляется значение переменной test_frame, text.
+            height=36, corner_radius=8,  # ПОЯСНЕНИЕ: обновляется значение переменной height.
+            fg_color="#27ae60", hover_color="#1e8449",  # ПОЯСНЕНИЕ: обновляется значение переменной fg_color.
+            command=self._test_all_connections  # ПОЯСНЕНИЕ: обновляется значение переменной command.
+        ).pack(fill="x", pady=(0, 5))  # ПОЯСНЕНИЕ: обновляется значение переменной ).pack(fill.
 
-        ctk.CTkButton(
-            test_frame, text="Send Test Query",
-            height=36, corner_radius=8,
-            fg_color="#3498db", hover_color="#2980b9",
-            command=self._send_test_query
-        ).pack(fill="x")
+        ctk.CTkButton(  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            test_frame, text="Send Test Query",  # ПОЯСНЕНИЕ: обновляется значение переменной test_frame, text.
+            height=36, corner_radius=8,  # ПОЯСНЕНИЕ: обновляется значение переменной height.
+            fg_color="#3498db", hover_color="#2980b9",  # ПОЯСНЕНИЕ: обновляется значение переменной fg_color.
+            command=self._send_test_query  # ПОЯСНЕНИЕ: обновляется значение переменной command.
+        ).pack(fill="x")  # ПОЯСНЕНИЕ: обновляется значение переменной ).pack(fill.
 
         # Connection status display
-        self.connection_status_label = ctk.CTkLabel(
-            sidebar, text="Status: Not tested",
-            font=ctk.CTkFont(size=11),
-            text_color="gray"
-        )
-        self.connection_status_label.pack(anchor="w", padx=20, pady=(5, 0))
+        self.connection_status_label = ctk.CTkLabel(  # ПОЯСНЕНИЕ: обновляется значение переменной self.connection_status_label.
+            sidebar, text="Status: Not tested",  # ПОЯСНЕНИЕ: обновляется значение переменной sidebar, text.
+            font=ctk.CTkFont(size=11),  # ПОЯСНЕНИЕ: обновляется значение переменной font.
+            text_color="gray"  # ПОЯСНЕНИЕ: обновляется значение переменной text_color.
+        )  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self.connection_status_label.pack(anchor="w", padx=20, pady=(5, 0))  # ПОЯСНЕНИЕ: обновляется значение переменной self.connection_status_label.pack(anchor.
 
         # Divider
-        ctk.CTkFrame(sidebar, height=2, fg_color="gray30").pack(fill="x", padx=20, pady=10)
+        ctk.CTkFrame(sidebar, height=2, fg_color="gray30").pack(fill="x", padx=20, pady=10)  # ПОЯСНЕНИЕ: обновляется значение переменной ctk.CTkFrame(sidebar, height.
 
         # Output directory
-        ctk.CTkLabel(
-            sidebar, text="Output Directory",
-            font=ctk.CTkFont(size=14, weight="bold")
-        ).pack(anchor="w", padx=20, pady=(10, 10))
+        ctk.CTkLabel(  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            sidebar, text="Output Directory",  # ПОЯСНЕНИЕ: обновляется значение переменной sidebar, text.
+            font=ctk.CTkFont(size=14, weight="bold")  # ПОЯСНЕНИЕ: обновляется значение переменной font.
+        ).pack(anchor="w", padx=20, pady=(10, 10))  # ПОЯСНЕНИЕ: обновляется значение переменной ).pack(anchor.
 
-        dir_frame = ctk.CTkFrame(sidebar, fg_color="transparent")
-        dir_frame.pack(fill="x", padx=20)
+        dir_frame = ctk.CTkFrame(sidebar, fg_color="transparent")  # ПОЯСНЕНИЕ: обновляется значение переменной dir_frame.
+        dir_frame.pack(fill="x", padx=20)  # ПОЯСНЕНИЕ: обновляется значение переменной dir_frame.pack(fill.
 
-        self.output_dir_label = ctk.CTkLabel(
-            dir_frame, text=self._truncate_path(self.output_dir),
-            font=ctk.CTkFont(size=11),
-            text_color="gray",
-            anchor="w"
-        )
-        self.output_dir_label.pack(fill="x")
+        self.output_dir_label = ctk.CTkLabel(  # ПОЯСНЕНИЕ: обновляется значение переменной self.output_dir_label.
+            dir_frame, text=self._truncate_path(self.output_dir),  # ПОЯСНЕНИЕ: обновляется значение переменной dir_frame, text.
+            font=ctk.CTkFont(size=11),  # ПОЯСНЕНИЕ: обновляется значение переменной font.
+            text_color="gray",  # ПОЯСНЕНИЕ: обновляется значение переменной text_color.
+            anchor="w"  # ПОЯСНЕНИЕ: обновляется значение переменной anchor.
+        )  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self.output_dir_label.pack(fill="x")  # ПОЯСНЕНИЕ: обновляется значение переменной self.output_dir_label.pack(fill.
 
-        ctk.CTkButton(
-            dir_frame, text="Change Directory",
-            height=32, corner_radius=8, fg_color="gray30",
-            command=self._select_output_dir
-        ).pack(fill="x", pady=(8, 0))
+        ctk.CTkButton(  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            dir_frame, text="Change Directory",  # ПОЯСНЕНИЕ: обновляется значение переменной dir_frame, text.
+            height=32, corner_radius=8, fg_color="gray30",  # ПОЯСНЕНИЕ: обновляется значение переменной height.
+            command=self._select_output_dir  # ПОЯСНЕНИЕ: обновляется значение переменной command.
+        ).pack(fill="x", pady=(8, 0))  # ПОЯСНЕНИЕ: обновляется значение переменной ).pack(fill.
 
         # Theme toggle at bottom
-        theme_frame = ctk.CTkFrame(sidebar, fg_color="transparent")
-        theme_frame.pack(side="bottom", fill="x", padx=20, pady=20)
+        theme_frame = ctk.CTkFrame(sidebar, fg_color="transparent")  # ПОЯСНЕНИЕ: обновляется значение переменной theme_frame.
+        theme_frame.pack(side="bottom", fill="x", padx=20, pady=20)  # ПОЯСНЕНИЕ: обновляется значение переменной theme_frame.pack(side.
 
-        ctk.CTkLabel(
-            theme_frame, text="Dark Mode",
-            font=ctk.CTkFont(size=12)
-        ).pack(side="left")
+        ctk.CTkLabel(  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            theme_frame, text="Dark Mode",  # ПОЯСНЕНИЕ: обновляется значение переменной theme_frame, text.
+            font=ctk.CTkFont(size=12)  # ПОЯСНЕНИЕ: обновляется значение переменной font.
+        ).pack(side="left")  # ПОЯСНЕНИЕ: обновляется значение переменной ).pack(side.
 
-        self.theme_switch = ctk.CTkSwitch(
-            theme_frame, text="",
-            command=self._toggle_theme
-        )
-        self.theme_switch.pack(side="right")
-        self.theme_switch.select()
+        self.theme_switch = ctk.CTkSwitch(  # ПОЯСНЕНИЕ: обновляется значение переменной self.theme_switch.
+            theme_frame, text="",  # ПОЯСНЕНИЕ: обновляется значение переменной theme_frame, text.
+            command=self._toggle_theme  # ПОЯСНЕНИЕ: обновляется значение переменной command.
+        )  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self.theme_switch.pack(side="right")  # ПОЯСНЕНИЕ: обновляется значение переменной self.theme_switch.pack(side.
+        self.theme_switch.select()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def _create_main_content(self):
-        """Create main content area"""
-        main = ctk.CTkFrame(self, fg_color="transparent")
-        main.grid(row=0, column=1, sticky="nsew", padx=20, pady=20)
-        main.grid_rowconfigure(1, weight=1)
-        main.grid_columnconfigure(0, weight=1)
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_create_main_content` — выполняет отдельный шаг бизнес-логики.
+    def _create_main_content(self):  # ПОЯСНЕНИЕ: объявляется функция _create_main_content с параметрами из сигнатуры.
+        """Create main content area"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        main = ctk.CTkFrame(self, fg_color="transparent")  # ПОЯСНЕНИЕ: обновляется значение переменной main.
+        main.grid(row=0, column=1, sticky="nsew", padx=20, pady=20)  # ПОЯСНЕНИЕ: обновляется значение переменной main.grid(row.
+        main.grid_rowconfigure(1, weight=1)  # ПОЯСНЕНИЕ: обновляется значение переменной main.grid_rowconfigure(1, weight.
+        main.grid_columnconfigure(0, weight=1)  # ПОЯСНЕНИЕ: обновляется значение переменной main.grid_columnconfigure(0, weight.
 
         # Tabs
-        self.tabview = ctk.CTkTabview(main, corner_radius=12)
-        self.tabview.grid(row=0, column=0, sticky="nsew", rowspan=2)
+        self.tabview = ctk.CTkTabview(main, corner_radius=12)  # ПОЯСНЕНИЕ: обновляется значение переменной self.tabview.
+        self.tabview.grid(row=0, column=0, sticky="nsew", rowspan=2)  # ПОЯСНЕНИЕ: обновляется значение переменной self.tabview.grid(row.
 
         # Create tabs
-        self.tab_chat = self.tabview.add("Chat")
-        self.tab_admin_chat = self.tabview.add("Admin_Chat")
-        self.tab_settings = self.tabview.add("API Settings")
-        self.tab_arbitrator = self.tabview.add("Arbitrator")
-        self.tab_role = self.tabview.add("Role")
-        self.tab_prohibitions = self.tabview.add("Prohibitions")
-        self.tab_tasks = self.tabview.add("Tasks")
-        self.tab_logs = self.tabview.add("Logs")
+        self.tab_chat = self.tabview.add("Chat")  # ПОЯСНЕНИЕ: обновляется значение переменной self.tab_chat.
+        self.tab_admin_chat = self.tabview.add("Admin_Chat")  # ПОЯСНЕНИЕ: обновляется значение переменной self.tab_admin_chat.
+        self.tab_settings = self.tabview.add("API Settings")  # ПОЯСНЕНИЕ: обновляется значение переменной self.tab_settings.
+        self.tab_arbitrator = self.tabview.add("Arbitrator")  # ПОЯСНЕНИЕ: обновляется значение переменной self.tab_arbitrator.
+        self.tab_role = self.tabview.add("Role")  # ПОЯСНЕНИЕ: обновляется значение переменной self.tab_role.
+        self.tab_prohibitions = self.tabview.add("Prohibitions")  # ПОЯСНЕНИЕ: обновляется значение переменной self.tab_prohibitions.
+        self.tab_tasks = self.tabview.add("Tasks")  # ПОЯСНЕНИЕ: обновляется значение переменной self.tab_tasks.
+        self.tab_logs = self.tabview.add("Logs")  # ПОЯСНЕНИЕ: обновляется значение переменной self.tab_logs.
 
-        self._create_chat_tab()
-        self._create_admin_chat_tab()
-        self._create_settings_tab()
-        self._create_arbitrator_tab()
-        self._create_role_tab()
-        self._create_prohibitions_tab()
-        self._create_tasks_tab()
-        self._create_logs_tab()
+        self._create_chat_tab()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self._create_admin_chat_tab()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self._create_settings_tab()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self._create_arbitrator_tab()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self._create_role_tab()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self._create_prohibitions_tab()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self._create_tasks_tab()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self._create_logs_tab()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def _create_chat_tab(self):
-        """Create chat tab"""
-        self.tab_chat.grid_rowconfigure(1, weight=1)
-        self.tab_chat.grid_columnconfigure(0, weight=1)
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_create_chat_tab` — выполняет отдельный шаг бизнес-логики.
+    def _create_chat_tab(self):  # ПОЯСНЕНИЕ: объявляется функция _create_chat_tab с параметрами из сигнатуры.
+        """Create chat tab"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        self.tab_chat.grid_rowconfigure(1, weight=1)  # ПОЯСНЕНИЕ: обновляется значение переменной self.tab_chat.grid_rowconfigure(1, weight.
+        self.tab_chat.grid_columnconfigure(0, weight=1)  # ПОЯСНЕНИЕ: обновляется значение переменной self.tab_chat.grid_columnconfigure(0, weight.
 
         # Header
-        header = ctk.CTkFrame(self.tab_chat, fg_color="transparent")
-        header.grid(row=0, column=0, sticky="ew", pady=(0, 10))
+        header = ctk.CTkFrame(self.tab_chat, fg_color="transparent")  # ПОЯСНЕНИЕ: обновляется значение переменной header.
+        header.grid(row=0, column=0, sticky="ew", pady=(0, 10))  # ПОЯСНЕНИЕ: обновляется значение переменной header.grid(row.
 
-        ctk.CTkLabel(
-            header, text="Ask AI",
-            font=ctk.CTkFont(size=20, weight="bold")
-        ).pack(side="left")
+        ctk.CTkLabel(  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            header, text="Ask AI",  # ПОЯСНЕНИЕ: обновляется значение переменной header, text.
+            font=ctk.CTkFont(size=20, weight="bold")  # ПОЯСНЕНИЕ: обновляется значение переменной font.
+        ).pack(side="left")  # ПОЯСНЕНИЕ: обновляется значение переменной ).pack(side.
 
         # Status label
-        self.status_label = ctk.CTkLabel(
-            header, text="Ready",
-            font=ctk.CTkFont(size=12),
-            text_color="gray"
-        )
-        self.status_label.pack(side="right")
+        self.status_label = ctk.CTkLabel(  # ПОЯСНЕНИЕ: обновляется значение переменной self.status_label.
+            header, text="Ready",  # ПОЯСНЕНИЕ: обновляется значение переменной header, text.
+            font=ctk.CTkFont(size=12),  # ПОЯСНЕНИЕ: обновляется значение переменной font.
+            text_color="gray"  # ПОЯСНЕНИЕ: обновляется значение переменной text_color.
+        )  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self.status_label.pack(side="right")  # ПОЯСНЕНИЕ: обновляется значение переменной self.status_label.pack(side.
 
         # Chat display
-        self.chat_display = ctk.CTkTextbox(
-            self.tab_chat, corner_radius=12,
-            font=ctk.CTkFont(family="Consolas", size=12),
-            state="disabled"
-        )
-        self.chat_display.grid(row=1, column=0, sticky="nsew", pady=(0, 10))
+        self.chat_display = ctk.CTkTextbox(  # ПОЯСНЕНИЕ: обновляется значение переменной self.chat_display.
+            self.tab_chat, corner_radius=12,  # ПОЯСНЕНИЕ: обновляется значение переменной self.tab_chat, corner_radius.
+            font=ctk.CTkFont(family="Consolas", size=12),  # ПОЯСНЕНИЕ: обновляется значение переменной font.
+            state="disabled"  # ПОЯСНЕНИЕ: обновляется значение переменной state.
+        )  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self.chat_display.grid(row=1, column=0, sticky="nsew", pady=(0, 10))  # ПОЯСНЕНИЕ: обновляется значение переменной self.chat_display.grid(row.
 
         # Input area
-        input_frame = ctk.CTkFrame(self.tab_chat, fg_color="transparent")
-        input_frame.grid(row=2, column=0, sticky="ew")
-        input_frame.grid_columnconfigure(0, weight=1)
+        input_frame = ctk.CTkFrame(self.tab_chat, fg_color="transparent")  # ПОЯСНЕНИЕ: обновляется значение переменной input_frame.
+        input_frame.grid(row=2, column=0, sticky="ew")  # ПОЯСНЕНИЕ: обновляется значение переменной input_frame.grid(row.
+        input_frame.grid_columnconfigure(0, weight=1)  # ПОЯСНЕНИЕ: обновляется значение переменной input_frame.grid_columnconfigure(0, weight.
 
-        self.chat_input = ctk.CTkTextbox(
-            input_frame, height=100, corner_radius=12,
-            font=ctk.CTkFont(size=13)
-        )
-        self.chat_input.grid(row=0, column=0, sticky="ew", padx=(0, 10))
+        self.chat_input = ctk.CTkTextbox(  # ПОЯСНЕНИЕ: обновляется значение переменной self.chat_input.
+            input_frame, height=100, corner_radius=12,  # ПОЯСНЕНИЕ: обновляется значение переменной input_frame, height.
+            font=ctk.CTkFont(size=13)  # ПОЯСНЕНИЕ: обновляется значение переменной font.
+        )  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self.chat_input.grid(row=0, column=0, sticky="ew", padx=(0, 10))  # ПОЯСНЕНИЕ: обновляется значение переменной self.chat_input.grid(row.
 
         # Keyboard shortcuts
         # Enter - send query, Shift+Enter - new line
-        self.chat_input.bind("<Return>", self._handle_enter_key)
-        self.chat_input.bind("<Shift-Return>", self._handle_shift_enter)
-        self.chat_input.bind("<Control-Return>", lambda e: self._send_query())
+        self.chat_input.bind("<Return>", self._handle_enter_key)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self.chat_input.bind("<Shift-Return>", self._handle_shift_enter)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self.chat_input.bind("<Control-Return>", lambda e: self._send_query())  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
         # Note: Ctrl+V works by default in CTkTextbox
 
         # Context menu for input
-        self._create_context_menu()
+        self._create_context_menu()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
         # Buttons
-        btn_frame = ctk.CTkFrame(input_frame, fg_color="transparent")
-        btn_frame.grid(row=0, column=1)
+        btn_frame = ctk.CTkFrame(input_frame, fg_color="transparent")  # ПОЯСНЕНИЕ: обновляется значение переменной btn_frame.
+        btn_frame.grid(row=0, column=1)  # ПОЯСНЕНИЕ: обновляется значение переменной btn_frame.grid(row.
 
-        self.send_btn = ctk.CTkButton(
-            btn_frame, text="Send", width=100, height=40,
-            corner_radius=10, font=ctk.CTkFont(size=14, weight="bold"),
-            command=self._send_query
-        )
-        self.send_btn.pack(pady=(0, 4))
+        self.send_btn = ctk.CTkButton(  # ПОЯСНЕНИЕ: обновляется значение переменной self.send_btn.
+            btn_frame, text="Send", width=100, height=40,  # ПОЯСНЕНИЕ: обновляется значение переменной btn_frame, text.
+            corner_radius=10, font=ctk.CTkFont(size=14, weight="bold"),  # ПОЯСНЕНИЕ: обновляется значение переменной corner_radius.
+            command=self._send_query  # ПОЯСНЕНИЕ: обновляется значение переменной command.
+        )  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self.send_btn.pack(pady=(0, 4))  # ПОЯСНЕНИЕ: обновляется значение переменной self.send_btn.pack(pady.
 
-        ctk.CTkButton(
-            btn_frame, text="Paste", width=100, height=30,
-            corner_radius=10, fg_color="#2980b9", hover_color="#1f618d",
-            command=self._paste_from_clipboard
-        ).pack(pady=(0, 4))
+        ctk.CTkButton(  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            btn_frame, text="Paste", width=100, height=30,  # ПОЯСНЕНИЕ: обновляется значение переменной btn_frame, text.
+            corner_radius=10, fg_color="#2980b9", hover_color="#1f618d",  # ПОЯСНЕНИЕ: обновляется значение переменной corner_radius.
+            command=self._paste_from_clipboard  # ПОЯСНЕНИЕ: обновляется значение переменной command.
+        ).pack(pady=(0, 4))  # ПОЯСНЕНИЕ: обновляется значение переменной ).pack(pady.
 
-        ctk.CTkButton(
-            btn_frame, text="Clear", width=100, height=30,
-            corner_radius=10, fg_color="gray30",
-            command=self._clear_chat
-        ).pack(pady=(0, 4))
+        ctk.CTkButton(  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            btn_frame, text="Clear", width=100, height=30,  # ПОЯСНЕНИЕ: обновляется значение переменной btn_frame, text.
+            corner_radius=10, fg_color="gray30",  # ПОЯСНЕНИЕ: обновляется значение переменной corner_radius.
+            command=self._clear_chat  # ПОЯСНЕНИЕ: обновляется значение переменной command.
+        ).pack(pady=(0, 4))  # ПОЯСНЕНИЕ: обновляется значение переменной ).pack(pady.
 
-        ctk.CTkButton(
-            btn_frame, text="New Chat", width=100, height=30,
-            corner_radius=10, fg_color="#e74c3c", hover_color="#c0392b",
-            command=self._new_chat
-        ).pack(pady=(0, 4))
+        ctk.CTkButton(  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            btn_frame, text="New Chat", width=100, height=30,  # ПОЯСНЕНИЕ: обновляется значение переменной btn_frame, text.
+            corner_radius=10, fg_color="#e74c3c", hover_color="#c0392b",  # ПОЯСНЕНИЕ: обновляется значение переменной corner_radius.
+            command=self._new_chat  # ПОЯСНЕНИЕ: обновляется значение переменной command.
+        ).pack(pady=(0, 4))  # ПОЯСНЕНИЕ: обновляется значение переменной ).pack(pady.
 
-        ctk.CTkButton(
-            btn_frame, text="Save Chat", width=100, height=30,
-            corner_radius=10, fg_color="#9b59b6", hover_color="#8e44ad",
-            command=self._save_chat_to_file
-        ).pack()
+        ctk.CTkButton(  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            btn_frame, text="Save Chat", width=100, height=30,  # ПОЯСНЕНИЕ: обновляется значение переменной btn_frame, text.
+            corner_radius=10, fg_color="#9b59b6", hover_color="#8e44ad",  # ПОЯСНЕНИЕ: обновляется значение переменной corner_radius.
+            command=self._save_chat_to_file  # ПОЯСНЕНИЕ: обновляется значение переменной command.
+        ).pack()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
         # Progress bar
-        self.progress = ctk.CTkProgressBar(self.tab_chat, mode="indeterminate", height=3)
+        self.progress = ctk.CTkProgressBar(self.tab_chat, mode="indeterminate", height=3)  # ПОЯСНЕНИЕ: обновляется значение переменной self.progress.
 
         # ===== Branches Panel =====
-        branches_frame = ctk.CTkFrame(self.tab_chat, corner_radius=12)
-        branches_frame.grid(row=4, column=0, sticky="ew", pady=(10, 0))
+        branches_frame = ctk.CTkFrame(self.tab_chat, corner_radius=12)  # ПОЯСНЕНИЕ: обновляется значение переменной branches_frame.
+        branches_frame.grid(row=4, column=0, sticky="ew", pady=(10, 0))  # ПОЯСНЕНИЕ: обновляется значение переменной branches_frame.grid(row.
 
         # Branches header
-        branches_header = ctk.CTkFrame(branches_frame, fg_color="transparent")
-        branches_header.pack(fill="x", padx=10, pady=(10, 5))
+        branches_header = ctk.CTkFrame(branches_frame, fg_color="transparent")  # ПОЯСНЕНИЕ: обновляется значение переменной branches_header.
+        branches_header.pack(fill="x", padx=10, pady=(10, 5))  # ПОЯСНЕНИЕ: обновляется значение переменной branches_header.pack(fill.
 
-        ctk.CTkLabel(
-            branches_header, text="Conversation Branches",
-            font=ctk.CTkFont(size=14, weight="bold")
-        ).pack(side="left")
+        ctk.CTkLabel(  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            branches_header, text="Conversation Branches",  # ПОЯСНЕНИЕ: обновляется значение переменной branches_header, text.
+            font=ctk.CTkFont(size=14, weight="bold")  # ПОЯСНЕНИЕ: обновляется значение переменной font.
+        ).pack(side="left")  # ПОЯСНЕНИЕ: обновляется значение переменной ).pack(side.
 
         # Current branch indicator
-        self.current_branch_label = ctk.CTkLabel(
-            branches_header, text="Current: None",
-            font=ctk.CTkFont(size=11),
-            text_color="gray"
-        )
-        self.current_branch_label.pack(side="right")
+        self.current_branch_label = ctk.CTkLabel(  # ПОЯСНЕНИЕ: обновляется значение переменной self.current_branch_label.
+            branches_header, text="Current: None",  # ПОЯСНЕНИЕ: обновляется значение переменной branches_header, text.
+            font=ctk.CTkFont(size=11),  # ПОЯСНЕНИЕ: обновляется значение переменной font.
+            text_color="gray"  # ПОЯСНЕНИЕ: обновляется значение переменной text_color.
+        )  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self.current_branch_label.pack(side="right")  # ПОЯСНЕНИЕ: обновляется значение переменной self.current_branch_label.pack(side.
 
         # Branches list (combobox)
-        branches_controls = ctk.CTkFrame(branches_frame, fg_color="transparent")
-        branches_controls.pack(fill="x", padx=10, pady=(0, 10))
+        branches_controls = ctk.CTkFrame(branches_frame, fg_color="transparent")  # ПОЯСНЕНИЕ: обновляется значение переменной branches_controls.
+        branches_controls.pack(fill="x", padx=10, pady=(0, 10))  # ПОЯСНЕНИЕ: обновляется значение переменной branches_controls.pack(fill.
 
-        self.branches_combo = ctk.CTkComboBox(
-            branches_controls, width=250, height=32,
-            values=["No saved branches"],
-            state="readonly",
-            command=self._on_branch_selected
-        )
-        self.branches_combo.pack(side="left", padx=(0, 10))
+        self.branches_combo = ctk.CTkComboBox(  # ПОЯСНЕНИЕ: обновляется значение переменной self.branches_combo.
+            branches_controls, width=250, height=32,  # ПОЯСНЕНИЕ: обновляется значение переменной branches_controls, width.
+            values=["No saved branches"],  # ПОЯСНЕНИЕ: обновляется значение переменной values.
+            state="readonly",  # ПОЯСНЕНИЕ: обновляется значение переменной state.
+            command=self._on_branch_selected  # ПОЯСНЕНИЕ: обновляется значение переменной command.
+        )  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self.branches_combo.pack(side="left", padx=(0, 10))  # ПОЯСНЕНИЕ: обновляется значение переменной self.branches_combo.pack(side.
 
         # Branch buttons
-        ctk.CTkButton(
-            branches_controls, text="Save", width=70, height=32,
-            corner_radius=8, fg_color="#27ae60", hover_color="#1e8449",
-            command=self._save_branch
-        ).pack(side="left", padx=(0, 5))
+        ctk.CTkButton(  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            branches_controls, text="Save", width=70, height=32,  # ПОЯСНЕНИЕ: обновляется значение переменной branches_controls, text.
+            corner_radius=8, fg_color="#27ae60", hover_color="#1e8449",  # ПОЯСНЕНИЕ: обновляется значение переменной corner_radius.
+            command=self._save_branch  # ПОЯСНЕНИЕ: обновляется значение переменной command.
+        ).pack(side="left", padx=(0, 5))  # ПОЯСНЕНИЕ: обновляется значение переменной ).pack(side.
 
-        ctk.CTkButton(
-            branches_controls, text="Load", width=70, height=32,
-            corner_radius=8, fg_color="#3498db", hover_color="#2980b9",
-            command=self._load_branch
-        ).pack(side="left", padx=(0, 5))
+        ctk.CTkButton(  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            branches_controls, text="Load", width=70, height=32,  # ПОЯСНЕНИЕ: обновляется значение переменной branches_controls, text.
+            corner_radius=8, fg_color="#3498db", hover_color="#2980b9",  # ПОЯСНЕНИЕ: обновляется значение переменной corner_radius.
+            command=self._load_branch  # ПОЯСНЕНИЕ: обновляется значение переменной command.
+        ).pack(side="left", padx=(0, 5))  # ПОЯСНЕНИЕ: обновляется значение переменной ).pack(side.
 
-        ctk.CTkButton(
-            branches_controls, text="Delete", width=70, height=32,
-            corner_radius=8, fg_color="#e74c3c", hover_color="#c0392b",
-            command=self._delete_branch
-        ).pack(side="left", padx=(0, 5))
+        ctk.CTkButton(  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            branches_controls, text="Delete", width=70, height=32,  # ПОЯСНЕНИЕ: обновляется значение переменной branches_controls, text.
+            corner_radius=8, fg_color="#e74c3c", hover_color="#c0392b",  # ПОЯСНЕНИЕ: обновляется значение переменной corner_radius.
+            command=self._delete_branch  # ПОЯСНЕНИЕ: обновляется значение переменной command.
+        ).pack(side="left", padx=(0, 5))  # ПОЯСНЕНИЕ: обновляется значение переменной ).pack(side.
 
-        ctk.CTkButton(
-            branches_controls, text="Refresh", width=70, height=32,
-            corner_radius=8, fg_color="gray30",
-            command=self._refresh_branches_list
-        ).pack(side="left")
+        ctk.CTkButton(  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            branches_controls, text="Refresh", width=70, height=32,  # ПОЯСНЕНИЕ: обновляется значение переменной branches_controls, text.
+            corner_radius=8, fg_color="gray30",  # ПОЯСНЕНИЕ: обновляется значение переменной corner_radius.
+            command=self._refresh_branches_list  # ПОЯСНЕНИЕ: обновляется значение переменной command.
+        ).pack(side="left")  # ПОЯСНЕНИЕ: обновляется значение переменной ).pack(side.
 
         # Load initial branches list
-        self._refresh_branches_list()
+        self._refresh_branches_list()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def _create_admin_chat_tab(self):
-        """Create Admin Chat tab with interaction log"""
-        self.tab_admin_chat.grid_rowconfigure(1, weight=1)
-        self.tab_admin_chat.grid_columnconfigure(0, weight=1)
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_create_admin_chat_tab` — выполняет отдельный шаг бизнес-логики.
+    def _create_admin_chat_tab(self):  # ПОЯСНЕНИЕ: объявляется функция _create_admin_chat_tab с параметрами из сигнатуры.
+        """Create Admin Chat tab with interaction log"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        self.tab_admin_chat.grid_rowconfigure(1, weight=1)  # ПОЯСНЕНИЕ: обновляется значение переменной self.tab_admin_chat.grid_rowconfigure(1, weight.
+        self.tab_admin_chat.grid_columnconfigure(0, weight=1)  # ПОЯСНЕНИЕ: обновляется значение переменной self.tab_admin_chat.grid_columnconfigure(0, weight.
 
-        header = ctk.CTkFrame(self.tab_admin_chat, fg_color="transparent")
-        header.grid(row=0, column=0, sticky="ew", pady=(0, 10))
+        header = ctk.CTkFrame(self.tab_admin_chat, fg_color="transparent")  # ПОЯСНЕНИЕ: обновляется значение переменной header.
+        header.grid(row=0, column=0, sticky="ew", pady=(0, 10))  # ПОЯСНЕНИЕ: обновляется значение переменной header.grid(row.
 
-        ctk.CTkLabel(
-            header, text="Admin Chat Log",
-            font=ctk.CTkFont(size=20, weight="bold")
-        ).pack(side="left")
+        ctk.CTkLabel(  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            header, text="Admin Chat Log",  # ПОЯСНЕНИЕ: обновляется значение переменной header, text.
+            font=ctk.CTkFont(size=20, weight="bold")  # ПОЯСНЕНИЕ: обновляется значение переменной font.
+        ).pack(side="left")  # ПОЯСНЕНИЕ: обновляется значение переменной ).pack(side.
 
-        self.admin_log_status = ctk.CTkLabel(
-            header, text="Ready",
-            font=ctk.CTkFont(size=12),
-            text_color="gray"
-        )
-        self.admin_log_status.pack(side="right")
+        self.admin_log_status = ctk.CTkLabel(  # ПОЯСНЕНИЕ: обновляется значение переменной self.admin_log_status.
+            header, text="Ready",  # ПОЯСНЕНИЕ: обновляется значение переменной header, text.
+            font=ctk.CTkFont(size=12),  # ПОЯСНЕНИЕ: обновляется значение переменной font.
+            text_color="gray"  # ПОЯСНЕНИЕ: обновляется значение переменной text_color.
+        )  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self.admin_log_status.pack(side="right")  # ПОЯСНЕНИЕ: обновляется значение переменной self.admin_log_status.pack(side.
 
-        self.admin_log_display = ctk.CTkTextbox(
-            self.tab_admin_chat, corner_radius=12,
-            font=ctk.CTkFont(family="Consolas", size=11),
-            state="disabled"
-        )
-        self.admin_log_display.grid(row=1, column=0, sticky="nsew", pady=(0, 10))
+        self.admin_log_display = ctk.CTkTextbox(  # ПОЯСНЕНИЕ: обновляется значение переменной self.admin_log_display.
+            self.tab_admin_chat, corner_radius=12,  # ПОЯСНЕНИЕ: обновляется значение переменной self.tab_admin_chat, corner_radius.
+            font=ctk.CTkFont(family="Consolas", size=11),  # ПОЯСНЕНИЕ: обновляется значение переменной font.
+            state="disabled"  # ПОЯСНЕНИЕ: обновляется значение переменной state.
+        )  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self.admin_log_display.grid(row=1, column=0, sticky="nsew", pady=(0, 10))  # ПОЯСНЕНИЕ: обновляется значение переменной self.admin_log_display.grid(row.
 
-        controls = ctk.CTkFrame(self.tab_admin_chat, fg_color="transparent")
-        controls.grid(row=2, column=0, sticky="ew")
+        controls = ctk.CTkFrame(self.tab_admin_chat, fg_color="transparent")  # ПОЯСНЕНИЕ: обновляется значение переменной controls.
+        controls.grid(row=2, column=0, sticky="ew")  # ПОЯСНЕНИЕ: обновляется значение переменной controls.grid(row.
 
-        self.admin_log_dir = None
+        self.admin_log_dir = None  # ПОЯСНЕНИЕ: обновляется значение переменной self.admin_log_dir.
 
-        ctk.CTkButton(
-            controls, text="Choose Folder", height=36,
-            corner_radius=8, fg_color="gray30",
-            command=self._choose_admin_log_dir
-        ).pack(side="left", padx=(0, 10))
+        ctk.CTkButton(  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            controls, text="Choose Folder", height=36,  # ПОЯСНЕНИЕ: обновляется значение переменной controls, text.
+            corner_radius=8, fg_color="gray30",  # ПОЯСНЕНИЕ: обновляется значение переменной corner_radius.
+            command=self._choose_admin_log_dir  # ПОЯСНЕНИЕ: обновляется значение переменной command.
+        ).pack(side="left", padx=(0, 10))  # ПОЯСНЕНИЕ: обновляется значение переменной ).pack(side.
 
-        ctk.CTkButton(
-            controls, text="Save Log", height=36,
-            corner_radius=8, fg_color="#2980b9", hover_color="#1f618d",
-            command=self._save_admin_log
-        ).pack(side="left")
+        ctk.CTkButton(  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            controls, text="Save Log", height=36,  # ПОЯСНЕНИЕ: обновляется значение переменной controls, text.
+            corner_radius=8, fg_color="#2980b9", hover_color="#1f618d",  # ПОЯСНЕНИЕ: обновляется значение переменной corner_radius.
+            command=self._save_admin_log  # ПОЯСНЕНИЕ: обновляется значение переменной command.
+        ).pack(side="left")  # ПОЯСНЕНИЕ: обновляется значение переменной ).pack(side.
 
-        self._bind_clipboard_shortcuts(self.admin_log_display, readonly=True)
+        self._bind_clipboard_shortcuts(self.admin_log_display, readonly=True)  # ПОЯСНЕНИЕ: обновляется значение переменной self._bind_clipboard_shortcuts(self.admin_log_disp.
 
-    def _create_settings_tab(self):
-        """Create settings tab"""
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_create_settings_tab` — выполняет отдельный шаг бизнес-логики.
+    def _create_settings_tab(self):  # ПОЯСНЕНИЕ: объявляется функция _create_settings_tab с параметрами из сигнатуры.
+        """Create settings tab"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
         # Scrollable frame for API cards
-        scroll = ctk.CTkScrollableFrame(self.tab_settings, corner_radius=0)
-        scroll.pack(fill="both", expand=True)
+        scroll = ctk.CTkScrollableFrame(self.tab_settings, corner_radius=0)  # ПОЯСНЕНИЕ: обновляется значение переменной scroll.
+        scroll.pack(fill="both", expand=True)  # ПОЯСНЕНИЕ: обновляется значение переменной scroll.pack(fill.
 
-        ctk.CTkLabel(
-            scroll, text="API Keys Configuration",
-            font=ctk.CTkFont(size=20, weight="bold")
-        ).pack(anchor="w", pady=(0, 15))
+        ctk.CTkLabel(  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            scroll, text="API Keys Configuration",  # ПОЯСНЕНИЕ: обновляется значение переменной scroll, text.
+            font=ctk.CTkFont(size=20, weight="bold")  # ПОЯСНЕНИЕ: обновляется значение переменной font.
+        ).pack(anchor="w", pady=(0, 15))  # ПОЯСНЕНИЕ: обновляется значение переменной ).pack(anchor.
 
         # API cards grid
-        cards_frame = ctk.CTkFrame(scroll, fg_color="transparent")
-        cards_frame.pack(fill="x")
+        cards_frame = ctk.CTkFrame(scroll, fg_color="transparent")  # ПОЯСНЕНИЕ: обновляется значение переменной cards_frame.
+        cards_frame.pack(fill="x")  # ПОЯСНЕНИЕ: обновляется значение переменной cards_frame.pack(fill.
 
-        for i, (name, key, color, url, desc) in enumerate(self.PROVIDER_INFO):
-            card = APIKeyCard(cards_frame, name, color, url, desc)
-            card.pack(fill="x", pady=8)
-            self.api_cards[key] = card
-            self._bind_clipboard_shortcuts(card.key_entry, readonly=False)
-            self._bind_clipboard_shortcuts(card.model_entry, readonly=False)
+        # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+        for i, (name, key, color, url, desc) in enumerate(self.PROVIDER_INFO):  # ПОЯСНЕНИЕ: запускается цикл for по коллекции.
+            card = APIKeyCard(cards_frame, name, color, url, desc)  # ПОЯСНЕНИЕ: обновляется значение переменной card.
+            card.pack(fill="x", pady=8)  # ПОЯСНЕНИЕ: обновляется значение переменной card.pack(fill.
+            self.api_cards[key] = card  # ПОЯСНЕНИЕ: обновляется значение переменной self.api_cards[key].
+            self._bind_clipboard_shortcuts(card.key_entry, readonly=False)  # ПОЯСНЕНИЕ: обновляется значение переменной self._bind_clipboard_shortcuts(card.key_entry, rea.
+            self._bind_clipboard_shortcuts(card.model_entry, readonly=False)  # ПОЯСНЕНИЕ: обновляется значение переменной self._bind_clipboard_shortcuts(card.model_entry, r.
 
         # Save button
-        btn_frame = ctk.CTkFrame(scroll, fg_color="transparent")
-        btn_frame.pack(fill="x", pady=20)
+        btn_frame = ctk.CTkFrame(scroll, fg_color="transparent")  # ПОЯСНЕНИЕ: обновляется значение переменной btn_frame.
+        btn_frame.pack(fill="x", pady=20)  # ПОЯСНЕНИЕ: обновляется значение переменной btn_frame.pack(fill.
 
-        ctk.CTkButton(
-            btn_frame, text="Save Settings", height=45,
-            corner_radius=10, font=ctk.CTkFont(size=14, weight="bold"),
-            command=self._save_settings
-        ).pack(side="left", padx=(0, 10))
+        ctk.CTkButton(  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            btn_frame, text="Save Settings", height=45,  # ПОЯСНЕНИЕ: обновляется значение переменной btn_frame, text.
+            corner_radius=10, font=ctk.CTkFont(size=14, weight="bold"),  # ПОЯСНЕНИЕ: обновляется значение переменной corner_radius.
+            command=self._save_settings  # ПОЯСНЕНИЕ: обновляется значение переменной command.
+        ).pack(side="left", padx=(0, 10))  # ПОЯСНЕНИЕ: обновляется значение переменной ).pack(side.
 
-        ctk.CTkButton(
-            btn_frame, text="Test Connections", height=45,
-            corner_radius=10, fg_color="gray30",
-            command=self._check_all_connections
-        ).pack(side="left")
+        ctk.CTkButton(  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            btn_frame, text="Test Connections", height=45,  # ПОЯСНЕНИЕ: обновляется значение переменной btn_frame, text.
+            corner_radius=10, fg_color="gray30",  # ПОЯСНЕНИЕ: обновляется значение переменной corner_radius.
+            command=self._check_all_connections  # ПОЯСНЕНИЕ: обновляется значение переменной command.
+        ).pack(side="left")  # ПОЯСНЕНИЕ: обновляется значение переменной ).pack(side.
 
-    def _create_logs_tab(self):
-        """Create logs tab"""
-        self.tab_logs.grid_rowconfigure(1, weight=1)
-        self.tab_logs.grid_columnconfigure(0, weight=1)
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_create_logs_tab` — выполняет отдельный шаг бизнес-логики.
+    def _create_logs_tab(self):  # ПОЯСНЕНИЕ: объявляется функция _create_logs_tab с параметрами из сигнатуры.
+        """Create logs tab"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        self.tab_logs.grid_rowconfigure(1, weight=1)  # ПОЯСНЕНИЕ: обновляется значение переменной self.tab_logs.grid_rowconfigure(1, weight.
+        self.tab_logs.grid_columnconfigure(0, weight=1)  # ПОЯСНЕНИЕ: обновляется значение переменной self.tab_logs.grid_columnconfigure(0, weight.
 
         # Header
-        header = ctk.CTkFrame(self.tab_logs, fg_color="transparent")
-        header.grid(row=0, column=0, sticky="ew", pady=(0, 10))
+        header = ctk.CTkFrame(self.tab_logs, fg_color="transparent")  # ПОЯСНЕНИЕ: обновляется значение переменной header.
+        header.grid(row=0, column=0, sticky="ew", pady=(0, 10))  # ПОЯСНЕНИЕ: обновляется значение переменной header.grid(row.
 
-        ctk.CTkLabel(
-            header, text="Logs & History",
-            font=ctk.CTkFont(size=20, weight="bold")
-        ).pack(side="left")
+        ctk.CTkLabel(  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            header, text="Logs & History",  # ПОЯСНЕНИЕ: обновляется значение переменной header, text.
+            font=ctk.CTkFont(size=20, weight="bold")  # ПОЯСНЕНИЕ: обновляется значение переменной font.
+        ).pack(side="left")  # ПОЯСНЕНИЕ: обновляется значение переменной ).pack(side.
 
         # Stats label
-        self.logs_stats_label = ctk.CTkLabel(
-            header, text="Responses: 0 | Errors: 0",
-            font=ctk.CTkFont(size=12),
-            text_color="gray"
-        )
-        self.logs_stats_label.pack(side="right")
+        self.logs_stats_label = ctk.CTkLabel(  # ПОЯСНЕНИЕ: обновляется значение переменной self.logs_stats_label.
+            header, text="Responses: 0 | Errors: 0",  # ПОЯСНЕНИЕ: обновляется значение переменной header, text.
+            font=ctk.CTkFont(size=12),  # ПОЯСНЕНИЕ: обновляется значение переменной font.
+            text_color="gray"  # ПОЯСНЕНИЕ: обновляется значение переменной text_color.
+        )  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self.logs_stats_label.pack(side="right")  # ПОЯСНЕНИЕ: обновляется значение переменной self.logs_stats_label.pack(side.
 
         # Log type selector
-        selector_frame = ctk.CTkFrame(self.tab_logs, fg_color="transparent")
-        selector_frame.grid(row=1, column=0, sticky="ew", pady=(0, 10))
+        selector_frame = ctk.CTkFrame(self.tab_logs, fg_color="transparent")  # ПОЯСНЕНИЕ: обновляется значение переменной selector_frame.
+        selector_frame.grid(row=1, column=0, sticky="ew", pady=(0, 10))  # ПОЯСНЕНИЕ: обновляется значение переменной selector_frame.grid(row.
 
-        self.log_type_var = ctk.StringVar(value="responses")
+        self.log_type_var = ctk.StringVar(value="responses")  # ПОЯСНЕНИЕ: обновляется значение переменной self.log_type_var.
 
-        ctk.CTkRadioButton(
-            selector_frame, text="Responses",
-            variable=self.log_type_var, value="responses",
-            command=self._refresh_logs_display
-        ).pack(side="left", padx=(0, 20))
+        ctk.CTkRadioButton(  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            selector_frame, text="Responses",  # ПОЯСНЕНИЕ: обновляется значение переменной selector_frame, text.
+            variable=self.log_type_var, value="responses",  # ПОЯСНЕНИЕ: обновляется значение переменной variable.
+            command=self._refresh_logs_display  # ПОЯСНЕНИЕ: обновляется значение переменной command.
+        ).pack(side="left", padx=(0, 20))  # ПОЯСНЕНИЕ: обновляется значение переменной ).pack(side.
 
-        ctk.CTkRadioButton(
-            selector_frame, text="Errors",
-            variable=self.log_type_var, value="errors",
-            command=self._refresh_logs_display
-        ).pack(side="left", padx=(0, 20))
+        ctk.CTkRadioButton(  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            selector_frame, text="Errors",  # ПОЯСНЕНИЕ: обновляется значение переменной selector_frame, text.
+            variable=self.log_type_var, value="errors",  # ПОЯСНЕНИЕ: обновляется значение переменной variable.
+            command=self._refresh_logs_display  # ПОЯСНЕНИЕ: обновляется значение переменной command.
+        ).pack(side="left", padx=(0, 20))  # ПОЯСНЕНИЕ: обновляется значение переменной ).pack(side.
 
-        ctk.CTkRadioButton(
-            selector_frame, text="All",
-            variable=self.log_type_var, value="all",
-            command=self._refresh_logs_display
-        ).pack(side="left")
+        ctk.CTkRadioButton(  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            selector_frame, text="All",  # ПОЯСНЕНИЕ: обновляется значение переменной selector_frame, text.
+            variable=self.log_type_var, value="all",  # ПОЯСНЕНИЕ: обновляется значение переменной variable.
+            command=self._refresh_logs_display  # ПОЯСНЕНИЕ: обновляется значение переменной command.
+        ).pack(side="left")  # ПОЯСНЕНИЕ: обновляется значение переменной ).pack(side.
 
         # Logs display
-        self.logs_display = ctk.CTkTextbox(
-            self.tab_logs, corner_radius=12,
-            font=ctk.CTkFont(family="Consolas", size=11),
-            state="disabled"
-        )
-        self.logs_display.grid(row=2, column=0, sticky="nsew", pady=(0, 10))
+        self.logs_display = ctk.CTkTextbox(  # ПОЯСНЕНИЕ: обновляется значение переменной self.logs_display.
+            self.tab_logs, corner_radius=12,  # ПОЯСНЕНИЕ: обновляется значение переменной self.tab_logs, corner_radius.
+            font=ctk.CTkFont(family="Consolas", size=11),  # ПОЯСНЕНИЕ: обновляется значение переменной font.
+            state="disabled"  # ПОЯСНЕНИЕ: обновляется значение переменной state.
+        )  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self.logs_display.grid(row=2, column=0, sticky="nsew", pady=(0, 10))  # ПОЯСНЕНИЕ: обновляется значение переменной self.logs_display.grid(row.
 
         # Context menu for logs
-        self.logs_menu = tk.Menu(self, tearoff=0)
-        self.logs_menu.add_command(label="Copy", command=self._copy_logs_selection, accelerator="Ctrl+C")
-        self.logs_menu.add_command(label="Copy All", command=self._copy_all_logs)
-        self.logs_menu.add_separator()
-        self.logs_menu.add_command(label="Select All", command=self._select_all_logs, accelerator="Ctrl+A")
+        self.logs_menu = tk.Menu(self, tearoff=0)  # ПОЯСНЕНИЕ: обновляется значение переменной self.logs_menu.
+        self.logs_menu.add_command(label="Copy", command=self._copy_logs_selection, accelerator="Ctrl+C")  # ПОЯСНЕНИЕ: обновляется значение переменной self.logs_menu.add_command(label.
+        self.logs_menu.add_command(label="Copy All", command=self._copy_all_logs)  # ПОЯСНЕНИЕ: обновляется значение переменной self.logs_menu.add_command(label.
+        self.logs_menu.add_separator()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self.logs_menu.add_command(label="Select All", command=self._select_all_logs, accelerator="Ctrl+A")  # ПОЯСНЕНИЕ: обновляется значение переменной self.logs_menu.add_command(label.
 
         # Bind right-click and keyboard shortcuts for logs
-        self.logs_display.bind("<Button-3>", self._show_logs_menu)
-        self._bind_clipboard_shortcuts(self.logs_display, readonly=True)
+        self.logs_display.bind("<Button-3>", self._show_logs_menu)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self._bind_clipboard_shortcuts(self.logs_display, readonly=True)  # ПОЯСНЕНИЕ: обновляется значение переменной self._bind_clipboard_shortcuts(self.logs_display, .
 
         # Buttons
-        btn_frame = ctk.CTkFrame(self.tab_logs, fg_color="transparent")
-        btn_frame.grid(row=3, column=0, sticky="ew")
+        btn_frame = ctk.CTkFrame(self.tab_logs, fg_color="transparent")  # ПОЯСНЕНИЕ: обновляется значение переменной btn_frame.
+        btn_frame.grid(row=3, column=0, sticky="ew")  # ПОЯСНЕНИЕ: обновляется значение переменной btn_frame.grid(row.
 
-        ctk.CTkButton(
-            btn_frame, text="Refresh", height=36,
-            corner_radius=8, fg_color="gray30",
-            command=self._refresh_logs_display
-        ).pack(side="left", padx=(0, 10))
+        ctk.CTkButton(  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            btn_frame, text="Refresh", height=36,  # ПОЯСНЕНИЕ: обновляется значение переменной btn_frame, text.
+            corner_radius=8, fg_color="gray30",  # ПОЯСНЕНИЕ: обновляется значение переменной corner_radius.
+            command=self._refresh_logs_display  # ПОЯСНЕНИЕ: обновляется значение переменной command.
+        ).pack(side="left", padx=(0, 10))  # ПОЯСНЕНИЕ: обновляется значение переменной ).pack(side.
 
-        ctk.CTkButton(
-            btn_frame, text="Export Logs", height=36,
-            corner_radius=8, fg_color="#27ae60", hover_color="#1e8449",
-            command=self._export_logs
-        ).pack(side="left", padx=(0, 10))
+        ctk.CTkButton(  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            btn_frame, text="Export Logs", height=36,  # ПОЯСНЕНИЕ: обновляется значение переменной btn_frame, text.
+            corner_radius=8, fg_color="#27ae60", hover_color="#1e8449",  # ПОЯСНЕНИЕ: обновляется значение переменной corner_radius.
+            command=self._export_logs  # ПОЯСНЕНИЕ: обновляется значение переменной command.
+        ).pack(side="left", padx=(0, 10))  # ПОЯСНЕНИЕ: обновляется значение переменной ).pack(side.
 
-        ctk.CTkButton(
-            btn_frame, text="Export Responses", height=36,
-            corner_radius=8, fg_color="#3498db", hover_color="#2980b9",
-            command=lambda: self._export_logs("responses")
-        ).pack(side="left", padx=(0, 10))
+        ctk.CTkButton(  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            btn_frame, text="Export Responses", height=36,  # ПОЯСНЕНИЕ: обновляется значение переменной btn_frame, text.
+            corner_radius=8, fg_color="#3498db", hover_color="#2980b9",  # ПОЯСНЕНИЕ: обновляется значение переменной corner_radius.
+            command=lambda: self._export_logs("responses")  # ПОЯСНЕНИЕ: обновляется значение переменной command.
+        ).pack(side="left", padx=(0, 10))  # ПОЯСНЕНИЕ: обновляется значение переменной ).pack(side.
 
-        ctk.CTkButton(
-            btn_frame, text="Export Errors", height=36,
-            corner_radius=8, fg_color="#e74c3c", hover_color="#c0392b",
-            command=lambda: self._export_logs("errors")
-        ).pack(side="left", padx=(0, 10))
+        ctk.CTkButton(  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            btn_frame, text="Export Errors", height=36,  # ПОЯСНЕНИЕ: обновляется значение переменной btn_frame, text.
+            corner_radius=8, fg_color="#e74c3c", hover_color="#c0392b",  # ПОЯСНЕНИЕ: обновляется значение переменной corner_radius.
+            command=lambda: self._export_logs("errors")  # ПОЯСНЕНИЕ: обновляется значение переменной command.
+        ).pack(side="left", padx=(0, 10))  # ПОЯСНЕНИЕ: обновляется значение переменной ).pack(side.
 
-        ctk.CTkButton(
-            btn_frame, text="Clear Logs", height=36,
-            corner_radius=8, fg_color="gray30",
-            command=self._clear_logs
-        ).pack(side="right")
+        ctk.CTkButton(  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            btn_frame, text="Clear Logs", height=36,  # ПОЯСНЕНИЕ: обновляется значение переменной btn_frame, text.
+            corner_radius=8, fg_color="gray30",  # ПОЯСНЕНИЕ: обновляется значение переменной corner_radius.
+            command=self._clear_logs  # ПОЯСНЕНИЕ: обновляется значение переменной command.
+        ).pack(side="right")  # ПОЯСНЕНИЕ: обновляется значение переменной ).pack(side.
 
-    def _create_arbitrator_tab(self):
-        """Create Arbitrator tab - Select Chairman neural network"""
-        self.tab_arbitrator.grid_rowconfigure(1, weight=1)
-        self.tab_arbitrator.grid_columnconfigure(0, weight=1)
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_create_arbitrator_tab` — выполняет отдельный шаг бизнес-логики.
+    def _create_arbitrator_tab(self):  # ПОЯСНЕНИЕ: объявляется функция _create_arbitrator_tab с параметрами из сигнатуры.
+        """Create Arbitrator tab - Select Chairman neural network"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        self.tab_arbitrator.grid_rowconfigure(1, weight=1)  # ПОЯСНЕНИЕ: обновляется значение переменной self.tab_arbitrator.grid_rowconfigure(1, weight.
+        self.tab_arbitrator.grid_columnconfigure(0, weight=1)  # ПОЯСНЕНИЕ: обновляется значение переменной self.tab_arbitrator.grid_columnconfigure(0, weight.
 
         # Header
-        header = ctk.CTkFrame(self.tab_arbitrator, fg_color="transparent")
-        header.grid(row=0, column=0, sticky="ew", pady=(0, 10))
+        header = ctk.CTkFrame(self.tab_arbitrator, fg_color="transparent")  # ПОЯСНЕНИЕ: обновляется значение переменной header.
+        header.grid(row=0, column=0, sticky="ew", pady=(0, 10))  # ПОЯСНЕНИЕ: обновляется значение переменной header.grid(row.
 
-        ctk.CTkLabel(
-            header, text="Арбитр - Главный председатель",
-            font=ctk.CTkFont(size=20, weight="bold")
-        ).pack(side="left")
+        ctk.CTkLabel(  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            header, text="Арбитр - Главный председатель",  # ПОЯСНЕНИЕ: обновляется значение переменной header, text.
+            font=ctk.CTkFont(size=20, weight="bold")  # ПОЯСНЕНИЕ: обновляется значение переменной font.
+        ).pack(side="left")  # ПОЯСНЕНИЕ: обновляется значение переменной ).pack(side.
 
         # Main content frame
-        content = ctk.CTkFrame(self.tab_arbitrator, fg_color="transparent")
-        content.grid(row=1, column=0, sticky="nsew", pady=(0, 10))
+        content = ctk.CTkFrame(self.tab_arbitrator, fg_color="transparent")  # ПОЯСНЕНИЕ: обновляется значение переменной content.
+        content.grid(row=1, column=0, sticky="nsew", pady=(0, 10))  # ПОЯСНЕНИЕ: обновляется значение переменной content.grid(row.
 
         # Chairman selection
-        ctk.CTkLabel(
-            content, text="Выберите председателя (главную нейросеть):",
-            font=ctk.CTkFont(size=14, weight="bold")
-        ).pack(anchor="w", pady=(10, 10))
+        ctk.CTkLabel(  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            content, text="Выберите председателя (главную нейросеть):",  # ПОЯСНЕНИЕ: обновляется значение переменной content, text.
+            font=ctk.CTkFont(size=14, weight="bold")  # ПОЯСНЕНИЕ: обновляется значение переменной font.
+        ).pack(anchor="w", pady=(10, 10))  # ПОЯСНЕНИЕ: обновляется значение переменной ).pack(anchor.
 
         # Dropdown for selecting chairman
-        self.chairman_var = ctk.StringVar(value="Не выбран")
-        chairman_options = ["Не выбран"] + [name for name, _, _, _, _ in self.PROVIDER_INFO]
+        self.chairman_var = ctk.StringVar(value="Не выбран")  # ПОЯСНЕНИЕ: обновляется значение переменной self.chairman_var.
+        chairman_options = ["Не выбран"] + [name for name, _, _, _, _ in self.PROVIDER_INFO]  # ПОЯСНЕНИЕ: обновляется значение переменной chairman_options.
 
-        self.chairman_combo = ctk.CTkComboBox(
-            content, width=300, height=36,
-            values=chairman_options,
-            variable=self.chairman_var,
-            state="readonly",
-            font=ctk.CTkFont(size=13)
-        )
-        self.chairman_combo.pack(anchor="w", pady=(0, 20))
+        self.chairman_combo = ctk.CTkComboBox(  # ПОЯСНЕНИЕ: обновляется значение переменной self.chairman_combo.
+            content, width=300, height=36,  # ПОЯСНЕНИЕ: обновляется значение переменной content, width.
+            values=chairman_options,  # ПОЯСНЕНИЕ: обновляется значение переменной values.
+            variable=self.chairman_var,  # ПОЯСНЕНИЕ: обновляется значение переменной variable.
+            state="readonly",  # ПОЯСНЕНИЕ: обновляется значение переменной state.
+            font=ctk.CTkFont(size=13)  # ПОЯСНЕНИЕ: обновляется значение переменной font.
+        )  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self.chairman_combo.pack(anchor="w", pady=(0, 20))  # ПОЯСНЕНИЕ: обновляется значение переменной self.chairman_combo.pack(anchor.
 
         # Description
-        desc_frame = ctk.CTkFrame(content, corner_radius=12)
-        desc_frame.pack(fill="both", expand=True, pady=(10, 10))
+        desc_frame = ctk.CTkFrame(content, corner_radius=12)  # ПОЯСНЕНИЕ: обновляется значение переменной desc_frame.
+        desc_frame.pack(fill="both", expand=True, pady=(10, 10))  # ПОЯСНЕНИЕ: обновляется значение переменной desc_frame.pack(fill.
 
-        ctk.CTkLabel(
-            desc_frame,
-            text="Председатель будет главной нейросетью,\nкоторая принимает финальные решения.",
-            font=ctk.CTkFont(size=12),
-            justify="left",
-            text_color="gray"
-        ).pack(padx=20, pady=20)
+        ctk.CTkLabel(  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            desc_frame,  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            text="Председатель будет главной нейросетью,\nкоторая принимает финальные решения.",  # ПОЯСНЕНИЕ: обновляется значение переменной text.
+            font=ctk.CTkFont(size=12),  # ПОЯСНЕНИЕ: обновляется значение переменной font.
+            justify="left",  # ПОЯСНЕНИЕ: обновляется значение переменной justify.
+            text_color="gray"  # ПОЯСНЕНИЕ: обновляется значение переменной text_color.
+        ).pack(padx=20, pady=20)  # ПОЯСНЕНИЕ: обновляется значение переменной ).pack(padx.
 
         # Save button
-        btn_frame = ctk.CTkFrame(self.tab_arbitrator, fg_color="transparent")
-        btn_frame.grid(row=2, column=0, sticky="ew")
+        btn_frame = ctk.CTkFrame(self.tab_arbitrator, fg_color="transparent")  # ПОЯСНЕНИЕ: обновляется значение переменной btn_frame.
+        btn_frame.grid(row=2, column=0, sticky="ew")  # ПОЯСНЕНИЕ: обновляется значение переменной btn_frame.grid(row.
 
-        ctk.CTkButton(
-            btn_frame, text="Сохранить", height=40,
-            corner_radius=10, font=ctk.CTkFont(size=14, weight="bold"),
-            fg_color="#27ae60", hover_color="#1e8449",
-            command=self._save_arbitrator_settings
-        ).pack(side="left", padx=(0, 10))
+        ctk.CTkButton(  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            btn_frame, text="Сохранить", height=40,  # ПОЯСНЕНИЕ: обновляется значение переменной btn_frame, text.
+            corner_radius=10, font=ctk.CTkFont(size=14, weight="bold"),  # ПОЯСНЕНИЕ: обновляется значение переменной corner_radius.
+            fg_color="#27ae60", hover_color="#1e8449",  # ПОЯСНЕНИЕ: обновляется значение переменной fg_color.
+            command=self._save_arbitrator_settings  # ПОЯСНЕНИЕ: обновляется значение переменной command.
+        ).pack(side="left", padx=(0, 10))  # ПОЯСНЕНИЕ: обновляется значение переменной ).pack(side.
 
         # Load saved chairman if exists
-        self._load_arbitrator_settings()
+        self._load_arbitrator_settings()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def _create_role_tab(self):
-        """Create Role tab - Custom prompts for each neural network"""
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_create_role_tab` — выполняет отдельный шаг бизнес-логики.
+    def _create_role_tab(self):  # ПОЯСНЕНИЕ: объявляется функция _create_role_tab с параметрами из сигнатуры.
+        """Create Role tab - Custom prompts for each neural network"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
         # Scrollable frame
-        scroll = ctk.CTkScrollableFrame(self.tab_role, corner_radius=0)
-        scroll.pack(fill="both", expand=True)
+        scroll = ctk.CTkScrollableFrame(self.tab_role, corner_radius=0)  # ПОЯСНЕНИЕ: обновляется значение переменной scroll.
+        scroll.pack(fill="both", expand=True)  # ПОЯСНЕНИЕ: обновляется значение переменной scroll.pack(fill.
 
-        ctk.CTkLabel(
-            scroll, text="Роль - Настройка промптов для каждой нейросети",
-            font=ctk.CTkFont(size=20, weight="bold")
-        ).pack(anchor="w", pady=(0, 15))
+        ctk.CTkLabel(  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            scroll, text="Роль - Настройка промптов для каждой нейросети",  # ПОЯСНЕНИЕ: обновляется значение переменной scroll, text.
+            font=ctk.CTkFont(size=20, weight="bold")  # ПОЯСНЕНИЕ: обновляется значение переменной font.
+        ).pack(anchor="w", pady=(0, 15))  # ПОЯСНЕНИЕ: обновляется значение переменной ).pack(anchor.
 
         # Store textboxes for each provider
-        self.role_prompts = {}
-        self.role_models = {}
+        self.role_prompts = {}  # ПОЯСНЕНИЕ: обновляется значение переменной self.role_prompts.
+        self.role_models = {}  # ПОЯСНЕНИЕ: обновляется значение переменной self.role_models.
 
         # Create card for each provider
-        for name, key, color, url, desc in self.PROVIDER_INFO:
-            card_frame = ctk.CTkFrame(scroll, corner_radius=12, fg_color=("gray85", "gray20"))
-            card_frame.pack(fill="x", pady=10)
+        # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+        for name, key, color, url, desc in self.PROVIDER_INFO:  # ПОЯСНЕНИЕ: запускается цикл for по коллекции.
+            card_frame = ctk.CTkFrame(scroll, corner_radius=12, fg_color=("gray85", "gray20"))  # ПОЯСНЕНИЕ: обновляется значение переменной card_frame.
+            card_frame.pack(fill="x", pady=10)  # ПОЯСНЕНИЕ: обновляется значение переменной card_frame.pack(fill.
 
             # Provider name header
-            header = ctk.CTkFrame(card_frame, fg_color="transparent")
-            header.pack(fill="x", padx=15, pady=(15, 10))
+            header = ctk.CTkFrame(card_frame, fg_color="transparent")  # ПОЯСНЕНИЕ: обновляется значение переменной header.
+            header.pack(fill="x", padx=15, pady=(15, 10))  # ПОЯСНЕНИЕ: обновляется значение переменной header.pack(fill.
 
-            ctk.CTkLabel(
-                header, text=name,
-                font=ctk.CTkFont(size=16, weight="bold"),
-                text_color=color
-            ).pack(side="left")
+            ctk.CTkLabel(  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                header, text=name,  # ПОЯСНЕНИЕ: обновляется значение переменной header, text.
+                font=ctk.CTkFont(size=16, weight="bold"),  # ПОЯСНЕНИЕ: обновляется значение переменной font.
+                text_color=color  # ПОЯСНЕНИЕ: обновляется значение переменной text_color.
+            ).pack(side="left")  # ПОЯСНЕНИЕ: обновляется значение переменной ).pack(side.
 
-            ctk.CTkLabel(
-                header, text=desc,
-                font=ctk.CTkFont(size=11),
-                text_color="gray"
-            ).pack(side="right")
+            ctk.CTkLabel(  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                header, text=desc,  # ПОЯСНЕНИЕ: обновляется значение переменной header, text.
+                font=ctk.CTkFont(size=11),  # ПОЯСНЕНИЕ: обновляется значение переменной font.
+                text_color="gray"  # ПОЯСНЕНИЕ: обновляется значение переменной text_color.
+            ).pack(side="right")  # ПОЯСНЕНИЕ: обновляется значение переменной ).pack(side.
 
             # Model selection
-            model_frame = ctk.CTkFrame(card_frame, fg_color="transparent")
-            model_frame.pack(fill="x", padx=15, pady=(0, 10))
+            model_frame = ctk.CTkFrame(card_frame, fg_color="transparent")  # ПОЯСНЕНИЕ: обновляется значение переменной model_frame.
+            model_frame.pack(fill="x", padx=15, pady=(0, 10))  # ПОЯСНЕНИЕ: обновляется значение переменной model_frame.pack(fill.
 
-            ctk.CTkLabel(
-                model_frame, text="Модель:",
-                font=ctk.CTkFont(size=12, weight="bold")
-            ).pack(side="left", padx=(0, 10))
+            ctk.CTkLabel(  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                model_frame, text="Модель:",  # ПОЯСНЕНИЕ: обновляется значение переменной model_frame, text.
+                font=ctk.CTkFont(size=12, weight="bold")  # ПОЯСНЕНИЕ: обновляется значение переменной font.
+            ).pack(side="left", padx=(0, 10))  # ПОЯСНЕНИЕ: обновляется значение переменной ).pack(side.
 
-            model_var = ctk.StringVar(value="default")
-            model_combo = ctk.CTkComboBox(
-                model_frame, width=200, height=28,
-                values=["default", "custom"],
-                variable=model_var,
-                state="readonly"
-            )
-            model_combo.pack(side="left")
-            self.role_models[key] = model_var
+            model_var = ctk.StringVar(value="default")  # ПОЯСНЕНИЕ: обновляется значение переменной model_var.
+            model_combo = ctk.CTkComboBox(  # ПОЯСНЕНИЕ: обновляется значение переменной model_combo.
+                model_frame, width=200, height=28,  # ПОЯСНЕНИЕ: обновляется значение переменной model_frame, width.
+                values=["default", "custom"],  # ПОЯСНЕНИЕ: обновляется значение переменной values.
+                variable=model_var,  # ПОЯСНЕНИЕ: обновляется значение переменной variable.
+                state="readonly"  # ПОЯСНЕНИЕ: обновляется значение переменной state.
+            )  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            model_combo.pack(side="left")  # ПОЯСНЕНИЕ: обновляется значение переменной model_combo.pack(side.
+            self.role_models[key] = model_var  # ПОЯСНЕНИЕ: обновляется значение переменной self.role_models[key].
 
             # Prompt label
-            ctk.CTkLabel(
-                card_frame, text="Системный промпт:",
-                font=ctk.CTkFont(size=12, weight="bold")
-            ).pack(anchor="w", padx=15, pady=(0, 5))
+            ctk.CTkLabel(  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                card_frame, text="Системный промпт:",  # ПОЯСНЕНИЕ: обновляется значение переменной card_frame, text.
+                font=ctk.CTkFont(size=12, weight="bold")  # ПОЯСНЕНИЕ: обновляется значение переменной font.
+            ).pack(anchor="w", padx=15, pady=(0, 5))  # ПОЯСНЕНИЕ: обновляется значение переменной ).pack(anchor.
 
             # Prompt textbox
-            prompt_box = ctk.CTkTextbox(
-                card_frame, height=120, corner_radius=8,
-                font=ctk.CTkFont(size=11),
-                wrap="word"
-            )
-            prompt_box.pack(fill="x", padx=15, pady=(0, 15))
+            prompt_box = ctk.CTkTextbox(  # ПОЯСНЕНИЕ: обновляется значение переменной prompt_box.
+                card_frame, height=120, corner_radius=8,  # ПОЯСНЕНИЕ: обновляется значение переменной card_frame, height.
+                font=ctk.CTkFont(size=11),  # ПОЯСНЕНИЕ: обновляется значение переменной font.
+                wrap="word"  # ПОЯСНЕНИЕ: обновляется значение переменной wrap.
+            )  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            prompt_box.pack(fill="x", padx=15, pady=(0, 15))  # ПОЯСНЕНИЕ: обновляется значение переменной prompt_box.pack(fill.
 
             # Bind clipboard shortcuts (Ctrl+C, Ctrl+V, Ctrl+A)
-            self._bind_clipboard_shortcuts(prompt_box, readonly=False)
+            self._bind_clipboard_shortcuts(prompt_box, readonly=False)  # ПОЯСНЕНИЕ: обновляется значение переменной self._bind_clipboard_shortcuts(prompt_box, readonl.
 
-            self.role_prompts[key] = prompt_box
+            self.role_prompts[key] = prompt_box  # ПОЯСНЕНИЕ: обновляется значение переменной self.role_prompts[key].
 
         # Save button
-        btn_frame = ctk.CTkFrame(scroll, fg_color="transparent")
-        btn_frame.pack(fill="x", pady=20)
+        btn_frame = ctk.CTkFrame(scroll, fg_color="transparent")  # ПОЯСНЕНИЕ: обновляется значение переменной btn_frame.
+        btn_frame.pack(fill="x", pady=20)  # ПОЯСНЕНИЕ: обновляется значение переменной btn_frame.pack(fill.
 
-        ctk.CTkButton(
-            btn_frame, text="Сохранить все промпты", height=40,
-            corner_radius=10, font=ctk.CTkFont(size=14, weight="bold"),
-            fg_color="#27ae60", hover_color="#1e8449",
-            command=self._save_role_settings
-        ).pack(side="left")
+        ctk.CTkButton(  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            btn_frame, text="Сохранить все промпты", height=40,  # ПОЯСНЕНИЕ: обновляется значение переменной btn_frame, text.
+            corner_radius=10, font=ctk.CTkFont(size=14, weight="bold"),  # ПОЯСНЕНИЕ: обновляется значение переменной corner_radius.
+            fg_color="#27ae60", hover_color="#1e8449",  # ПОЯСНЕНИЕ: обновляется значение переменной fg_color.
+            command=self._save_role_settings  # ПОЯСНЕНИЕ: обновляется значение переменной command.
+        ).pack(side="left")  # ПОЯСНЕНИЕ: обновляется значение переменной ).pack(side.
 
         # Load saved prompts
-        self._load_role_settings()
+        self._load_role_settings()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def _create_prohibitions_tab(self):
-        """Create Prohibitions tab - List of prohibited prompts/topics"""
-        self.tab_prohibitions.grid_rowconfigure(1, weight=1)
-        self.tab_prohibitions.grid_columnconfigure(0, weight=1)
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_create_prohibitions_tab` — выполняет отдельный шаг бизнес-логики.
+    def _create_prohibitions_tab(self):  # ПОЯСНЕНИЕ: объявляется функция _create_prohibitions_tab с параметрами из сигнатуры.
+        """Create Prohibitions tab - List of prohibited prompts/topics"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        self.tab_prohibitions.grid_rowconfigure(1, weight=1)  # ПОЯСНЕНИЕ: обновляется значение переменной self.tab_prohibitions.grid_rowconfigure(1, weight.
+        self.tab_prohibitions.grid_columnconfigure(0, weight=1)  # ПОЯСНЕНИЕ: обновляется значение переменной self.tab_prohibitions.grid_columnconfigure(0, weig.
 
         # Header
-        header = ctk.CTkFrame(self.tab_prohibitions, fg_color="transparent")
-        header.grid(row=0, column=0, sticky="ew", pady=(0, 10))
+        header = ctk.CTkFrame(self.tab_prohibitions, fg_color="transparent")  # ПОЯСНЕНИЕ: обновляется значение переменной header.
+        header.grid(row=0, column=0, sticky="ew", pady=(0, 10))  # ПОЯСНЕНИЕ: обновляется значение переменной header.grid(row.
 
-        ctk.CTkLabel(
-            header, text="Запреты - Список запрещенных тем",
-            font=ctk.CTkFont(size=20, weight="bold")
-        ).pack(side="left")
+        ctk.CTkLabel(  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            header, text="Запреты - Список запрещенных тем",  # ПОЯСНЕНИЕ: обновляется значение переменной header, text.
+            font=ctk.CTkFont(size=20, weight="bold")  # ПОЯСНЕНИЕ: обновляется значение переменной font.
+        ).pack(side="left")  # ПОЯСНЕНИЕ: обновляется значение переменной ).pack(side.
 
         # Description
-        ctk.CTkLabel(
-            self.tab_prohibitions,
-            text="Добавьте запреты для нейросетей (по одному на строку):",
-            font=ctk.CTkFont(size=12),
-            text_color="gray"
-        ).grid(row=1, column=0, sticky="w", pady=(0, 10))
+        ctk.CTkLabel(  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            self.tab_prohibitions,  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            text="Добавьте запреты для нейросетей (по одному на строку):",  # ПОЯСНЕНИЕ: обновляется значение переменной text.
+            font=ctk.CTkFont(size=12),  # ПОЯСНЕНИЕ: обновляется значение переменной font.
+            text_color="gray"  # ПОЯСНЕНИЕ: обновляется значение переменной text_color.
+        ).grid(row=1, column=0, sticky="w", pady=(0, 10))  # ПОЯСНЕНИЕ: обновляется значение переменной ).grid(row.
 
         # Scrollable textbox for prohibitions
-        self.prohibitions_text = ctk.CTkTextbox(
-            self.tab_prohibitions, corner_radius=12,
-            font=ctk.CTkFont(size=12),
-            wrap="word"
-        )
-        self.prohibitions_text.grid(row=2, column=0, sticky="nsew", pady=(0, 10))
+        self.prohibitions_text = ctk.CTkTextbox(  # ПОЯСНЕНИЕ: обновляется значение переменной self.prohibitions_text.
+            self.tab_prohibitions, corner_radius=12,  # ПОЯСНЕНИЕ: обновляется значение переменной self.tab_prohibitions, corner_radius.
+            font=ctk.CTkFont(size=12),  # ПОЯСНЕНИЕ: обновляется значение переменной font.
+            wrap="word"  # ПОЯСНЕНИЕ: обновляется значение переменной wrap.
+        )  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self.prohibitions_text.grid(row=2, column=0, sticky="nsew", pady=(0, 10))  # ПОЯСНЕНИЕ: обновляется значение переменной self.prohibitions_text.grid(row.
 
         # Bind clipboard shortcuts
-        self._bind_clipboard_shortcuts(self.prohibitions_text, readonly=False)
+        self._bind_clipboard_shortcuts(self.prohibitions_text, readonly=False)  # ПОЯСНЕНИЕ: обновляется значение переменной self._bind_clipboard_shortcuts(self.prohibitions_t.
 
         # Buttons
-        btn_frame = ctk.CTkFrame(self.tab_prohibitions, fg_color="transparent")
-        btn_frame.grid(row=3, column=0, sticky="ew")
+        btn_frame = ctk.CTkFrame(self.tab_prohibitions, fg_color="transparent")  # ПОЯСНЕНИЕ: обновляется значение переменной btn_frame.
+        btn_frame.grid(row=3, column=0, sticky="ew")  # ПОЯСНЕНИЕ: обновляется значение переменной btn_frame.grid(row.
 
-        ctk.CTkButton(
-            btn_frame, text="Сохранить запреты", height=40,
-            corner_radius=10, font=ctk.CTkFont(size=14, weight="bold"),
-            fg_color="#27ae60", hover_color="#1e8449",
-            command=self._save_prohibitions
-        ).pack(side="left", padx=(0, 10))
+        ctk.CTkButton(  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            btn_frame, text="Сохранить запреты", height=40,  # ПОЯСНЕНИЕ: обновляется значение переменной btn_frame, text.
+            corner_radius=10, font=ctk.CTkFont(size=14, weight="bold"),  # ПОЯСНЕНИЕ: обновляется значение переменной corner_radius.
+            fg_color="#27ae60", hover_color="#1e8449",  # ПОЯСНЕНИЕ: обновляется значение переменной fg_color.
+            command=self._save_prohibitions  # ПОЯСНЕНИЕ: обновляется значение переменной command.
+        ).pack(side="left", padx=(0, 10))  # ПОЯСНЕНИЕ: обновляется значение переменной ).pack(side.
 
-        ctk.CTkButton(
-            btn_frame, text="Очистить", height=40,
-            corner_radius=10, fg_color="gray30",
-            command=self._clear_prohibitions
-        ).pack(side="left")
+        ctk.CTkButton(  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            btn_frame, text="Очистить", height=40,  # ПОЯСНЕНИЕ: обновляется значение переменной btn_frame, text.
+            corner_radius=10, fg_color="gray30",  # ПОЯСНЕНИЕ: обновляется значение переменной corner_radius.
+            command=self._clear_prohibitions  # ПОЯСНЕНИЕ: обновляется значение переменной command.
+        ).pack(side="left")  # ПОЯСНЕНИЕ: обновляется значение переменной ).pack(side.
 
         # Load saved prohibitions
-        self._load_prohibitions()
+        self._load_prohibitions()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def _create_tasks_tab(self):
-        """Create Tasks tab - Algorithm and response logic"""
-        self.tab_tasks.grid_rowconfigure(1, weight=1)
-        self.tab_tasks.grid_columnconfigure(0, weight=1)
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_create_tasks_tab` — выполняет отдельный шаг бизнес-логики.
+    def _create_tasks_tab(self):  # ПОЯСНЕНИЕ: объявляется функция _create_tasks_tab с параметрами из сигнатуры.
+        """Create Tasks tab - Algorithm and response logic"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        self.tab_tasks.grid_rowconfigure(1, weight=1)  # ПОЯСНЕНИЕ: обновляется значение переменной self.tab_tasks.grid_rowconfigure(1, weight.
+        self.tab_tasks.grid_columnconfigure(0, weight=1)  # ПОЯСНЕНИЕ: обновляется значение переменной self.tab_tasks.grid_columnconfigure(0, weight.
 
         # Header
-        header = ctk.CTkFrame(self.tab_tasks, fg_color="transparent")
-        header.grid(row=0, column=0, sticky="ew", pady=(0, 10))
+        header = ctk.CTkFrame(self.tab_tasks, fg_color="transparent")  # ПОЯСНЕНИЕ: обновляется значение переменной header.
+        header.grid(row=0, column=0, sticky="ew", pady=(0, 10))  # ПОЯСНЕНИЕ: обновляется значение переменной header.grid(row.
 
-        ctk.CTkLabel(
-            header, text="Задачи - Алгоритм ответа нейросети",
-            font=ctk.CTkFont(size=20, weight="bold")
-        ).pack(side="left")
+        ctk.CTkLabel(  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            header, text="Задачи - Алгоритм ответа нейросети",  # ПОЯСНЕНИЕ: обновляется значение переменной header, text.
+            font=ctk.CTkFont(size=20, weight="bold")  # ПОЯСНЕНИЕ: обновляется значение переменной font.
+        ).pack(side="left")  # ПОЯСНЕНИЕ: обновляется значение переменной ).pack(side.
 
         # Description
-        ctk.CTkLabel(
-            self.tab_tasks,
-            text="Настройте алгоритм обработки запросов и ответов:",
-            font=ctk.CTkFont(size=12),
-            text_color="gray"
-        ).grid(row=1, column=0, sticky="w", pady=(0, 10))
+        ctk.CTkLabel(  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            self.tab_tasks,  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            text="Настройте алгоритм обработки запросов и ответов:",  # ПОЯСНЕНИЕ: обновляется значение переменной text.
+            font=ctk.CTkFont(size=12),  # ПОЯСНЕНИЕ: обновляется значение переменной font.
+            text_color="gray"  # ПОЯСНЕНИЕ: обновляется значение переменной text_color.
+        ).grid(row=1, column=0, sticky="w", pady=(0, 10))  # ПОЯСНЕНИЕ: обновляется значение переменной ).grid(row.
 
         # Scrollable textbox for tasks/algorithm
-        self.tasks_text = ctk.CTkTextbox(
-            self.tab_tasks, corner_radius=12,
-            font=ctk.CTkFont(size=12),
-            wrap="word"
-        )
-        self.tasks_text.grid(row=2, column=0, sticky="nsew", pady=(0, 10))
+        self.tasks_text = ctk.CTkTextbox(  # ПОЯСНЕНИЕ: обновляется значение переменной self.tasks_text.
+            self.tab_tasks, corner_radius=12,  # ПОЯСНЕНИЕ: обновляется значение переменной self.tab_tasks, corner_radius.
+            font=ctk.CTkFont(size=12),  # ПОЯСНЕНИЕ: обновляется значение переменной font.
+            wrap="word"  # ПОЯСНЕНИЕ: обновляется значение переменной wrap.
+        )  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self.tasks_text.grid(row=2, column=0, sticky="nsew", pady=(0, 10))  # ПОЯСНЕНИЕ: обновляется значение переменной self.tasks_text.grid(row.
 
         # Bind clipboard shortcuts
-        self._bind_clipboard_shortcuts(self.tasks_text, readonly=False)
+        self._bind_clipboard_shortcuts(self.tasks_text, readonly=False)  # ПОЯСНЕНИЕ: обновляется значение переменной self._bind_clipboard_shortcuts(self.tasks_text, re.
 
         # Preset algorithms frame
-        preset_frame = ctk.CTkFrame(self.tab_tasks, corner_radius=12)
-        preset_frame.grid(row=3, column=0, sticky="ew", pady=(0, 10))
+        preset_frame = ctk.CTkFrame(self.tab_tasks, corner_radius=12)  # ПОЯСНЕНИЕ: обновляется значение переменной preset_frame.
+        preset_frame.grid(row=3, column=0, sticky="ew", pady=(0, 10))  # ПОЯСНЕНИЕ: обновляется значение переменной preset_frame.grid(row.
 
-        ctk.CTkLabel(
-            preset_frame, text="Шаблоны алгоритмов:",
-            font=ctk.CTkFont(size=12, weight="bold")
-        ).pack(anchor="w", padx=15, pady=(10, 5))
+        ctk.CTkLabel(  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            preset_frame, text="Шаблоны алгоритмов:",  # ПОЯСНЕНИЕ: обновляется значение переменной preset_frame, text.
+            font=ctk.CTkFont(size=12, weight="bold")  # ПОЯСНЕНИЕ: обновляется значение переменной font.
+        ).pack(anchor="w", padx=15, pady=(10, 5))  # ПОЯСНЕНИЕ: обновляется значение переменной ).pack(anchor.
 
-        presets_buttons = ctk.CTkFrame(preset_frame, fg_color="transparent")
-        presets_buttons.pack(fill="x", padx=15, pady=(0, 10))
+        presets_buttons = ctk.CTkFrame(preset_frame, fg_color="transparent")  # ПОЯСНЕНИЕ: обновляется значение переменной presets_buttons.
+        presets_buttons.pack(fill="x", padx=15, pady=(0, 10))  # ПОЯСНЕНИЕ: обновляется значение переменной presets_buttons.pack(fill.
 
-        ctk.CTkButton(
-            presets_buttons, text="Параллельный", height=32,
-            corner_radius=8, fg_color="#3498db",
-            command=lambda: self._load_task_preset("parallel")
-        ).pack(side="left", padx=(0, 5))
+        ctk.CTkButton(  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            presets_buttons, text="Параллельный", height=32,  # ПОЯСНЕНИЕ: обновляется значение переменной presets_buttons, text.
+            corner_radius=8, fg_color="#3498db",  # ПОЯСНЕНИЕ: обновляется значение переменной corner_radius.
+            command=lambda: self._load_task_preset("parallel")  # ПОЯСНЕНИЕ: обновляется значение переменной command.
+        ).pack(side="left", padx=(0, 5))  # ПОЯСНЕНИЕ: обновляется значение переменной ).pack(side.
 
-        ctk.CTkButton(
-            presets_buttons, text="Последовательный", height=32,
-            corner_radius=8, fg_color="#9b59b6",
-            command=lambda: self._load_task_preset("sequential")
-        ).pack(side="left", padx=(0, 5))
+        ctk.CTkButton(  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            presets_buttons, text="Последовательный", height=32,  # ПОЯСНЕНИЕ: обновляется значение переменной presets_buttons, text.
+            corner_radius=8, fg_color="#9b59b6",  # ПОЯСНЕНИЕ: обновляется значение переменной corner_radius.
+            command=lambda: self._load_task_preset("sequential")  # ПОЯСНЕНИЕ: обновляется значение переменной command.
+        ).pack(side="left", padx=(0, 5))  # ПОЯСНЕНИЕ: обновляется значение переменной ).pack(side.
 
-        ctk.CTkButton(
-            presets_buttons, text="Арбитраж", height=32,
-            corner_radius=8, fg_color="#e74c3c",
-            command=lambda: self._load_task_preset("arbitration")
-        ).pack(side="left")
+        ctk.CTkButton(  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            presets_buttons, text="Арбитраж", height=32,  # ПОЯСНЕНИЕ: обновляется значение переменной presets_buttons, text.
+            corner_radius=8, fg_color="#e74c3c",  # ПОЯСНЕНИЕ: обновляется значение переменной corner_radius.
+            command=lambda: self._load_task_preset("arbitration")  # ПОЯСНЕНИЕ: обновляется значение переменной command.
+        ).pack(side="left")  # ПОЯСНЕНИЕ: обновляется значение переменной ).pack(side.
 
         # Buttons
-        btn_frame = ctk.CTkFrame(self.tab_tasks, fg_color="transparent")
-        btn_frame.grid(row=4, column=0, sticky="ew")
+        btn_frame = ctk.CTkFrame(self.tab_tasks, fg_color="transparent")  # ПОЯСНЕНИЕ: обновляется значение переменной btn_frame.
+        btn_frame.grid(row=4, column=0, sticky="ew")  # ПОЯСНЕНИЕ: обновляется значение переменной btn_frame.grid(row.
 
-        ctk.CTkButton(
-            btn_frame, text="Сохранить алгоритм", height=40,
-            corner_radius=10, font=ctk.CTkFont(size=14, weight="bold"),
-            fg_color="#27ae60", hover_color="#1e8449",
-            command=self._save_tasks
-        ).pack(side="left", padx=(0, 10))
+        ctk.CTkButton(  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            btn_frame, text="Сохранить алгоритм", height=40,  # ПОЯСНЕНИЕ: обновляется значение переменной btn_frame, text.
+            corner_radius=10, font=ctk.CTkFont(size=14, weight="bold"),  # ПОЯСНЕНИЕ: обновляется значение переменной corner_radius.
+            fg_color="#27ae60", hover_color="#1e8449",  # ПОЯСНЕНИЕ: обновляется значение переменной fg_color.
+            command=self._save_tasks  # ПОЯСНЕНИЕ: обновляется значение переменной command.
+        ).pack(side="left", padx=(0, 10))  # ПОЯСНЕНИЕ: обновляется значение переменной ).pack(side.
 
-        ctk.CTkButton(
-            btn_frame, text="Очистить", height=40,
-            corner_radius=10, fg_color="gray30",
-            command=self._clear_tasks
-        ).pack(side="left")
+        ctk.CTkButton(  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            btn_frame, text="Очистить", height=40,  # ПОЯСНЕНИЕ: обновляется значение переменной btn_frame, text.
+            corner_radius=10, fg_color="gray30",  # ПОЯСНЕНИЕ: обновляется значение переменной corner_radius.
+            command=self._clear_tasks  # ПОЯСНЕНИЕ: обновляется значение переменной command.
+        ).pack(side="left")  # ПОЯСНЕНИЕ: обновляется значение переменной ).pack(side.
 
         # Load saved tasks
-        self._load_tasks()
+        self._load_tasks()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def _refresh_logs_display(self):
-        """Refresh logs display"""
-        log_type = self.log_type_var.get()
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_refresh_logs_display` — выполняет отдельный шаг бизнес-логики.
+    def _refresh_logs_display(self):  # ПОЯСНЕНИЕ: объявляется функция _refresh_logs_display с параметрами из сигнатуры.
+        """Refresh logs display"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        log_type = self.log_type_var.get()  # ПОЯСНЕНИЕ: обновляется значение переменной log_type.
 
-        self.logs_display.configure(state="normal")
-        self.logs_display.delete("1.0", "end")
+        self.logs_display.configure(state="normal")  # ПОЯСНЕНИЕ: обновляется значение переменной self.logs_display.configure(state.
+        self.logs_display.delete("1.0", "end")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-        responses = app_logger.get_responses_log()
-        errors = app_logger.get_errors_log()
+        responses = app_logger.get_responses_log()  # ПОЯСНЕНИЕ: обновляется значение переменной responses.
+        errors = app_logger.get_errors_log()  # ПОЯСНЕНИЕ: обновляется значение переменной errors.
 
         # Update stats
-        self.logs_stats_label.configure(
-            text=f"Responses: {len(responses)} | Errors: {len(errors)}"
-        )
+        self.logs_stats_label.configure(  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            text=f"Responses: {len(responses)} | Errors: {len(errors)}"  # ПОЯСНЕНИЕ: обновляется значение переменной text.
+        )  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-        if log_type in ["all", "responses"]:
-            self.logs_display.insert("end", "=" * 50 + "\n")
-            self.logs_display.insert("end", "RESPONSES LOG\n")
-            self.logs_display.insert("end", "=" * 50 + "\n\n")
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if log_type in ["all", "responses"]:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            self.logs_display.insert("end", "=" * 50 + "\n")  # ПОЯСНЕНИЕ: обновляется значение переменной self.logs_display.insert("end", ".
+            self.logs_display.insert("end", "RESPONSES LOG\n")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            self.logs_display.insert("end", "=" * 50 + "\n\n")  # ПОЯСНЕНИЕ: обновляется значение переменной self.logs_display.insert("end", ".
 
-            for entry in reversed(responses):  # Newest first
-                self.logs_display.insert("end", f"[{entry['timestamp'][:19]}] {entry['provider']}\n")
-                self.logs_display.insert("end", f"Q: {entry['question'][:100]}...\n")
-                status = "OK" if entry['success'] else "FAIL"
-                self.logs_display.insert("end", f"Status: {status} | Time: {entry['elapsed_time']:.2f}s\n")
-                self.logs_display.insert("end", f"Response: {entry['response'][:200]}...\n")
-                self.logs_display.insert("end", "-" * 40 + "\n\n")
+            # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+            for entry in reversed(responses):  # Newest first  # ПОЯСНЕНИЕ: запускается цикл for по коллекции.
+                self.logs_display.insert("end", f"[{entry['timestamp'][:19]}] {entry['provider']}\n")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                self.logs_display.insert("end", f"Q: {entry['question'][:100]}...\n")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                status = "OK" if entry['success'] else "FAIL"  # ПОЯСНЕНИЕ: обновляется значение переменной status.
+                self.logs_display.insert("end", f"Status: {status} | Time: {entry['elapsed_time']:.2f}s\n")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                self.logs_display.insert("end", f"Response: {entry['response'][:200]}...\n")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                self.logs_display.insert("end", "-" * 40 + "\n\n")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-        if log_type in ["all", "errors"]:
-            self.logs_display.insert("end", "\n" + "=" * 50 + "\n")
-            self.logs_display.insert("end", "ERRORS LOG\n")
-            self.logs_display.insert("end", "=" * 50 + "\n\n")
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if log_type in ["all", "errors"]:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            self.logs_display.insert("end", "\n" + "=" * 50 + "\n")  # ПОЯСНЕНИЕ: обновляется значение переменной self.logs_display.insert("end", "\n" + ".
+            self.logs_display.insert("end", "ERRORS LOG\n")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            self.logs_display.insert("end", "=" * 50 + "\n\n")  # ПОЯСНЕНИЕ: обновляется значение переменной self.logs_display.insert("end", ".
 
-            for entry in reversed(errors):  # Newest first
-                self.logs_display.insert("end", f"[{entry['timestamp'][:19]}] {entry['provider']}\n")
-                self.logs_display.insert("end", f"Error: {entry['error']}\n")
-                if entry['details']:
-                    self.logs_display.insert("end", f"Details: {entry['details']}\n")
-                self.logs_display.insert("end", "-" * 40 + "\n\n")
+            # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+            for entry in reversed(errors):  # Newest first  # ПОЯСНЕНИЕ: запускается цикл for по коллекции.
+                self.logs_display.insert("end", f"[{entry['timestamp'][:19]}] {entry['provider']}\n")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                self.logs_display.insert("end", f"Error: {entry['error']}\n")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                if entry['details']:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                    self.logs_display.insert("end", f"Details: {entry['details']}\n")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                self.logs_display.insert("end", "-" * 40 + "\n\n")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-        self.logs_display.configure(state="disabled")
+        self.logs_display.configure(state="disabled")  # ПОЯСНЕНИЕ: обновляется значение переменной self.logs_display.configure(state.
 
-    def _export_logs(self, log_type: str = "all"):
-        """Export logs to file"""
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        default_name = f"ai_manager_logs_{log_type}_{timestamp}.txt"
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_export_logs` — выполняет отдельный шаг бизнес-логики.
+    def _export_logs(self, log_type: str = "all"):  # ПОЯСНЕНИЕ: объявляется функция _export_logs с параметрами из сигнатуры.
+        """Export logs to file"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")  # ПОЯСНЕНИЕ: обновляется значение переменной timestamp.
+        default_name = f"ai_manager_logs_{log_type}_{timestamp}.txt"  # ПОЯСНЕНИЕ: обновляется значение переменной default_name.
 
-        filepath = filedialog.asksaveasfilename(
-            title="Export Logs",
-            defaultextension=".txt",
-            initialfile=default_name,
-            filetypes=[("Text files", "*.txt"), ("All files", "*.*")]
-        )
+        filepath = filedialog.asksaveasfilename(  # ПОЯСНЕНИЕ: обновляется значение переменной filepath.
+            title="Export Logs",  # ПОЯСНЕНИЕ: обновляется значение переменной title.
+            defaultextension=".txt",  # ПОЯСНЕНИЕ: обновляется значение переменной defaultextension.
+            initialfile=default_name,  # ПОЯСНЕНИЕ: обновляется значение переменной initialfile.
+            filetypes=[("Text files", "*.txt"), ("All files", "*.*")]  # ПОЯСНЕНИЕ: обновляется значение переменной filetypes.
+        )  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-        if filepath:
-            if app_logger.export_logs(filepath, log_type):
-                messagebox.showinfo("Success", f"Logs exported to:\n{filepath}")
-                self.status_label.configure(text=f"Logs exported")
-            else:
-                messagebox.showerror("Error", "Failed to export logs")
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if filepath:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if app_logger.export_logs(filepath, log_type):  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                messagebox.showinfo("Success", f"Logs exported to:\n{filepath}")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                self.status_label.configure(text=f"Logs exported")  # ПОЯСНЕНИЕ: обновляется значение переменной self.status_label.configure(text.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            else:  # ПОЯСНЕНИЕ: выполняется альтернативная ветка else.
+                messagebox.showerror("Error", "Failed to export logs")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def _clear_logs(self):
-        """Clear in-memory logs"""
-        if messagebox.askyesno("Confirm", "Clear all in-memory logs?"):
-            app_logger.clear_logs()
-            self._refresh_logs_display()
-            self.status_label.configure(text="Logs cleared")
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_clear_logs` — выполняет отдельный шаг бизнес-логики.
+    def _clear_logs(self):  # ПОЯСНЕНИЕ: объявляется функция _clear_logs с параметрами из сигнатуры.
+        """Clear in-memory logs"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if messagebox.askyesno("Confirm", "Clear all in-memory logs?"):  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            app_logger.clear_logs()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            self._refresh_logs_display()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            self.status_label.configure(text="Logs cleared")  # ПОЯСНЕНИЕ: обновляется значение переменной self.status_label.configure(text.
 
-    def _test_all_connections(self):
-        """Test all connections with detailed status"""
-        self.connection_status_label.configure(text="Testing connections...")
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_test_all_connections` — выполняет отдельный шаг бизнес-логики.
+    def _test_all_connections(self):  # ПОЯСНЕНИЕ: объявляется функция _test_all_connections с параметрами из сигнатуры.
+        """Test all connections with detailed status"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        self.connection_status_label.configure(text="Testing connections...")  # ПОЯСНЕНИЕ: обновляется значение переменной self.connection_status_label.configure(text.
 
-        thread = threading.Thread(target=self._test_connections_thread, daemon=True)
-        thread.start()
+        thread = threading.Thread(target=self._test_connections_thread, daemon=True)  # ПОЯСНЕНИЕ: обновляется значение переменной thread.
+        thread.start()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def _test_connections_thread(self):
-        """Thread for testing connections"""
-        self._update_providers()
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_test_connections_thread` — выполняет отдельный шаг бизнес-логики.
+    def _test_connections_thread(self):  # ПОЯСНЕНИЕ: объявляется функция _test_connections_thread с параметрами из сигнатуры.
+        """Thread for testing connections"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        self._update_providers()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-        results = {}
-        connected = 0
-        total = 0
+        results = {}  # ПОЯСНЕНИЕ: обновляется значение переменной results.
+        connected = 0  # ПОЯСНЕНИЕ: обновляется значение переменной connected.
+        total = 0  # ПОЯСНЕНИЕ: обновляется значение переменной total.
 
-        key_map = {
-            "openai": "OpenAI GPT",
-            "anthropic": "Anthropic Claude",
-            "gemini": "Gemini",
-            "deepseek": "DeepSeek",
-            "groq": "Groq",
-            "mistral": "Mistral AI"
-        }
+        key_map = {  # ПОЯСНЕНИЕ: обновляется значение переменной key_map.
+            "openai": "OpenAI GPT",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            "anthropic": "Anthropic Claude",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            "gemini": "Gemini",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            "deepseek": "DeepSeek",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            "groq": "Groq",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            "mistral": "Mistral AI"  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        }  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-        for key, name in key_map.items():
-            if name in self.providers and self.provider_switches[name].get():
-                total += 1
-                status = self.providers[name].test_connection()
-                results[name] = status
+        # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+        for key, name in key_map.items():  # ПОЯСНЕНИЕ: запускается цикл for по коллекции.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if name in self.providers and self.provider_switches[name].get():  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                total += 1  # ПОЯСНЕНИЕ: обновляется значение переменной total +.
+                status = self.providers[name].test_connection()  # ПОЯСНЕНИЕ: обновляется значение переменной status.
+                results[name] = status  # ПОЯСНЕНИЕ: обновляется значение переменной results[name].
 
-                if status:
-                    connected += 1
+                # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                if status:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                    connected += 1  # ПОЯСНЕНИЕ: обновляется значение переменной connected +.
 
                 # Log the test
-                app_logger.log_connection_test(name, status)
+                app_logger.log_connection_test(name, status)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
                 # Update UI
-                self.after(0, lambda n=name, s=status: self._update_connection_status(n, s))
-                self.after(0, lambda k=key, s=status: self._update_card_status(k, s))
+                self.after(0, lambda n=name, s=status: self._update_connection_status(n, s))  # ПОЯСНЕНИЕ: обновляется значение переменной self.after(0, lambda n.
+                self.after(0, lambda k=key, s=status: self._update_card_status(k, s))  # ПОЯСНЕНИЕ: обновляется значение переменной self.after(0, lambda k.
 
         # Update status label
-        status_text = f"Connected: {connected}/{total}"
-        self.after(0, lambda: self.connection_status_label.configure(
-            text=status_text,
-            text_color="#2ecc71" if connected == total else "#e74c3c"
-        ))
+        status_text = f"Connected: {connected}/{total}"  # ПОЯСНЕНИЕ: обновляется значение переменной status_text.
+        self.after(0, lambda: self.connection_status_label.configure(  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            text=status_text,  # ПОЯСНЕНИЕ: обновляется значение переменной text.
+            text_color="#2ecc71" if connected == total else "#e74c3c"  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        ))  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def _send_test_query(self):
-        """Send a simple test query to all selected providers"""
-        selected = [name for name, switch in self.provider_switches.items() if switch.get()]
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_send_test_query` — выполняет отдельный шаг бизнес-логики.
+    def _send_test_query(self):  # ПОЯСНЕНИЕ: объявляется функция _send_test_query с параметрами из сигнатуры.
+        """Send a simple test query to all selected providers"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        selected = [name for name, switch in self.provider_switches.items() if switch.get()]  # ПОЯСНЕНИЕ: обновляется значение переменной selected.
 
-        if not selected:
-            messagebox.showwarning("Warning", "Please select at least one AI provider!")
-            return
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if not selected:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            messagebox.showwarning("Warning", "Please select at least one AI provider!")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            return  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
         # Simple test question
-        test_question = "Hello! Please respond with 'OK' if you can receive this message."
+        test_question = "Hello! Please respond with 'OK' if you can receive this message."  # ПОЯСНЕНИЕ: обновляется значение переменной test_question.
 
-        self.connection_status_label.configure(text="Sending test query...")
-        self._add_to_chat(f"[TEST] Sending test query to {len(selected)} providers...\n", "system")
+        self.connection_status_label.configure(text="Sending test query...")  # ПОЯСНЕНИЕ: обновляется значение переменной self.connection_status_label.configure(text.
+        self._add_to_chat(f"[TEST] Sending test query to {len(selected)} providers...\n", "system")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-        self._update_providers()
+        self._update_providers()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-        thread = threading.Thread(
-            target=self._process_test_query,
-            args=(test_question, selected),
-            daemon=True
-        )
-        thread.start()
+        thread = threading.Thread(  # ПОЯСНЕНИЕ: обновляется значение переменной thread.
+            target=self._process_test_query,  # ПОЯСНЕНИЕ: обновляется значение переменной target.
+            args=(test_question, selected),  # ПОЯСНЕНИЕ: обновляется значение переменной args.
+            daemon=True  # ПОЯСНЕНИЕ: обновляется значение переменной daemon.
+        )  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        thread.start()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def _process_test_query(self, question: str, providers: List[str]):
-        """Process test query"""
-        results = {}
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_process_test_query` — выполняет отдельный шаг бизнес-логики.
+    def _process_test_query(self, question: str, providers: List[str]):  # ПОЯСНЕНИЕ: объявляется функция _process_test_query с параметрами из сигнатуры.
+        """Process test query"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        results = {}  # ПОЯСНЕНИЕ: обновляется значение переменной results.
 
-        with ThreadPoolExecutor(max_workers=len(providers)) as executor:
-            futures = {}
-            for name in providers:
-                if name in self.providers:
-                    future = executor.submit(self.providers[name].query, question)
-                    futures[future] = name
+        with ThreadPoolExecutor(max_workers=len(providers)) as executor:  # ПОЯСНЕНИЕ: открывается контекстный менеджер для ресурса.
+            futures = {}  # ПОЯСНЕНИЕ: обновляется значение переменной futures.
+            # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+            for name in providers:  # ПОЯСНЕНИЕ: запускается цикл for по коллекции.
+                # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                if name in self.providers:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                    future = executor.submit(self.providers[name].query, question)  # ПОЯСНЕНИЕ: обновляется значение переменной future.
+                    futures[future] = name  # ПОЯСНЕНИЕ: обновляется значение переменной futures[future].
 
-            for future in as_completed(futures):
-                name = futures[future]
-                try:
-                    response, elapsed = future.result()
-                    success = not response.startswith("Error")
-                    results[name] = (success, elapsed)
+            # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+            for future in as_completed(futures):  # ПОЯСНЕНИЕ: запускается цикл for по коллекции.
+                name = futures[future]  # ПОЯСНЕНИЕ: обновляется значение переменной name.
+                # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+                try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+                    response, elapsed = future.result()  # ПОЯСНЕНИЕ: обновляется значение переменной response, elapsed.
+                    success = not response.startswith("Error")  # ПОЯСНЕНИЕ: обновляется значение переменной success.
+                    results[name] = (success, elapsed)  # ПОЯСНЕНИЕ: обновляется значение переменной results[name].
 
                     # Log response
-                    app_logger.log_response(name, question, response, elapsed, success)
+                    app_logger.log_response(name, question, response, elapsed, success)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
                     # Show result
-                    status = "OK" if success else "FAIL"
-                    self.after(0, lambda n=name, s=status, t=elapsed:
-                        self._add_to_chat(f"[TEST] {n}: {s} ({t:.2f}s)\n", "response"))
+                    status = "OK" if success else "FAIL"  # ПОЯСНЕНИЕ: обновляется значение переменной status.
+                    self.after(0, lambda n=name, s=status, t=elapsed:  # ПОЯСНЕНИЕ: обновляется значение переменной self.after(0, lambda n.
+                        self._add_to_chat(f"[TEST] {n}: {s} ({t:.2f}s)\n", "response"))  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-                except Exception as e:
-                    results[name] = (False, 0)
-                    app_logger.log_error(name, str(e), "Test query failed")
-                    self.after(0, lambda n=name, e=str(e):
-                        self._add_to_chat(f"[TEST] {n}: ERROR - {e}\n", "error"))
+                # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+                except Exception as e:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+                    results[name] = (False, 0)  # ПОЯСНЕНИЕ: обновляется значение переменной results[name].
+                    app_logger.log_error(name, str(e), "Test query failed")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                    self.after(0, lambda n=name, e=str(e):  # ПОЯСНЕНИЕ: обновляется значение переменной self.after(0, lambda n.
+                        self._add_to_chat(f"[TEST] {n}: ERROR - {e}\n", "error"))  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
         # Summary
-        success_count = sum(1 for v in results.values() if v[0])
-        total = len(results)
+        success_count = sum(1 for v in results.values() if v[0])  # ПОЯСНЕНИЕ: обновляется значение переменной success_count.
+        total = len(results)  # ПОЯСНЕНИЕ: обновляется значение переменной total.
 
-        self.after(0, lambda: self._add_to_chat(
-            f"\n[TEST COMPLETE] {success_count}/{total} providers responded successfully\n\n",
-            "system"
-        ))
-        self.after(0, lambda: self.connection_status_label.configure(
-            text=f"Test: {success_count}/{total} OK",
-            text_color="#2ecc71" if success_count == total else "#e74c3c"
-        ))
+        self.after(0, lambda: self._add_to_chat(  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            f"\n[TEST COMPLETE] {success_count}/{total} providers responded successfully\n\n",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            "system"  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        ))  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self.after(0, lambda: self.connection_status_label.configure(  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            text=f"Test: {success_count}/{total} OK",  # ПОЯСНЕНИЕ: обновляется значение переменной text.
+            text_color="#2ecc71" if success_count == total else "#e74c3c"  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        ))  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
     # ==================== Actions ====================
 
-    def _select_all_providers(self):
-        for switch in self.provider_switches.values():
-            switch.set(True)
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_select_all_providers` — выполняет отдельный шаг бизнес-логики.
+    def _select_all_providers(self):  # ПОЯСНЕНИЕ: объявляется функция _select_all_providers с параметрами из сигнатуры.
+        """Описание: функция `_select_all_providers`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+        for switch in self.provider_switches.values():  # ПОЯСНЕНИЕ: запускается цикл for по коллекции.
+            switch.set(True)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def _deselect_all_providers(self):
-        for switch in self.provider_switches.values():
-            switch.set(False)
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_deselect_all_providers` — выполняет отдельный шаг бизнес-логики.
+    def _deselect_all_providers(self):  # ПОЯСНЕНИЕ: объявляется функция _deselect_all_providers с параметрами из сигнатуры.
+        """Описание: функция `_deselect_all_providers`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+        for switch in self.provider_switches.values():  # ПОЯСНЕНИЕ: запускается цикл for по коллекции.
+            switch.set(False)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def _select_output_dir(self):
-        directory = filedialog.askdirectory(
-            title="Select Output Directory",
-            initialdir=self.output_dir
-        )
-        if directory:
-            self.output_dir = directory
-            self.config["output_dir"] = directory
-            self._save_config()
-            self.output_dir_label.configure(text=self._truncate_path(directory))
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_select_output_dir` — выполняет отдельный шаг бизнес-логики.
+    def _select_output_dir(self):  # ПОЯСНЕНИЕ: объявляется функция _select_output_dir с параметрами из сигнатуры.
+        """Описание: функция `_select_output_dir`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        directory = filedialog.askdirectory(  # ПОЯСНЕНИЕ: обновляется значение переменной directory.
+            title="Select Output Directory",  # ПОЯСНЕНИЕ: обновляется значение переменной title.
+            initialdir=self.output_dir  # ПОЯСНЕНИЕ: обновляется значение переменной initialdir.
+        )  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if directory:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            self.output_dir = directory  # ПОЯСНЕНИЕ: обновляется значение переменной self.output_dir.
+            self.config["output_dir"] = directory  # ПОЯСНЕНИЕ: обновляется значение переменной self.config["output_dir"].
+            self._save_config()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            self.output_dir_label.configure(text=self._truncate_path(directory))  # ПОЯСНЕНИЕ: обновляется значение переменной self.output_dir_label.configure(text.
 
-    def _truncate_path(self, path: str, max_len: int = 35) -> str:
-        if len(path) <= max_len:
-            return path
-        return "..." + path[-(max_len - 3):]
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_truncate_path` — выполняет отдельный шаг бизнес-логики.
+    def _truncate_path(self, path: str, max_len: int = 35) -> str:  # ПОЯСНЕНИЕ: объявляется функция _truncate_path с параметрами из сигнатуры.
+        """Описание: функция `_truncate_path`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if len(path) <= max_len:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            return path  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+        return "..." + path[-(max_len - 3):]  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
-    def _toggle_theme(self):
-        mode = "dark" if self.theme_switch.get() else "light"
-        ctk.set_appearance_mode(mode)
-        self.config["theme"] = mode
-        self._save_config()
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_toggle_theme` — выполняет отдельный шаг бизнес-логики.
+    def _toggle_theme(self):  # ПОЯСНЕНИЕ: объявляется функция _toggle_theme с параметрами из сигнатуры.
+        """Описание: функция `_toggle_theme`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        mode = "dark" if self.theme_switch.get() else "light"  # ПОЯСНЕНИЕ: обновляется значение переменной mode.
+        ctk.set_appearance_mode(mode)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self.config["theme"] = mode  # ПОЯСНЕНИЕ: обновляется значение переменной self.config["theme"].
+        self._save_config()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def _load_config_to_ui(self):
-        """Load config to UI"""
-        for key, card in self.api_cards.items():
-            card.set_key(self.config["api_keys"].get(key, ""))
-            card.set_model(self.config.get("models", {}).get(key, ""))
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_load_config_to_ui` — выполняет отдельный шаг бизнес-логики.
+    def _load_config_to_ui(self):  # ПОЯСНЕНИЕ: объявляется функция _load_config_to_ui с параметрами из сигнатуры.
+        """Load config to UI"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+        for key, card in self.api_cards.items():  # ПОЯСНЕНИЕ: запускается цикл for по коллекции.
+            card.set_key(self.config["api_keys"].get(key, ""))  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            card.set_model(self.config.get("models", {}).get(key, ""))  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
         # Theme
-        if self.config.get("theme") == "light":
-            self.theme_switch.deselect()
-            ctk.set_appearance_mode("light")
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if self.config.get("theme") == "light":  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            self.theme_switch.deselect()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            ctk.set_appearance_mode("light")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def _save_settings(self):
-        """Save API settings securely"""
-        for key, card in self.api_cards.items():
-            api_key = card.get_key()
-            self.config["api_keys"][key] = api_key
-            self.config["models"][key] = card.get_model()
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_save_settings` — выполняет отдельный шаг бизнес-логики.
+    def _save_settings(self):  # ПОЯСНЕНИЕ: объявляется функция _save_settings с параметрами из сигнатуры.
+        """Save API settings securely"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+        for key, card in self.api_cards.items():  # ПОЯСНЕНИЕ: запускается цикл for по коллекции.
+            api_key = card.get_key()  # ПОЯСНЕНИЕ: обновляется значение переменной api_key.
+            self.config["api_keys"][key] = api_key  # ПОЯСНЕНИЕ: обновляется значение переменной self.config["api_keys"][key].
+            self.config["models"][key] = card.get_model()  # ПОЯСНЕНИЕ: обновляется значение переменной self.config["models"][key].
             # Save directly to secure storage
-            secure_storage.set_key(key, api_key)
+            secure_storage.set_key(key, api_key)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-        self._update_providers()
-        self._save_config()
+        self._update_providers()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self._save_config()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-        storage_type = "system keyring" if KEYRING_AVAILABLE else "encrypted file"
-        messagebox.showinfo("Success", f"Settings saved securely!\n(Keys stored in {storage_type})")
-        self._check_all_connections()
+        storage_type = "system keyring" if KEYRING_AVAILABLE else "encrypted file"  # ПОЯСНЕНИЕ: обновляется значение переменной storage_type.
+        messagebox.showinfo("Success", f"Settings saved securely!\n(Keys stored in {storage_type})")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self._check_all_connections()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def _update_providers(self):
-        """Update provider API keys"""
-        key_map = {
-            "OpenAI GPT": "openai",
-            "Anthropic Claude": "anthropic",
-            "Gemini": "gemini",
-            "DeepSeek": "deepseek",
-            "Groq": "groq",
-            "Mistral AI": "mistral"
-        }
-        for name, key in key_map.items():
-            if name in self.providers:
-                self.providers[name].api_key = self.config["api_keys"].get(key, "")
-                model_name = self.config.get("models", {}).get(key, "")
-                if model_name:
-                    self.providers[name].model = model_name
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_update_providers` — выполняет отдельный шаг бизнес-логики.
+    def _update_providers(self):  # ПОЯСНЕНИЕ: объявляется функция _update_providers с параметрами из сигнатуры.
+        """Update provider API keys"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        key_map = {  # ПОЯСНЕНИЕ: обновляется значение переменной key_map.
+            "OpenAI GPT": "openai",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            "Anthropic Claude": "anthropic",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            "Gemini": "gemini",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            "DeepSeek": "deepseek",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            "Groq": "groq",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            "Mistral AI": "mistral"  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        }  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+        for name, key in key_map.items():  # ПОЯСНЕНИЕ: запускается цикл for по коллекции.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if name in self.providers:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                self.providers[name].api_key = self.config["api_keys"].get(key, "")  # ПОЯСНЕНИЕ: обновляется значение переменной self.providers[name].api_key.
+                model_name = self.config.get("models", {}).get(key, "")  # ПОЯСНЕНИЕ: обновляется значение переменной model_name.
+                # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                if model_name:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                    self.providers[name].model = model_name  # ПОЯСНЕНИЕ: обновляется значение переменной self.providers[name].model.
 
-    def _check_connections_background(self):
-        """Check connections in background"""
-        thread = threading.Thread(target=self._check_all_connections_thread, daemon=True)
-        thread.start()
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_check_connections_background` — выполняет отдельный шаг бизнес-логики.
+    def _check_connections_background(self):  # ПОЯСНЕНИЕ: объявляется функция _check_connections_background с параметрами из сигнатуры.
+        """Check connections in background"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        thread = threading.Thread(target=self._check_all_connections_thread, daemon=True)  # ПОЯСНЕНИЕ: обновляется значение переменной thread.
+        thread.start()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def _check_all_connections(self):
-        """Check all connections"""
-        thread = threading.Thread(target=self._check_all_connections_thread, daemon=True)
-        thread.start()
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_check_all_connections` — выполняет отдельный шаг бизнес-логики.
+    def _check_all_connections(self):  # ПОЯСНЕНИЕ: объявляется функция _check_all_connections с параметрами из сигнатуры.
+        """Check all connections"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        thread = threading.Thread(target=self._check_all_connections_thread, daemon=True)  # ПОЯСНЕНИЕ: обновляется значение переменной thread.
+        thread.start()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def _check_all_connections_thread(self):
-        """Thread for checking connections"""
-        self._update_providers()
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_check_all_connections_thread` — выполняет отдельный шаг бизнес-логики.
+    def _check_all_connections_thread(self):  # ПОЯСНЕНИЕ: объявляется функция _check_all_connections_thread с параметрами из сигнатуры.
+        """Thread for checking connections"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        self._update_providers()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-        key_map = {
-            "openai": "OpenAI GPT",
-            "anthropic": "Anthropic Claude",
-            "gemini": "Gemini",
-            "deepseek": "DeepSeek",
-            "groq": "Groq",
-            "mistral": "Mistral AI"
-        }
+        key_map = {  # ПОЯСНЕНИЕ: обновляется значение переменной key_map.
+            "openai": "OpenAI GPT",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            "anthropic": "Anthropic Claude",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            "gemini": "Gemini",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            "deepseek": "DeepSeek",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            "groq": "Groq",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            "mistral": "Mistral AI"  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        }  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-        for key, name in key_map.items():
-            if name in self.providers:
-                status = self.providers[name].test_connection()
+        # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+        for key, name in key_map.items():  # ПОЯСНЕНИЕ: запускается цикл for по коллекции.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if name in self.providers:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                status = self.providers[name].test_connection()  # ПОЯСНЕНИЕ: обновляется значение переменной status.
 
                 # Update UI
-                self.after(0, lambda n=name, s=status: self._update_connection_status(n, s))
-                self.after(0, lambda k=key, s=status: self._update_card_status(k, s))
+                self.after(0, lambda n=name, s=status: self._update_connection_status(n, s))  # ПОЯСНЕНИЕ: обновляется значение переменной self.after(0, lambda n.
+                self.after(0, lambda k=key, s=status: self._update_card_status(k, s))  # ПОЯСНЕНИЕ: обновляется значение переменной self.after(0, lambda k.
 
-    def _update_connection_status(self, name: str, status: bool):
-        if name in self.provider_switches:
-            self.provider_switches[name].set_status(status)
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_update_connection_status` — выполняет отдельный шаг бизнес-логики.
+    def _update_connection_status(self, name: str, status: bool):  # ПОЯСНЕНИЕ: объявляется функция _update_connection_status с параметрами из сигнатуры.
+        """Описание: функция `_update_connection_status`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if name in self.provider_switches:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            self.provider_switches[name].set_status(status)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def _update_card_status(self, key: str, status: bool):
-        if key in self.api_cards:
-            self.api_cards[key].set_status(status)
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_update_card_status` — выполняет отдельный шаг бизнес-логики.
+    def _update_card_status(self, key: str, status: bool):  # ПОЯСНЕНИЕ: объявляется функция _update_card_status с параметрами из сигнатуры.
+        """Описание: функция `_update_card_status`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if key in self.api_cards:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            self.api_cards[key].set_status(status)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def _handle_enter_key(self, event):
-        """Handle Enter key - send query"""
-        self._send_query()
-        return "break"  # Prevent default newline
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_handle_enter_key` — выполняет отдельный шаг бизнес-логики.
+    def _handle_enter_key(self, event):  # ПОЯСНЕНИЕ: объявляется функция _handle_enter_key с параметрами из сигнатуры.
+        """Handle Enter key - send query"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        self._send_query()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        return "break"  # Prevent default newline  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
-    def _handle_shift_enter(self, event):
-        """Handle Shift+Enter - insert newline"""
-        self.chat_input.insert("insert", "\n")
-        return "break"
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_handle_shift_enter` — выполняет отдельный шаг бизнес-логики.
+    def _handle_shift_enter(self, event):  # ПОЯСНЕНИЕ: объявляется функция _handle_shift_enter с параметрами из сигнатуры.
+        """Handle Shift+Enter - insert newline"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        self.chat_input.insert("insert", "\n")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        return "break"  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
-    def _send_query(self):
-        """Send query to selected providers"""
-        if self.is_processing:
-            return
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_send_query` — выполняет отдельный шаг бизнес-логики.
+    def _send_query(self):  # ПОЯСНЕНИЕ: объявляется функция _send_query с параметрами из сигнатуры.
+        """Send query to selected providers"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if self.is_processing:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            return  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
-        question = self.chat_input.get("1.0", "end-1c").strip()
-        if not question:
-            return
+        question = self.chat_input.get("1.0", "end-1c").strip()  # ПОЯСНЕНИЕ: обновляется значение переменной question.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if not question:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            return  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
         # Get selected providers
-        selected = [name for name, switch in self.provider_switches.items() if switch.get()]
-        if not selected:
-            messagebox.showwarning("Warning", "Please select at least one AI provider!")
-            return
+        selected = [name for name, switch in self.provider_switches.items() if switch.get()]  # ПОЯСНЕНИЕ: обновляется значение переменной selected.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if not selected:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            messagebox.showwarning("Warning", "Please select at least one AI provider!")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            return  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
         # Update UI
-        self.is_processing = True
-        self.send_btn.configure(state="disabled")
-        self.progress.grid(row=3, column=0, sticky="ew", pady=(10, 0))
-        self.progress.start()
-        self.status_label.configure(text=f"Querying {len(selected)} AI providers...")
-        self._append_admin_log(f"Request sent. Providers: {', '.join(selected)}")
-        self._append_admin_log(f"User input: {question}")
+        self.is_processing = True  # ПОЯСНЕНИЕ: обновляется значение переменной self.is_processing.
+        self.send_btn.configure(state="disabled")  # ПОЯСНЕНИЕ: обновляется значение переменной self.send_btn.configure(state.
+        self.progress.grid(row=3, column=0, sticky="ew", pady=(10, 0))  # ПОЯСНЕНИЕ: обновляется значение переменной self.progress.grid(row.
+        self.progress.start()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self.status_label.configure(text=f"Querying {len(selected)} AI providers...")  # ПОЯСНЕНИЕ: обновляется значение переменной self.status_label.configure(text.
+        self._append_admin_log(f"Request sent. Providers: {', '.join(selected)}")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self._append_admin_log(f"User input: {question}")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
         # Add user message to chat
-        self._add_to_chat(f"You: {question}\n", "user")
-        self._add_to_chat("-" * 60 + "\n", "divider")
+        self._add_to_chat(f"You: {question}\n", "user")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self._add_to_chat("-" * 60 + "\n", "divider")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
         # Clear input
-        self.chat_input.delete("1.0", "end")
+        self.chat_input.delete("1.0", "end")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
         # Update providers
-        self._update_providers()
+        self._update_providers()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
         # Start query thread
-        thread = threading.Thread(
-            target=self._process_query,
-            args=(question, selected),
-            daemon=True
-        )
-        thread.start()
+        thread = threading.Thread(  # ПОЯСНЕНИЕ: обновляется значение переменной thread.
+            target=self._process_query,  # ПОЯСНЕНИЕ: обновляется значение переменной target.
+            args=(question, selected),  # ПОЯСНЕНИЕ: обновляется значение переменной args.
+            daemon=True  # ПОЯСНЕНИЕ: обновляется значение переменной daemon.
+        )  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        thread.start()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def _process_query(self, question: str, providers: List[str]):
-        """Process query in parallel"""
-        responses = {}
-        total_time = 0
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_process_query` — выполняет отдельный шаг бизнес-логики.
+    def _process_query(self, question: str, providers: List[str]):  # ПОЯСНЕНИЕ: объявляется функция _process_query с параметрами из сигнатуры.
+        """Process query in parallel"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        responses = {}  # ПОЯСНЕНИЕ: обновляется значение переменной responses.
+        total_time = 0  # ПОЯСНЕНИЕ: обновляется значение переменной total_time.
 
         # Use ThreadPoolExecutor for parallel requests
-        with ThreadPoolExecutor(max_workers=len(providers)) as executor:
-            futures = {}
-            for name in providers:
-                if name in self.providers:
-                    self._append_admin_log(f"Processing started for provider: {name}")
-                    future = executor.submit(self.providers[name].query, question)
-                    futures[future] = name
+        with ThreadPoolExecutor(max_workers=len(providers)) as executor:  # ПОЯСНЕНИЕ: открывается контекстный менеджер для ресурса.
+            futures = {}  # ПОЯСНЕНИЕ: обновляется значение переменной futures.
+            # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+            for name in providers:  # ПОЯСНЕНИЕ: запускается цикл for по коллекции.
+                # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                if name in self.providers:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                    self._append_admin_log(f"Processing started for provider: {name}")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                    future = executor.submit(self.providers[name].query, question)  # ПОЯСНЕНИЕ: обновляется значение переменной future.
+                    futures[future] = name  # ПОЯСНЕНИЕ: обновляется значение переменной futures[future].
 
-            for future in as_completed(futures):
-                name = futures[future]
-                try:
-                    response, elapsed = future.result()
-                    responses[name] = (response, elapsed)
-                    total_time = max(total_time, elapsed)
+            # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+            for future in as_completed(futures):  # ПОЯСНЕНИЕ: запускается цикл for по коллекции.
+                name = futures[future]  # ПОЯСНЕНИЕ: обновляется значение переменной name.
+                # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+                try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+                    response, elapsed = future.result()  # ПОЯСНЕНИЕ: обновляется значение переменной response, elapsed.
+                    responses[name] = (response, elapsed)  # ПОЯСНЕНИЕ: обновляется значение переменной responses[name].
+                    total_time = max(total_time, elapsed)  # ПОЯСНЕНИЕ: обновляется значение переменной total_time.
 
                     # Log response
-                    success = not response.startswith("Error")
-                    app_logger.log_response(name, question, response, elapsed, success)
+                    success = not response.startswith("Error")  # ПОЯСНЕНИЕ: обновляется значение переменной success.
+                    app_logger.log_response(name, question, response, elapsed, success)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-                    if not success:
-                        app_logger.log_error(name, response, f"Query: {question[:100]}")
+                    # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                    if not success:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                        app_logger.log_error(name, response, f"Query: {question[:100]}")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
                     # Update UI immediately
-                    self.after(0, lambda n=name, r=response, t=elapsed: self._show_response(n, r, t))
-                    self._append_admin_log(f"Response received from {name} in {elapsed:.1f}s")
-                except Exception as e:
-                    responses[name] = (f"Error: {str(e)}", 0)
+                    self.after(0, lambda n=name, r=response, t=elapsed: self._show_response(n, r, t))  # ПОЯСНЕНИЕ: обновляется значение переменной self.after(0, lambda n.
+                    self._append_admin_log(f"Response received from {name} in {elapsed:.1f}s")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+                except Exception as e:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+                    responses[name] = (f"Error: {str(e)}", 0)  # ПОЯСНЕНИЕ: обновляется значение переменной responses[name].
                     # Log error
-                    app_logger.log_error(name, str(e), f"Exception during query: {question[:100]}")
-                    self.after(0, lambda n=name, e=str(e): self._show_response(n, f"Error: {e}", 0))
-                    self._append_admin_log(f"Error from {name}: {e}")
+                    app_logger.log_error(name, str(e), f"Exception during query: {question[:100]}")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                    self.after(0, lambda n=name, e=str(e): self._show_response(n, f"Error: {e}", 0))  # ПОЯСНЕНИЕ: обновляется значение переменной self.after(0, lambda n.
+                    self._append_admin_log(f"Error from {name}: {e}")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
         # Save to file
-        filepath = self._save_responses(question, responses)
+        filepath = self._save_responses(question, responses)  # ПОЯСНЕНИЕ: обновляется значение переменной filepath.
 
         # Finish
-        self.after(0, lambda: self._finish_query(len(responses), total_time, filepath))
+        self.after(0, lambda: self._finish_query(len(responses), total_time, filepath))  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def _show_response(self, name: str, response: str, elapsed: float):
-        """Show response in chat"""
-        color = self.providers[name].color if name in self.providers else "#3498db"
-        header = f"\n[{name}] ({elapsed:.1f}s)\n"
-        self._add_to_chat(header, "header")
-        self._add_to_chat(response + "\n", "response")
-        self._add_to_chat("-" * 60 + "\n", "divider")
-        self._append_admin_log(f"Rendered response from {name}")
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_show_response` — выполняет отдельный шаг бизнес-логики.
+    def _show_response(self, name: str, response: str, elapsed: float):  # ПОЯСНЕНИЕ: объявляется функция _show_response с параметрами из сигнатуры.
+        """Show response in chat"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        color = self.providers[name].color if name in self.providers else "#3498db"  # ПОЯСНЕНИЕ: обновляется значение переменной color.
+        header = f"\n[{name}] ({elapsed:.1f}s)\n"  # ПОЯСНЕНИЕ: обновляется значение переменной header.
+        self._add_to_chat(header, "header")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self._add_to_chat(response + "\n", "response")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self._add_to_chat("-" * 60 + "\n", "divider")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self._append_admin_log(f"Rendered response from {name}")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def _finish_query(self, count: int, total_time: float, filepath: str):
-        """Finish query processing"""
-        self.is_processing = False
-        self.send_btn.configure(state="normal")
-        self.progress.stop()
-        self.progress.grid_forget()
-        self.status_label.configure(text=f"Completed: {count} responses in {total_time:.1f}s")
-        self._append_admin_log(f"Processing completed. Responses: {count}, total time: {total_time:.1f}s")
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_finish_query` — выполняет отдельный шаг бизнес-логики.
+    def _finish_query(self, count: int, total_time: float, filepath: str):  # ПОЯСНЕНИЕ: объявляется функция _finish_query с параметрами из сигнатуры.
+        """Finish query processing"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        self.is_processing = False  # ПОЯСНЕНИЕ: обновляется значение переменной self.is_processing.
+        self.send_btn.configure(state="normal")  # ПОЯСНЕНИЕ: обновляется значение переменной self.send_btn.configure(state.
+        self.progress.stop()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self.progress.grid_forget()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self.status_label.configure(text=f"Completed: {count} responses in {total_time:.1f}s")  # ПОЯСНЕНИЕ: обновляется значение переменной self.status_label.configure(text.
+        self._append_admin_log(f"Processing completed. Responses: {count}, total time: {total_time:.1f}s")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-        if filepath:
-            self._add_to_chat(f"\nSaved to: {filepath}\n\n", "info")
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if filepath:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            self._add_to_chat(f"\nSaved to: {filepath}\n\n", "info")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def _add_to_chat(self, text: str, tag: str = None):
-        """Add text to chat display"""
-        self.chat_display.configure(state="normal")
-        self.chat_display.insert("end", text)
-        self.chat_display.see("end")
-        self.chat_display.configure(state="disabled")
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_add_to_chat` — выполняет отдельный шаг бизнес-логики.
+    def _add_to_chat(self, text: str, tag: str = None):  # ПОЯСНЕНИЕ: объявляется функция _add_to_chat с параметрами из сигнатуры.
+        """Add text to chat display"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        self.chat_display.configure(state="normal")  # ПОЯСНЕНИЕ: обновляется значение переменной self.chat_display.configure(state.
+        self.chat_display.insert("end", text)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self.chat_display.see("end")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self.chat_display.configure(state="disabled")  # ПОЯСНЕНИЕ: обновляется значение переменной self.chat_display.configure(state.
 
-    def _append_admin_log(self, message: str):
-        """Append a message to the admin chat log with timestamp."""
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        line = f"[{timestamp}] {message}\n"
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_append_admin_log` — выполняет отдельный шаг бизнес-логики.
+    def _append_admin_log(self, message: str):  # ПОЯСНЕНИЕ: объявляется функция _append_admin_log с параметрами из сигнатуры.
+        """Append a message to the admin chat log with timestamp."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")  # ПОЯСНЕНИЕ: обновляется значение переменной timestamp.
+        line = f"[{timestamp}] {message}\n"  # ПОЯСНЕНИЕ: обновляется значение переменной line.
 
-        def write_log():
-            self.admin_log_display.configure(state="normal")
-            self.admin_log_display.insert("end", line)
-            self.admin_log_display.see("end")
-            self.admin_log_display.configure(state="disabled")
-            self.admin_log_status.configure(text=message)
+        # ЛОГИЧЕСКИЙ БЛОК: функция `write_log` — выполняет отдельный шаг бизнес-логики.
+        def write_log():  # ПОЯСНЕНИЕ: объявляется функция write_log с параметрами из сигнатуры.
+            """Описание: функция `write_log`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+            self.admin_log_display.configure(state="normal")  # ПОЯСНЕНИЕ: обновляется значение переменной self.admin_log_display.configure(state.
+            self.admin_log_display.insert("end", line)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            self.admin_log_display.see("end")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            self.admin_log_display.configure(state="disabled")  # ПОЯСНЕНИЕ: обновляется значение переменной self.admin_log_display.configure(state.
+            self.admin_log_status.configure(text=message)  # ПОЯСНЕНИЕ: обновляется значение переменной self.admin_log_status.configure(text.
 
-        self.after(0, write_log)
+        self.after(0, write_log)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def _choose_admin_log_dir(self):
-        """Choose directory for saving admin logs."""
-        directory = filedialog.askdirectory(title="Select log folder")
-        if directory:
-            self.admin_log_dir = directory
-            self.admin_log_status.configure(text=f"Folder: {os.path.basename(directory)}")
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_choose_admin_log_dir` — выполняет отдельный шаг бизнес-логики.
+    def _choose_admin_log_dir(self):  # ПОЯСНЕНИЕ: объявляется функция _choose_admin_log_dir с параметрами из сигнатуры.
+        """Choose directory for saving admin logs."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        directory = filedialog.askdirectory(title="Select log folder")  # ПОЯСНЕНИЕ: обновляется значение переменной directory.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if directory:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            self.admin_log_dir = directory  # ПОЯСНЕНИЕ: обновляется значение переменной self.admin_log_dir.
+            self.admin_log_status.configure(text=f"Folder: {os.path.basename(directory)}")  # ПОЯСНЕНИЕ: обновляется значение переменной self.admin_log_status.configure(text.
 
-    def _save_admin_log(self):
-        """Save admin chat log to a file in the selected directory."""
-        self.admin_log_display.configure(state="normal")
-        content = self.admin_log_display.get("1.0", "end-1c")
-        self.admin_log_display.configure(state="disabled")
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_save_admin_log` — выполняет отдельный шаг бизнес-логики.
+    def _save_admin_log(self):  # ПОЯСНЕНИЕ: объявляется функция _save_admin_log с параметрами из сигнатуры.
+        """Save admin chat log to a file in the selected directory."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        self.admin_log_display.configure(state="normal")  # ПОЯСНЕНИЕ: обновляется значение переменной self.admin_log_display.configure(state.
+        content = self.admin_log_display.get("1.0", "end-1c")  # ПОЯСНЕНИЕ: обновляется значение переменной content.
+        self.admin_log_display.configure(state="disabled")  # ПОЯСНЕНИЕ: обновляется значение переменной self.admin_log_display.configure(state.
 
-        if not content.strip():
-            messagebox.showwarning("Warning", "Admin log is empty. Nothing to save.")
-            return
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if not content.strip():  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            messagebox.showwarning("Warning", "Admin log is empty. Nothing to save.")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            return  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
-        if not self.admin_log_dir:
-            self._choose_admin_log_dir()
-            if not self.admin_log_dir:
-                return
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if not self.admin_log_dir:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            self._choose_admin_log_dir()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if not self.admin_log_dir:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                return  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
-        os.makedirs(self.admin_log_dir, exist_ok=True)
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"admin_chat_log_{timestamp}.txt"
-        filepath = os.path.join(self.admin_log_dir, filename)
+        os.makedirs(self.admin_log_dir, exist_ok=True)  # ПОЯСНЕНИЕ: обновляется значение переменной os.makedirs(self.admin_log_dir, exist_ok.
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")  # ПОЯСНЕНИЕ: обновляется значение переменной timestamp.
+        filename = f"admin_chat_log_{timestamp}.txt"  # ПОЯСНЕНИЕ: обновляется значение переменной filename.
+        filepath = os.path.join(self.admin_log_dir, filename)  # ПОЯСНЕНИЕ: обновляется значение переменной filepath.
 
-        try:
-            with open(filepath, "w", encoding="utf-8") as f:
-                f.write("=" * 70 + "\n")
-                f.write("AI Manager Admin Chat Log\n")
-                f.write(f"Saved: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-                f.write("=" * 70 + "\n\n")
-                f.write(content)
-                f.write("\n\n" + "=" * 70 + "\n")
-                f.write("End of admin log\n")
-                f.write("=" * 70 + "\n")
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+            with open(filepath, "w", encoding="utf-8") as f:  # ПОЯСНЕНИЕ: открывается контекстный менеджер для ресурса.
+                f.write("=" * 70 + "\n")  # ПОЯСНЕНИЕ: обновляется значение переменной f.write(".
+                f.write("AI Manager Admin Chat Log\n")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                f.write(f"Saved: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                f.write("=" * 70 + "\n\n")  # ПОЯСНЕНИЕ: обновляется значение переменной f.write(".
+                f.write(content)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                f.write("\n\n" + "=" * 70 + "\n")  # ПОЯСНЕНИЕ: обновляется значение переменной f.write("\n\n" + ".
+                f.write("End of admin log\n")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                f.write("=" * 70 + "\n")  # ПОЯСНЕНИЕ: обновляется значение переменной f.write(".
 
-            self.admin_log_status.configure(text=f"Saved: {filename}")
-            messagebox.showinfo("Success", f"Admin log saved to:\n{filepath}")
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to save admin log:\n{str(e)}")
+            self.admin_log_status.configure(text=f"Saved: {filename}")  # ПОЯСНЕНИЕ: обновляется значение переменной self.admin_log_status.configure(text.
+            messagebox.showinfo("Success", f"Admin log saved to:\n{filepath}")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except Exception as e:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+            messagebox.showerror("Error", f"Failed to save admin log:\n{str(e)}")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def _clear_chat(self):
-        """Clear chat display"""
-        self.chat_display.configure(state="normal")
-        self.chat_display.delete("1.0", "end")
-        self.chat_display.configure(state="disabled")
-        self.status_label.configure(text="Ready")
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_clear_chat` — выполняет отдельный шаг бизнес-логики.
+    def _clear_chat(self):  # ПОЯСНЕНИЕ: объявляется функция _clear_chat с параметрами из сигнатуры.
+        """Clear chat display"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        self.chat_display.configure(state="normal")  # ПОЯСНЕНИЕ: обновляется значение переменной self.chat_display.configure(state.
+        self.chat_display.delete("1.0", "end")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self.chat_display.configure(state="disabled")  # ПОЯСНЕНИЕ: обновляется значение переменной self.chat_display.configure(state.
+        self.status_label.configure(text="Ready")  # ПОЯСНЕНИЕ: обновляется значение переменной self.status_label.configure(text.
 
-    def _new_chat(self):
-        """Clear conversation history and start new chat"""
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_new_chat` — выполняет отдельный шаг бизнес-логики.
+    def _new_chat(self):  # ПОЯСНЕНИЕ: объявляется функция _new_chat с параметрами из сигнатуры.
+        """Clear conversation history and start new chat"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
         # Clear history for all providers
-        for provider in self.providers.values():
-            provider.clear_history()
+        # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+        for provider in self.providers.values():  # ПОЯСНЕНИЕ: запускается цикл for по коллекции.
+            provider.clear_history()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
         # Clear chat display
-        self._clear_chat()
-        self.status_label.configure(text="New chat started - history cleared")
-        self.current_branch_label.configure(text="Current: None")
+        self._clear_chat()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self.status_label.configure(text="New chat started - history cleared")  # ПОЯСНЕНИЕ: обновляется значение переменной self.status_label.configure(text.
+        self.current_branch_label.configure(text="Current: None")  # ПОЯСНЕНИЕ: обновляется значение переменной self.current_branch_label.configure(text.
 
-    def _save_chat_to_file(self):
-        """Save chat content to a file with directory selection"""
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_save_chat_to_file` — выполняет отдельный шаг бизнес-логики.
+    def _save_chat_to_file(self):  # ПОЯСНЕНИЕ: объявляется функция _save_chat_to_file с параметрами из сигнатуры.
+        """Save chat content to a file with directory selection"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
         # Get chat content
-        self.chat_display.configure(state="normal")
-        content = self.chat_display.get("1.0", "end-1c")
-        self.chat_display.configure(state="disabled")
+        self.chat_display.configure(state="normal")  # ПОЯСНЕНИЕ: обновляется значение переменной self.chat_display.configure(state.
+        content = self.chat_display.get("1.0", "end-1c")  # ПОЯСНЕНИЕ: обновляется значение переменной content.
+        self.chat_display.configure(state="disabled")  # ПОЯСНЕНИЕ: обновляется значение переменной self.chat_display.configure(state.
 
-        if not content.strip():
-            messagebox.showwarning("Warning", "Chat is empty. Nothing to save.")
-            return
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if not content.strip():  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            messagebox.showwarning("Warning", "Chat is empty. Nothing to save.")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            return  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
         # Generate default filename
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        default_name = f"chat_log_{timestamp}.txt"
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")  # ПОЯСНЕНИЕ: обновляется значение переменной timestamp.
+        default_name = f"chat_log_{timestamp}.txt"  # ПОЯСНЕНИЕ: обновляется значение переменной default_name.
 
         # Ask user for save location
-        filepath = filedialog.asksaveasfilename(
-            defaultextension=".txt",
-            filetypes=[
-                ("Text files", "*.txt"),
-                ("Markdown files", "*.md"),
-                ("All files", "*.*")
-            ],
-            initialfile=default_name,
-            title="Save Chat Log"
-        )
+        filepath = filedialog.asksaveasfilename(  # ПОЯСНЕНИЕ: обновляется значение переменной filepath.
+            defaultextension=".txt",  # ПОЯСНЕНИЕ: обновляется значение переменной defaultextension.
+            filetypes=[  # ПОЯСНЕНИЕ: обновляется значение переменной filetypes.
+                ("Text files", "*.txt"),  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                ("Markdown files", "*.md"),  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                ("All files", "*.*")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            ],  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            initialfile=default_name,  # ПОЯСНЕНИЕ: обновляется значение переменной initialfile.
+            title="Save Chat Log"  # ПОЯСНЕНИЕ: обновляется значение переменной title.
+        )  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-        if not filepath:
-            return  # User cancelled
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if not filepath:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            return  # User cancelled  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
-        try:
-            with open(filepath, 'w', encoding='utf-8') as f:
-                f.write("=" * 70 + "\n")
-                f.write(f"AI Manager Chat Log\n")
-                f.write(f"Saved: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-                f.write("=" * 70 + "\n\n")
-                f.write(content)
-                f.write("\n\n" + "=" * 70 + "\n")
-                f.write("End of chat log\n")
-                f.write("=" * 70 + "\n")
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+            with open(filepath, 'w', encoding='utf-8') as f:  # ПОЯСНЕНИЕ: открывается контекстный менеджер для ресурса.
+                f.write("=" * 70 + "\n")  # ПОЯСНЕНИЕ: обновляется значение переменной f.write(".
+                f.write(f"AI Manager Chat Log\n")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                f.write(f"Saved: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                f.write("=" * 70 + "\n\n")  # ПОЯСНЕНИЕ: обновляется значение переменной f.write(".
+                f.write(content)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                f.write("\n\n" + "=" * 70 + "\n")  # ПОЯСНЕНИЕ: обновляется значение переменной f.write("\n\n" + ".
+                f.write("End of chat log\n")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                f.write("=" * 70 + "\n")  # ПОЯСНЕНИЕ: обновляется значение переменной f.write(".
 
-            self.status_label.configure(text=f"Chat saved to {os.path.basename(filepath)}")
-            messagebox.showinfo("Success", f"Chat saved to:\n{filepath}")
+            self.status_label.configure(text=f"Chat saved to {os.path.basename(filepath)}")  # ПОЯСНЕНИЕ: обновляется значение переменной self.status_label.configure(text.
+            messagebox.showinfo("Success", f"Chat saved to:\n{filepath}")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to save chat:\n{str(e)}")
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except Exception as e:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+            messagebox.showerror("Error", f"Failed to save chat:\n{str(e)}")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
     # ==================== Branch Management ====================
 
-    def _refresh_branches_list(self):
-        """Refresh the branches dropdown list"""
-        branches = branch_manager.get_branches_list()
-        if branches:
-            values = [f"{b['name']} ({b['created_at'][:10]})" for b in branches]
-            self.branches_combo.configure(values=values)
-            if branch_manager.current_branch_id:
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_refresh_branches_list` — выполняет отдельный шаг бизнес-логики.
+    def _refresh_branches_list(self):  # ПОЯСНЕНИЕ: объявляется функция _refresh_branches_list с параметрами из сигнатуры.
+        """Refresh the branches dropdown list"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        branches = branch_manager.get_branches_list()  # ПОЯСНЕНИЕ: обновляется значение переменной branches.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if branches:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            values = [f"{b['name']} ({b['created_at'][:10]})" for b in branches]  # ПОЯСНЕНИЕ: обновляется значение переменной values.
+            self.branches_combo.configure(values=values)  # ПОЯСНЕНИЕ: обновляется значение переменной self.branches_combo.configure(values.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if branch_manager.current_branch_id:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
                 # Find and select current branch
-                for i, b in enumerate(branches):
-                    if b['id'] == branch_manager.current_branch_id:
-                        self.branches_combo.set(values[i])
-                        self.current_branch_label.configure(text=f"Current: {b['name']}")
-                        break
-        else:
-            self.branches_combo.configure(values=["No saved branches"])
-            self.branches_combo.set("No saved branches")
+                # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+                for i, b in enumerate(branches):  # ПОЯСНЕНИЕ: запускается цикл for по коллекции.
+                    # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                    if b['id'] == branch_manager.current_branch_id:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                        self.branches_combo.set(values[i])  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                        self.current_branch_label.configure(text=f"Current: {b['name']}")  # ПОЯСНЕНИЕ: обновляется значение переменной self.current_branch_label.configure(text.
+                        break  # ПОЯСНЕНИЕ: цикл прерывается немедленно.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        else:  # ПОЯСНЕНИЕ: выполняется альтернативная ветка else.
+            self.branches_combo.configure(values=["No saved branches"])  # ПОЯСНЕНИЕ: обновляется значение переменной self.branches_combo.configure(values.
+            self.branches_combo.set("No saved branches")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def _on_branch_selected(self, selection):
-        """Handle branch selection from dropdown"""
-        pass  # Selection is handled by Load button
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_on_branch_selected` — выполняет отдельный шаг бизнес-логики.
+    def _on_branch_selected(self, selection):  # ПОЯСНЕНИЕ: объявляется функция _on_branch_selected с параметрами из сигнатуры.
+        """Handle branch selection from dropdown"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        pass  # Selection is handled by Load button  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def _save_branch(self):
-        """Save current conversation as a new branch"""
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_save_branch` — выполняет отдельный шаг бизнес-логики.
+    def _save_branch(self):  # ПОЯСНЕНИЕ: объявляется функция _save_branch с параметрами из сигнатуры.
+        """Save current conversation as a new branch"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
         # Create dialog for branch name
-        dialog = ctk.CTkInputDialog(
-            text="Enter branch name:",
-            title="Save Branch"
-        )
-        name = dialog.get_input()
+        dialog = ctk.CTkInputDialog(  # ПОЯСНЕНИЕ: обновляется значение переменной dialog.
+            text="Enter branch name:",  # ПОЯСНЕНИЕ: обновляется значение переменной text.
+            title="Save Branch"  # ПОЯСНЕНИЕ: обновляется значение переменной title.
+        )  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        name = dialog.get_input()  # ПОЯСНЕНИЕ: обновляется значение переменной name.
 
-        if not name:
-            return
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if not name:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            return  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
         # Collect conversation history from all providers
-        providers_history = {}
-        for key, provider in self.providers.items():
-            providers_history[key] = provider.conversation_history.copy()
+        providers_history = {}  # ПОЯСНЕНИЕ: обновляется значение переменной providers_history.
+        # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+        for key, provider in self.providers.items():  # ПОЯСНЕНИЕ: запускается цикл for по коллекции.
+            providers_history[key] = provider.conversation_history.copy()  # ПОЯСНЕНИЕ: обновляется значение переменной providers_history[key].
 
         # Get chat content
-        self.chat_display.configure(state="normal")
-        chat_content = self.chat_display.get("1.0", "end-1c")
-        self.chat_display.configure(state="disabled")
+        self.chat_display.configure(state="normal")  # ПОЯСНЕНИЕ: обновляется значение переменной self.chat_display.configure(state.
+        chat_content = self.chat_display.get("1.0", "end-1c")  # ПОЯСНЕНИЕ: обновляется значение переменной chat_content.
+        self.chat_display.configure(state="disabled")  # ПОЯСНЕНИЕ: обновляется значение переменной self.chat_display.configure(state.
 
         # Save branch
-        branch_id = branch_manager.create_branch(name, providers_history, chat_content)
+        branch_id = branch_manager.create_branch(name, providers_history, chat_content)  # ПОЯСНЕНИЕ: обновляется значение переменной branch_id.
 
-        if branch_id:
-            self._refresh_branches_list()
-            self.status_label.configure(text=f"Branch '{name}' saved")
-            self.current_branch_label.configure(text=f"Current: {name}")
-            messagebox.showinfo("Success", f"Branch '{name}' saved successfully!")
-        else:
-            messagebox.showerror("Error", "Failed to save branch")
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if branch_id:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            self._refresh_branches_list()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            self.status_label.configure(text=f"Branch '{name}' saved")  # ПОЯСНЕНИЕ: обновляется значение переменной self.status_label.configure(text.
+            self.current_branch_label.configure(text=f"Current: {name}")  # ПОЯСНЕНИЕ: обновляется значение переменной self.current_branch_label.configure(text.
+            messagebox.showinfo("Success", f"Branch '{name}' saved successfully!")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        else:  # ПОЯСНЕНИЕ: выполняется альтернативная ветка else.
+            messagebox.showerror("Error", "Failed to save branch")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def _load_branch(self):
-        """Load selected branch"""
-        selection = self.branches_combo.get()
-        if selection == "No saved branches":
-            messagebox.showwarning("Warning", "No branches to load")
-            return
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_load_branch` — выполняет отдельный шаг бизнес-логики.
+    def _load_branch(self):  # ПОЯСНЕНИЕ: объявляется функция _load_branch с параметрами из сигнатуры.
+        """Load selected branch"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        selection = self.branches_combo.get()  # ПОЯСНЕНИЕ: обновляется значение переменной selection.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if selection == "No saved branches":  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            messagebox.showwarning("Warning", "No branches to load")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            return  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
-        branches = branch_manager.get_branches_list()
-        if not branches:
-            return
+        branches = branch_manager.get_branches_list()  # ПОЯСНЕНИЕ: обновляется значение переменной branches.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if not branches:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            return  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
         # Find selected branch
-        selected_idx = None
-        values = [f"{b['name']} ({b['created_at'][:10]})" for b in branches]
-        for i, v in enumerate(values):
-            if v == selection:
-                selected_idx = i
-                break
+        selected_idx = None  # ПОЯСНЕНИЕ: обновляется значение переменной selected_idx.
+        values = [f"{b['name']} ({b['created_at'][:10]})" for b in branches]  # ПОЯСНЕНИЕ: обновляется значение переменной values.
+        # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+        for i, v in enumerate(values):  # ПОЯСНЕНИЕ: запускается цикл for по коллекции.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if v == selection:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                selected_idx = i  # ПОЯСНЕНИЕ: обновляется значение переменной selected_idx.
+                break  # ПОЯСНЕНИЕ: цикл прерывается немедленно.
 
-        if selected_idx is None:
-            messagebox.showwarning("Warning", "Please select a branch first")
-            return
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if selected_idx is None:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            messagebox.showwarning("Warning", "Please select a branch first")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            return  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
-        branch = branches[selected_idx]
-        branch_data = branch_manager.load_branch(branch['id'])
+        branch = branches[selected_idx]  # ПОЯСНЕНИЕ: обновляется значение переменной branch.
+        branch_data = branch_manager.load_branch(branch['id'])  # ПОЯСНЕНИЕ: обновляется значение переменной branch_data.
 
-        if not branch_data:
-            messagebox.showerror("Error", "Failed to load branch")
-            return
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if not branch_data:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            messagebox.showerror("Error", "Failed to load branch")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            return  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
         # Restore conversation history to providers
-        providers_history = branch_data.get("providers_history", {})
-        for key, history in providers_history.items():
-            if key in self.providers:
-                self.providers[key].conversation_history = history.copy()
+        providers_history = branch_data.get("providers_history", {})  # ПОЯСНЕНИЕ: обновляется значение переменной providers_history.
+        # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+        for key, history in providers_history.items():  # ПОЯСНЕНИЕ: запускается цикл for по коллекции.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if key in self.providers:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                self.providers[key].conversation_history = history.copy()  # ПОЯСНЕНИЕ: обновляется значение переменной self.providers[key].conversation_history.
 
         # Restore chat display
-        chat_content = branch_data.get("chat_content", "")
-        self.chat_display.configure(state="normal")
-        self.chat_display.delete("1.0", "end")
-        self.chat_display.insert("1.0", chat_content)
-        self.chat_display.configure(state="disabled")
+        chat_content = branch_data.get("chat_content", "")  # ПОЯСНЕНИЕ: обновляется значение переменной chat_content.
+        self.chat_display.configure(state="normal")  # ПОЯСНЕНИЕ: обновляется значение переменной self.chat_display.configure(state.
+        self.chat_display.delete("1.0", "end")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self.chat_display.insert("1.0", chat_content)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self.chat_display.configure(state="disabled")  # ПОЯСНЕНИЕ: обновляется значение переменной self.chat_display.configure(state.
 
-        self.current_branch_label.configure(text=f"Current: {branch['name']}")
-        self.status_label.configure(text=f"Branch '{branch['name']}' loaded")
-        messagebox.showinfo("Success", f"Branch '{branch['name']}' loaded successfully!")
+        self.current_branch_label.configure(text=f"Current: {branch['name']}")  # ПОЯСНЕНИЕ: обновляется значение переменной self.current_branch_label.configure(text.
+        self.status_label.configure(text=f"Branch '{branch['name']}' loaded")  # ПОЯСНЕНИЕ: обновляется значение переменной self.status_label.configure(text.
+        messagebox.showinfo("Success", f"Branch '{branch['name']}' loaded successfully!")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def _delete_branch(self):
-        """Delete selected branch"""
-        selection = self.branches_combo.get()
-        if selection == "No saved branches":
-            messagebox.showwarning("Warning", "No branches to delete")
-            return
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_delete_branch` — выполняет отдельный шаг бизнес-логики.
+    def _delete_branch(self):  # ПОЯСНЕНИЕ: объявляется функция _delete_branch с параметрами из сигнатуры.
+        """Delete selected branch"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        selection = self.branches_combo.get()  # ПОЯСНЕНИЕ: обновляется значение переменной selection.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if selection == "No saved branches":  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            messagebox.showwarning("Warning", "No branches to delete")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            return  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
-        branches = branch_manager.get_branches_list()
-        if not branches:
-            return
+        branches = branch_manager.get_branches_list()  # ПОЯСНЕНИЕ: обновляется значение переменной branches.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if not branches:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            return  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
         # Find selected branch
-        selected_idx = None
-        values = [f"{b['name']} ({b['created_at'][:10]})" for b in branches]
-        for i, v in enumerate(values):
-            if v == selection:
-                selected_idx = i
-                break
+        selected_idx = None  # ПОЯСНЕНИЕ: обновляется значение переменной selected_idx.
+        values = [f"{b['name']} ({b['created_at'][:10]})" for b in branches]  # ПОЯСНЕНИЕ: обновляется значение переменной values.
+        # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+        for i, v in enumerate(values):  # ПОЯСНЕНИЕ: запускается цикл for по коллекции.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if v == selection:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                selected_idx = i  # ПОЯСНЕНИЕ: обновляется значение переменной selected_idx.
+                break  # ПОЯСНЕНИЕ: цикл прерывается немедленно.
 
-        if selected_idx is None:
-            messagebox.showwarning("Warning", "Please select a branch first")
-            return
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if selected_idx is None:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            messagebox.showwarning("Warning", "Please select a branch first")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            return  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
-        branch = branches[selected_idx]
+        branch = branches[selected_idx]  # ПОЯСНЕНИЕ: обновляется значение переменной branch.
 
         # Confirm deletion
-        if not messagebox.askyesno("Confirm", f"Delete branch '{branch['name']}'?"):
-            return
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if not messagebox.askyesno("Confirm", f"Delete branch '{branch['name']}'?"):  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            return  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
-        if branch_manager.delete_branch(branch['id']):
-            self._refresh_branches_list()
-            self.status_label.configure(text=f"Branch '{branch['name']}' deleted")
-            if branch_manager.current_branch_id is None:
-                self.current_branch_label.configure(text="Current: None")
-            messagebox.showinfo("Success", f"Branch '{branch['name']}' deleted")
-        else:
-            messagebox.showerror("Error", "Failed to delete branch")
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if branch_manager.delete_branch(branch['id']):  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            self._refresh_branches_list()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            self.status_label.configure(text=f"Branch '{branch['name']}' deleted")  # ПОЯСНЕНИЕ: обновляется значение переменной self.status_label.configure(text.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if branch_manager.current_branch_id is None:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                self.current_branch_label.configure(text="Current: None")  # ПОЯСНЕНИЕ: обновляется значение переменной self.current_branch_label.configure(text.
+            messagebox.showinfo("Success", f"Branch '{branch['name']}' deleted")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        else:  # ПОЯСНЕНИЕ: выполняется альтернативная ветка else.
+            messagebox.showerror("Error", "Failed to delete branch")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def _paste_from_clipboard(self):
-        """Paste text from clipboard to input field"""
-        target = self._get_text_widget(self.chat_input)
-        if not target:
-            return
-        with self._with_widget_enabled(target):
-            try:
-                target.event_generate("<<Paste>>")
-            except Exception:
-                pass
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_paste_from_clipboard` — выполняет отдельный шаг бизнес-логики.
+    def _paste_from_clipboard(self):  # ПОЯСНЕНИЕ: объявляется функция _paste_from_clipboard с параметрами из сигнатуры.
+        """Paste text from clipboard to input field"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        target = self._get_text_widget(self.chat_input)  # ПОЯСНЕНИЕ: обновляется значение переменной target.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if not target:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            return  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+        with self._with_widget_enabled(target):  # ПОЯСНЕНИЕ: открывается контекстный менеджер для ресурса.
+            # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+            try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+                target.event_generate("<<Paste>>")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+            except Exception:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+                pass  # ПОЯСНЕНИЕ: оставляется пустая заглушка без действий.
 
-    def _copy_to_clipboard(self, text: str):
-        """Copy text to clipboard"""
-        try:
-            self.clipboard_clear()
-            self.clipboard_append(text)
-            self.status_label.configure(text="Copied to clipboard")
-        except Exception:
-            pass
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_copy_to_clipboard` — выполняет отдельный шаг бизнес-логики.
+    def _copy_to_clipboard(self, text: str):  # ПОЯСНЕНИЕ: объявляется функция _copy_to_clipboard с параметрами из сигнатуры.
+        """Copy text to clipboard"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+            self.clipboard_clear()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            self.clipboard_append(text)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            self.status_label.configure(text="Copied to clipboard")  # ПОЯСНЕНИЕ: обновляется значение переменной self.status_label.configure(text.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except Exception:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+            pass  # ПОЯСНЕНИЕ: оставляется пустая заглушка без действий.
 
-    def _create_context_menu(self):
-        """Create right-click context menu for text widgets"""
-        import tkinter as tk
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_create_context_menu` — выполняет отдельный шаг бизнес-логики.
+    def _create_context_menu(self):  # ПОЯСНЕНИЕ: объявляется функция _create_context_menu с параметрами из сигнатуры.
+        """Create right-click context menu for text widgets"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        import tkinter as tk  # ПОЯСНЕНИЕ: импортируется модуль tkinter as tk.
 
         # Context menu for input
-        self.input_menu = tk.Menu(self, tearoff=0)
-        self.input_menu.add_command(label="Cut", command=self._cut_input, accelerator="Ctrl+X")
-        self.input_menu.add_command(label="Copy", command=self._copy_input, accelerator="Ctrl+C")
-        self.input_menu.add_command(label="Paste", command=self._paste_from_clipboard, accelerator="Ctrl+V")
-        self.input_menu.add_separator()
-        self.input_menu.add_command(label="Select All", command=self._select_all_input, accelerator="Ctrl+A")
-        self.input_menu.add_command(label="Clear", command=lambda: self.chat_input.delete("1.0", "end"))
+        self.input_menu = tk.Menu(self, tearoff=0)  # ПОЯСНЕНИЕ: обновляется значение переменной self.input_menu.
+        self.input_menu.add_command(label="Cut", command=self._cut_input, accelerator="Ctrl+X")  # ПОЯСНЕНИЕ: обновляется значение переменной self.input_menu.add_command(label.
+        self.input_menu.add_command(label="Copy", command=self._copy_input, accelerator="Ctrl+C")  # ПОЯСНЕНИЕ: обновляется значение переменной self.input_menu.add_command(label.
+        self.input_menu.add_command(label="Paste", command=self._paste_from_clipboard, accelerator="Ctrl+V")  # ПОЯСНЕНИЕ: обновляется значение переменной self.input_menu.add_command(label.
+        self.input_menu.add_separator()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self.input_menu.add_command(label="Select All", command=self._select_all_input, accelerator="Ctrl+A")  # ПОЯСНЕНИЕ: обновляется значение переменной self.input_menu.add_command(label.
+        self.input_menu.add_command(label="Clear", command=lambda: self.chat_input.delete("1.0", "end"))  # ПОЯСНЕНИЕ: обновляется значение переменной self.input_menu.add_command(label.
 
         # Context menu for chat display
-        self.chat_menu = tk.Menu(self, tearoff=0)
-        self.chat_menu.add_command(label="Copy", command=self._copy_chat_selection, accelerator="Ctrl+C")
-        self.chat_menu.add_command(label="Copy All", command=self._copy_all_chat)
-        self.chat_menu.add_separator()
-        self.chat_menu.add_command(label="Select All", command=self._select_all_chat, accelerator="Ctrl+A")
-        self.chat_menu.add_command(label="Clear Chat", command=self._clear_chat)
+        self.chat_menu = tk.Menu(self, tearoff=0)  # ПОЯСНЕНИЕ: обновляется значение переменной self.chat_menu.
+        self.chat_menu.add_command(label="Copy", command=self._copy_chat_selection, accelerator="Ctrl+C")  # ПОЯСНЕНИЕ: обновляется значение переменной self.chat_menu.add_command(label.
+        self.chat_menu.add_command(label="Copy All", command=self._copy_all_chat)  # ПОЯСНЕНИЕ: обновляется значение переменной self.chat_menu.add_command(label.
+        self.chat_menu.add_separator()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self.chat_menu.add_command(label="Select All", command=self._select_all_chat, accelerator="Ctrl+A")  # ПОЯСНЕНИЕ: обновляется значение переменной self.chat_menu.add_command(label.
+        self.chat_menu.add_command(label="Clear Chat", command=self._clear_chat)  # ПОЯСНЕНИЕ: обновляется значение переменной self.chat_menu.add_command(label.
 
         # Bind right-click
-        self.chat_input.bind("<Button-3>", self._show_input_menu)
-        self.chat_display.bind("<Button-3>", self._show_chat_menu)
+        self.chat_input.bind("<Button-3>", self._show_input_menu)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self.chat_display.bind("<Button-3>", self._show_chat_menu)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
         # ===== Keyboard shortcuts for all text widgets =====
         # IMPORTANT: For disabled widgets (readonly), need to temporarily enable for copy
-        self._bind_clipboard_shortcuts(self.chat_input, readonly=False)
-        self._bind_clipboard_shortcuts(self.chat_display, readonly=True)
+        self._bind_clipboard_shortcuts(self.chat_input, readonly=False)  # ПОЯСНЕНИЕ: обновляется значение переменной self._bind_clipboard_shortcuts(self.chat_input, re.
+        self._bind_clipboard_shortcuts(self.chat_display, readonly=True)  # ПОЯСНЕНИЕ: обновляется значение переменной self._bind_clipboard_shortcuts(self.chat_display, .
 
-    def _get_text_widget(self, widget):
-        """Resolve CTk widgets to their underlying tk widget."""
-        if hasattr(widget, "_entry"):
-            return widget._entry
-        if hasattr(widget, "_textbox"):
-            return widget._textbox
-        return widget
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_get_text_widget` — выполняет отдельный шаг бизнес-логики.
+    def _get_text_widget(self, widget):  # ПОЯСНЕНИЕ: объявляется функция _get_text_widget с параметрами из сигнатуры.
+        """Resolve CTk widgets to their underlying tk widget."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if hasattr(widget, "_entry"):  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            return widget._entry  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if hasattr(widget, "_textbox"):  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            return widget._textbox  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+        return widget  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
-    @contextlib.contextmanager
-    def _with_widget_enabled(self, widget):
-        """Temporarily enable widgets in disabled/readonly state."""
-        original_state = None
-        try:
-            original_state = widget.cget("state")
-        except Exception:
-            original_state = None
-        if original_state in ("disabled", "readonly"):
-            try:
-                widget.configure(state="normal")
-            except Exception:
-                pass
-        try:
-            yield
-        finally:
-            if original_state in ("disabled", "readonly"):
-                try:
-                    widget.configure(state=original_state)
-                except Exception:
-                    pass
+    @contextlib.contextmanager  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_with_widget_enabled` — выполняет отдельный шаг бизнес-логики.
+    def _with_widget_enabled(self, widget):  # ПОЯСНЕНИЕ: объявляется функция _with_widget_enabled с параметрами из сигнатуры.
+        """Temporarily enable widgets in disabled/readonly state."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        original_state = None  # ПОЯСНЕНИЕ: обновляется значение переменной original_state.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+            original_state = widget.cget("state")  # ПОЯСНЕНИЕ: обновляется значение переменной original_state.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except Exception:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+            original_state = None  # ПОЯСНЕНИЕ: обновляется значение переменной original_state.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if original_state in ("disabled", "readonly"):  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+            try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+                widget.configure(state="normal")  # ПОЯСНЕНИЕ: обновляется значение переменной widget.configure(state.
+            # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+            except Exception:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+                pass  # ПОЯСНЕНИЕ: оставляется пустая заглушка без действий.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+            yield  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        finally:  # ПОЯСНЕНИЕ: выполняются действия очистки в finally.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if original_state in ("disabled", "readonly"):  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+                try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+                    widget.configure(state=original_state)  # ПОЯСНЕНИЕ: обновляется значение переменной widget.configure(state.
+                # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+                except Exception:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+                    pass  # ПОЯСНЕНИЕ: оставляется пустая заглушка без действий.
 
-    def _bind_clipboard_shortcuts(self, widget, readonly=False):
-        """Bind clipboard shortcuts with native Tk events and safe fallback."""
-        def _selection_present(target):
-            if isinstance(target, tk.Entry):
-                return target.selection_present()
-            if isinstance(target, tk.Text):
-                return bool(target.tag_ranges("sel"))
-            return False
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_bind_clipboard_shortcuts` — выполняет отдельный шаг бизнес-логики.
+    def _bind_clipboard_shortcuts(self, widget, readonly=False):  # ПОЯСНЕНИЕ: объявляется функция _bind_clipboard_shortcuts с параметрами из сигнатуры.
+        """Bind clipboard shortcuts with native Tk events and safe fallback."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        # ЛОГИЧЕСКИЙ БЛОК: функция `_selection_present` — выполняет отдельный шаг бизнес-логики.
+        def _selection_present(target):  # ПОЯСНЕНИЕ: объявляется функция _selection_present с параметрами из сигнатуры.
+            """Описание: функция `_selection_present`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if isinstance(target, tk.Entry):  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                return target.selection_present()  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if isinstance(target, tk.Text):  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                return bool(target.tag_ranges("sel"))  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+            return False  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
-        def _handle_copy(event=None):
-            target = self._get_text_widget(event.widget if event else widget)
-            if not target or not _selection_present(target):
-                return None
-            with self._with_widget_enabled(target):
-                try:
-                    target.event_generate("<<Copy>>")
-                    return "break"
-                except Exception:
-                    return None
+        # ЛОГИЧЕСКИЙ БЛОК: функция `_handle_copy` — выполняет отдельный шаг бизнес-логики.
+        def _handle_copy(event=None):  # ПОЯСНЕНИЕ: объявляется функция _handle_copy с параметрами из сигнатуры.
+            """Описание: функция `_handle_copy`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+            target = self._get_text_widget(event.widget if event else widget)  # ПОЯСНЕНИЕ: обновляется значение переменной target.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if not target or not _selection_present(target):  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                return None  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+            with self._with_widget_enabled(target):  # ПОЯСНЕНИЕ: открывается контекстный менеджер для ресурса.
+                # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+                try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+                    target.event_generate("<<Copy>>")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                    return "break"  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+                # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+                except Exception:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+                    return None  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
-        def _handle_cut(event=None):
-            if readonly:
-                return None
-            target = self._get_text_widget(event.widget if event else widget)
-            if not target or not _selection_present(target):
-                return None
-            with self._with_widget_enabled(target):
-                try:
-                    target.event_generate("<<Cut>>")
-                    return "break"
-                except Exception:
-                    return None
+        # ЛОГИЧЕСКИЙ БЛОК: функция `_handle_cut` — выполняет отдельный шаг бизнес-логики.
+        def _handle_cut(event=None):  # ПОЯСНЕНИЕ: объявляется функция _handle_cut с параметрами из сигнатуры.
+            """Описание: функция `_handle_cut`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if readonly:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                return None  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+            target = self._get_text_widget(event.widget if event else widget)  # ПОЯСНЕНИЕ: обновляется значение переменной target.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if not target or not _selection_present(target):  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                return None  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+            with self._with_widget_enabled(target):  # ПОЯСНЕНИЕ: открывается контекстный менеджер для ресурса.
+                # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+                try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+                    target.event_generate("<<Cut>>")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                    return "break"  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+                # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+                except Exception:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+                    return None  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
-        def _handle_paste(event=None):
-            if readonly:
-                return None
-            try:
-                clipboard_text = self.clipboard_get()
-            except Exception:
-                return None
-            if not clipboard_text:
-                return None
-            target = self._get_text_widget(event.widget if event else widget)
-            if not target:
-                return None
-            with self._with_widget_enabled(target):
-                try:
-                    target.event_generate("<<Paste>>")
-                    return "break"
-                except Exception:
-                    try:
-                        if isinstance(target, tk.Entry):
-                            if target.selection_present():
-                                target.delete("sel.first", "sel.last")
-                            target.insert(target.index("insert"), clipboard_text)
-                        elif isinstance(target, tk.Text):
-                            if target.tag_ranges("sel"):
-                                target.delete("sel.first", "sel.last")
-                            target.insert("insert", clipboard_text)
-                        return "break"
-                    except Exception:
-                        return None
+        # ЛОГИЧЕСКИЙ БЛОК: функция `_handle_paste` — выполняет отдельный шаг бизнес-логики.
+        def _handle_paste(event=None):  # ПОЯСНЕНИЕ: объявляется функция _handle_paste с параметрами из сигнатуры.
+            """Описание: функция `_handle_paste`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if readonly:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                return None  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+            # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+            try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+                clipboard_text = self.clipboard_get()  # ПОЯСНЕНИЕ: обновляется значение переменной clipboard_text.
+            # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+            except Exception:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+                return None  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if not clipboard_text:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                return None  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+            target = self._get_text_widget(event.widget if event else widget)  # ПОЯСНЕНИЕ: обновляется значение переменной target.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if not target:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                return None  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+            with self._with_widget_enabled(target):  # ПОЯСНЕНИЕ: открывается контекстный менеджер для ресурса.
+                # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+                try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+                    target.event_generate("<<Paste>>")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                    return "break"  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+                # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+                except Exception:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+                    # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+                    try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+                        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                        if isinstance(target, tk.Entry):  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                            if target.selection_present():  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                                target.delete("sel.first", "sel.last")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                            target.insert(target.index("insert"), clipboard_text)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                        elif isinstance(target, tk.Text):  # ПОЯСНЕНИЕ: проверяется дополнительное условие elif.
+                            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                            if target.tag_ranges("sel"):  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                                target.delete("sel.first", "sel.last")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                            target.insert("insert", clipboard_text)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                        return "break"  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+                    # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+                    except Exception:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+                        return None  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
-        def _handle_select_all(event=None):
-            target = self._get_text_widget(event.widget if event else widget)
-            if not target:
-                return None
-            with self._with_widget_enabled(target):
-                try:
-                    if isinstance(target, tk.Entry):
-                        target.select_range(0, "end")
-                    elif isinstance(target, tk.Text):
-                        target.tag_add("sel", "1.0", "end-1c")
-                    target.focus_set()
-                    return "break"
-                except Exception:
-                    return None
+        # ЛОГИЧЕСКИЙ БЛОК: функция `_handle_select_all` — выполняет отдельный шаг бизнес-логики.
+        def _handle_select_all(event=None):  # ПОЯСНЕНИЕ: объявляется функция _handle_select_all с параметрами из сигнатуры.
+            """Описание: функция `_handle_select_all`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+            target = self._get_text_widget(event.widget if event else widget)  # ПОЯСНЕНИЕ: обновляется значение переменной target.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if not target:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                return None  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+            with self._with_widget_enabled(target):  # ПОЯСНЕНИЕ: открывается контекстный менеджер для ресурса.
+                # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+                try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+                    # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                    if isinstance(target, tk.Entry):  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                        target.select_range(0, "end")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                    # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                    elif isinstance(target, tk.Text):  # ПОЯСНЕНИЕ: проверяется дополнительное условие elif.
+                        target.tag_add("sel", "1.0", "end-1c")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                    target.focus_set()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                    return "break"  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+                # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+                except Exception:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+                    return None  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
-        widget.bind("<Control-c>", _handle_copy)
-        widget.bind("<Control-C>", _handle_copy)
-        widget.bind("<Control-x>", _handle_cut)
-        widget.bind("<Control-X>", _handle_cut)
-        widget.bind("<Control-v>", _handle_paste)
-        widget.bind("<Control-V>", _handle_paste)
-        widget.bind("<Control-a>", _handle_select_all)
-        widget.bind("<Control-A>", _handle_select_all)
+        widget.bind("<Control-c>", _handle_copy)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        widget.bind("<Control-C>", _handle_copy)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        widget.bind("<Control-x>", _handle_cut)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        widget.bind("<Control-X>", _handle_cut)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        widget.bind("<Control-v>", _handle_paste)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        widget.bind("<Control-V>", _handle_paste)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        widget.bind("<Control-a>", _handle_select_all)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        widget.bind("<Control-A>", _handle_select_all)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def _show_input_menu(self, event):
-        """Show context menu for input"""
-        try:
-            self.input_menu.tk_popup(event.x_root, event.y_root)
-        finally:
-            self.input_menu.grab_release()
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_show_input_menu` — выполняет отдельный шаг бизнес-логики.
+    def _show_input_menu(self, event):  # ПОЯСНЕНИЕ: объявляется функция _show_input_menu с параметрами из сигнатуры.
+        """Show context menu for input"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+            self.input_menu.tk_popup(event.x_root, event.y_root)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        finally:  # ПОЯСНЕНИЕ: выполняются действия очистки в finally.
+            self.input_menu.grab_release()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def _show_chat_menu(self, event):
-        """Show context menu for chat"""
-        try:
-            self.chat_menu.tk_popup(event.x_root, event.y_root)
-        finally:
-            self.chat_menu.grab_release()
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_show_chat_menu` — выполняет отдельный шаг бизнес-логики.
+    def _show_chat_menu(self, event):  # ПОЯСНЕНИЕ: объявляется функция _show_chat_menu с параметрами из сигнатуры.
+        """Show context menu for chat"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+            self.chat_menu.tk_popup(event.x_root, event.y_root)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        finally:  # ПОЯСНЕНИЕ: выполняются действия очистки в finally.
+            self.chat_menu.grab_release()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def _cut_input(self):
-        """Cut selected text from input"""
-        target = self._get_text_widget(self.chat_input)
-        if not target:
-            return
-        with self._with_widget_enabled(target):
-            try:
-                target.event_generate("<<Cut>>")
-            except Exception:
-                pass
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_cut_input` — выполняет отдельный шаг бизнес-логики.
+    def _cut_input(self):  # ПОЯСНЕНИЕ: объявляется функция _cut_input с параметрами из сигнатуры.
+        """Cut selected text from input"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        target = self._get_text_widget(self.chat_input)  # ПОЯСНЕНИЕ: обновляется значение переменной target.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if not target:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            return  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+        with self._with_widget_enabled(target):  # ПОЯСНЕНИЕ: открывается контекстный менеджер для ресурса.
+            # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+            try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+                target.event_generate("<<Cut>>")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+            except Exception:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+                pass  # ПОЯСНЕНИЕ: оставляется пустая заглушка без действий.
 
-    def _copy_input(self):
-        """Copy selected text from input"""
-        target = self._get_text_widget(self.chat_input)
-        if not target:
-            return
-        with self._with_widget_enabled(target):
-            try:
-                target.event_generate("<<Copy>>")
-            except Exception:
-                pass
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_copy_input` — выполняет отдельный шаг бизнес-логики.
+    def _copy_input(self):  # ПОЯСНЕНИЕ: объявляется функция _copy_input с параметрами из сигнатуры.
+        """Copy selected text from input"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        target = self._get_text_widget(self.chat_input)  # ПОЯСНЕНИЕ: обновляется значение переменной target.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if not target:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            return  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+        with self._with_widget_enabled(target):  # ПОЯСНЕНИЕ: открывается контекстный менеджер для ресурса.
+            # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+            try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+                target.event_generate("<<Copy>>")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+            except Exception:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+                pass  # ПОЯСНЕНИЕ: оставляется пустая заглушка без действий.
 
-    def _select_all_input(self):
-        """Select all text in input"""
-        target = self._get_text_widget(self.chat_input)
-        if not target:
-            return "break"
-        with self._with_widget_enabled(target):
-            try:
-                target.tag_add("sel", "1.0", "end-1c")
-                target.focus_set()
-            except Exception:
-                pass
-        return "break"
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_select_all_input` — выполняет отдельный шаг бизнес-логики.
+    def _select_all_input(self):  # ПОЯСНЕНИЕ: объявляется функция _select_all_input с параметрами из сигнатуры.
+        """Select all text in input"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        target = self._get_text_widget(self.chat_input)  # ПОЯСНЕНИЕ: обновляется значение переменной target.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if not target:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            return "break"  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+        with self._with_widget_enabled(target):  # ПОЯСНЕНИЕ: открывается контекстный менеджер для ресурса.
+            # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+            try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+                target.tag_add("sel", "1.0", "end-1c")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                target.focus_set()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+            except Exception:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+                pass  # ПОЯСНЕНИЕ: оставляется пустая заглушка без действий.
+        return "break"  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
-    def _copy_chat_selection(self):
-        """Copy selected text from chat"""
-        target = self._get_text_widget(self.chat_display)
-        if not target:
-            return
-        with self._with_widget_enabled(target):
-            try:
-                target.event_generate("<<Copy>>")
-            except Exception:
-                pass
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_copy_chat_selection` — выполняет отдельный шаг бизнес-логики.
+    def _copy_chat_selection(self):  # ПОЯСНЕНИЕ: объявляется функция _copy_chat_selection с параметрами из сигнатуры.
+        """Copy selected text from chat"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        target = self._get_text_widget(self.chat_display)  # ПОЯСНЕНИЕ: обновляется значение переменной target.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if not target:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            return  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+        with self._with_widget_enabled(target):  # ПОЯСНЕНИЕ: открывается контекстный менеджер для ресурса.
+            # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+            try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+                target.event_generate("<<Copy>>")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+            except Exception:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+                pass  # ПОЯСНЕНИЕ: оставляется пустая заглушка без действий.
 
-    def _copy_all_chat(self):
-        """Copy all chat content"""
-        target = self._get_text_widget(self.chat_display)
-        if not target:
-            return
-        with self._with_widget_enabled(target):
-            try:
-                if isinstance(target, tk.Text):
-                    target.tag_add("sel", "1.0", "end-1c")
-                    target.event_generate("<<Copy>>")
-                    target.tag_remove("sel", "1.0", "end")
-            except Exception:
-                pass
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_copy_all_chat` — выполняет отдельный шаг бизнес-логики.
+    def _copy_all_chat(self):  # ПОЯСНЕНИЕ: объявляется функция _copy_all_chat с параметрами из сигнатуры.
+        """Copy all chat content"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        target = self._get_text_widget(self.chat_display)  # ПОЯСНЕНИЕ: обновляется значение переменной target.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if not target:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            return  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+        with self._with_widget_enabled(target):  # ПОЯСНЕНИЕ: открывается контекстный менеджер для ресурса.
+            # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+            try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+                # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                if isinstance(target, tk.Text):  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                    target.tag_add("sel", "1.0", "end-1c")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                    target.event_generate("<<Copy>>")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                    target.tag_remove("sel", "1.0", "end")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+            except Exception:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+                pass  # ПОЯСНЕНИЕ: оставляется пустая заглушка без действий.
 
-    def _select_all_chat(self):
-        """Select all text in chat"""
-        target = self._get_text_widget(self.chat_display)
-        if not target:
-            return
-        with self._with_widget_enabled(target):
-            try:
-                if isinstance(target, tk.Text):
-                    target.tag_add("sel", "1.0", "end-1c")
-                    target.focus_set()
-            except Exception:
-                pass
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_select_all_chat` — выполняет отдельный шаг бизнес-логики.
+    def _select_all_chat(self):  # ПОЯСНЕНИЕ: объявляется функция _select_all_chat с параметрами из сигнатуры.
+        """Select all text in chat"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        target = self._get_text_widget(self.chat_display)  # ПОЯСНЕНИЕ: обновляется значение переменной target.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if not target:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            return  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+        with self._with_widget_enabled(target):  # ПОЯСНЕНИЕ: открывается контекстный менеджер для ресурса.
+            # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+            try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+                # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                if isinstance(target, tk.Text):  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                    target.tag_add("sel", "1.0", "end-1c")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                    target.focus_set()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+            except Exception:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+                pass  # ПОЯСНЕНИЕ: оставляется пустая заглушка без действий.
 
     # ==================== Logs Keyboard Shortcuts ====================
 
-    def _show_logs_menu(self, event):
-        """Show context menu for logs"""
-        try:
-            self.logs_menu.tk_popup(event.x_root, event.y_root)
-        finally:
-            self.logs_menu.grab_release()
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_show_logs_menu` — выполняет отдельный шаг бизнес-логики.
+    def _show_logs_menu(self, event):  # ПОЯСНЕНИЕ: объявляется функция _show_logs_menu с параметрами из сигнатуры.
+        """Show context menu for logs"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+            self.logs_menu.tk_popup(event.x_root, event.y_root)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        finally:  # ПОЯСНЕНИЕ: выполняются действия очистки в finally.
+            self.logs_menu.grab_release()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def _copy_logs_selection(self):
-        """Copy selected text from logs"""
-        target = self._get_text_widget(self.logs_display)
-        if not target:
-            return
-        with self._with_widget_enabled(target):
-            try:
-                target.event_generate("<<Copy>>")
-            except Exception:
-                pass
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_copy_logs_selection` — выполняет отдельный шаг бизнес-логики.
+    def _copy_logs_selection(self):  # ПОЯСНЕНИЕ: объявляется функция _copy_logs_selection с параметрами из сигнатуры.
+        """Copy selected text from logs"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        target = self._get_text_widget(self.logs_display)  # ПОЯСНЕНИЕ: обновляется значение переменной target.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if not target:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            return  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+        with self._with_widget_enabled(target):  # ПОЯСНЕНИЕ: открывается контекстный менеджер для ресурса.
+            # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+            try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+                target.event_generate("<<Copy>>")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+            except Exception:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+                pass  # ПОЯСНЕНИЕ: оставляется пустая заглушка без действий.
 
-    def _copy_all_logs(self):
-        """Copy all logs content"""
-        target = self._get_text_widget(self.logs_display)
-        if not target:
-            return
-        with self._with_widget_enabled(target):
-            try:
-                if isinstance(target, tk.Text):
-                    target.tag_add("sel", "1.0", "end-1c")
-                    target.event_generate("<<Copy>>")
-                    target.tag_remove("sel", "1.0", "end")
-            except Exception:
-                pass
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_copy_all_logs` — выполняет отдельный шаг бизнес-логики.
+    def _copy_all_logs(self):  # ПОЯСНЕНИЕ: объявляется функция _copy_all_logs с параметрами из сигнатуры.
+        """Copy all logs content"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        target = self._get_text_widget(self.logs_display)  # ПОЯСНЕНИЕ: обновляется значение переменной target.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if not target:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            return  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+        with self._with_widget_enabled(target):  # ПОЯСНЕНИЕ: открывается контекстный менеджер для ресурса.
+            # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+            try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+                # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                if isinstance(target, tk.Text):  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                    target.tag_add("sel", "1.0", "end-1c")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                    target.event_generate("<<Copy>>")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                    target.tag_remove("sel", "1.0", "end")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+            except Exception:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+                pass  # ПОЯСНЕНИЕ: оставляется пустая заглушка без действий.
 
-    def _select_all_logs(self):
-        """Select all text in logs"""
-        target = self._get_text_widget(self.logs_display)
-        if not target:
-            return
-        with self._with_widget_enabled(target):
-            try:
-                if isinstance(target, tk.Text):
-                    target.tag_add("sel", "1.0", "end-1c")
-                    target.focus_set()
-            except Exception:
-                pass
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_select_all_logs` — выполняет отдельный шаг бизнес-логики.
+    def _select_all_logs(self):  # ПОЯСНЕНИЕ: объявляется функция _select_all_logs с параметрами из сигнатуры.
+        """Select all text in logs"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        target = self._get_text_widget(self.logs_display)  # ПОЯСНЕНИЕ: обновляется значение переменной target.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if not target:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            return  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+        with self._with_widget_enabled(target):  # ПОЯСНЕНИЕ: открывается контекстный менеджер для ресурса.
+            # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+            try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+                # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                if isinstance(target, tk.Text):  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                    target.tag_add("sel", "1.0", "end-1c")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                    target.focus_set()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+            except Exception:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+                pass  # ПОЯСНЕНИЕ: оставляется пустая заглушка без действий.
 
-    def _save_responses(self, question: str, responses: Dict[str, Tuple[str, float]]) -> Optional[str]:
-        """Save responses to file"""
-        try:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"ai_responses_{timestamp}.txt"
-            filepath = os.path.join(self.output_dir, filename)
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_save_responses` — выполняет отдельный шаг бизнес-логики.
+    def _save_responses(self, question: str, responses: Dict[str, Tuple[str, float]]) -> Optional[str]:  # ПОЯСНЕНИЕ: объявляется функция _save_responses с параметрами из сигнатуры.
+        """Save responses to file"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")  # ПОЯСНЕНИЕ: обновляется значение переменной timestamp.
+            filename = f"ai_responses_{timestamp}.txt"  # ПОЯСНЕНИЕ: обновляется значение переменной filename.
+            filepath = os.path.join(self.output_dir, filename)  # ПОЯСНЕНИЕ: обновляется значение переменной filepath.
 
-            with open(filepath, 'w', encoding='utf-8') as f:
-                f.write("=" * 70 + "\n")
-                f.write(f"AI MANAGER RESPONSES\n")
-                f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-                f.write("=" * 70 + "\n\n")
+            with open(filepath, 'w', encoding='utf-8') as f:  # ПОЯСНЕНИЕ: открывается контекстный менеджер для ресурса.
+                f.write("=" * 70 + "\n")  # ПОЯСНЕНИЕ: обновляется значение переменной f.write(".
+                f.write(f"AI MANAGER RESPONSES\n")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                f.write("=" * 70 + "\n\n")  # ПОЯСНЕНИЕ: обновляется значение переменной f.write(".
 
-                f.write("QUESTION:\n")
-                f.write("-" * 70 + "\n")
-                f.write(question + "\n")
-                f.write("-" * 70 + "\n\n")
+                f.write("QUESTION:\n")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                f.write("-" * 70 + "\n")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                f.write(question + "\n")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                f.write("-" * 70 + "\n\n")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-                for name, (response, elapsed) in responses.items():
-                    f.write(f"\n{'='*70}\n")
-                    f.write(f"[{name}] - Response time: {elapsed:.2f}s\n")
-                    f.write(f"{'='*70}\n\n")
-                    f.write(response + "\n")
+                # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+                for name, (response, elapsed) in responses.items():  # ПОЯСНЕНИЕ: запускается цикл for по коллекции.
+                    f.write(f"\n{'='*70}\n")  # ПОЯСНЕНИЕ: обновляется значение переменной f.write(f"\n{'.
+                    f.write(f"[{name}] - Response time: {elapsed:.2f}s\n")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                    f.write(f"{'='*70}\n\n")  # ПОЯСНЕНИЕ: обновляется значение переменной f.write(f"{'.
+                    f.write(response + "\n")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-                f.write("\n" + "=" * 70 + "\n")
-                f.write(f"Total providers: {len(responses)}\n")
-                f.write("=" * 70 + "\n")
+                f.write("\n" + "=" * 70 + "\n")  # ПОЯСНЕНИЕ: обновляется значение переменной f.write("\n" + ".
+                f.write(f"Total providers: {len(responses)}\n")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                f.write("=" * 70 + "\n")  # ПОЯСНЕНИЕ: обновляется значение переменной f.write(".
 
-            return filepath
-        except Exception as e:
-            print(f"Error saving file: {e}")
-            return None
+            return filepath  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except Exception as e:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+            print(f"Error saving file: {e}")  # ПОЯСНЕНИЕ: выводится служебное сообщение в консоль.
+            return None  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
     # ==================== New Tab Helper Methods ====================
 
-    def _save_arbitrator_settings(self):
-        """Save arbitrator (chairman) settings"""
-        try:
-            chairman = self.chairman_var.get()
-            config_path = os.path.join(".", "arbitrator_config.json")
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_save_arbitrator_settings` — выполняет отдельный шаг бизнес-логики.
+    def _save_arbitrator_settings(self):  # ПОЯСНЕНИЕ: объявляется функция _save_arbitrator_settings с параметрами из сигнатуры.
+        """Save arbitrator (chairman) settings"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+            chairman = self.chairman_var.get()  # ПОЯСНЕНИЕ: обновляется значение переменной chairman.
+            config_path = os.path.join(".", "arbitrator_config.json")  # ПОЯСНЕНИЕ: обновляется значение переменной config_path.
 
-            config = {
-                "chairman": chairman,
-                "updated_at": datetime.now().isoformat()
-            }
+            config = {  # ПОЯСНЕНИЕ: обновляется значение переменной config.
+                "chairman": chairman,  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                "updated_at": datetime.now().isoformat()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            }  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-            with open(config_path, 'w', encoding='utf-8') as f:
-                json.dump(config, f, ensure_ascii=False, indent=2)
+            with open(config_path, 'w', encoding='utf-8') as f:  # ПОЯСНЕНИЕ: открывается контекстный менеджер для ресурса.
+                json.dump(config, f, ensure_ascii=False, indent=2)  # ПОЯСНЕНИЕ: обновляется значение переменной json.dump(config, f, ensure_ascii.
 
-            messagebox.showinfo("Успешно", f"Председатель сохранен: {chairman}")
-            self.status_label.configure(text=f"Председатель: {chairman}")
-        except Exception as e:
-            messagebox.showerror("Ошибка", f"Не удалось сохранить: {e}")
+            messagebox.showinfo("Успешно", f"Председатель сохранен: {chairman}")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            self.status_label.configure(text=f"Председатель: {chairman}")  # ПОЯСНЕНИЕ: обновляется значение переменной self.status_label.configure(text.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except Exception as e:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+            messagebox.showerror("Ошибка", f"Не удалось сохранить: {e}")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def _load_arbitrator_settings(self):
-        """Load arbitrator settings"""
-        try:
-            config_path = os.path.join(".", "arbitrator_config.json")
-            if os.path.exists(config_path):
-                with open(config_path, 'r', encoding='utf-8') as f:
-                    config = json.load(f)
-                chairman = config.get("chairman", "Не выбран")
-                self.chairman_var.set(chairman)
-        except Exception as e:
-            logging.error(f"Failed to load arbitrator settings: {e}")
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_load_arbitrator_settings` — выполняет отдельный шаг бизнес-логики.
+    def _load_arbitrator_settings(self):  # ПОЯСНЕНИЕ: объявляется функция _load_arbitrator_settings с параметрами из сигнатуры.
+        """Load arbitrator settings"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+            config_path = os.path.join(".", "arbitrator_config.json")  # ПОЯСНЕНИЕ: обновляется значение переменной config_path.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if os.path.exists(config_path):  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                with open(config_path, 'r', encoding='utf-8') as f:  # ПОЯСНЕНИЕ: открывается контекстный менеджер для ресурса.
+                    config = json.load(f)  # ПОЯСНЕНИЕ: обновляется значение переменной config.
+                chairman = config.get("chairman", "Не выбран")  # ПОЯСНЕНИЕ: обновляется значение переменной chairman.
+                self.chairman_var.set(chairman)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except Exception as e:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+            logging.error(f"Failed to load arbitrator settings: {e}")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def _save_role_settings(self):
-        """Save role settings (prompts and models for each provider)"""
-        try:
-            config_path = os.path.join(".", "role_config.json")
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_save_role_settings` — выполняет отдельный шаг бизнес-логики.
+    def _save_role_settings(self):  # ПОЯСНЕНИЕ: объявляется функция _save_role_settings с параметрами из сигнатуры.
+        """Save role settings (prompts and models for each provider)"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+            config_path = os.path.join(".", "role_config.json")  # ПОЯСНЕНИЕ: обновляется значение переменной config_path.
 
-            config = {
-                "providers": {},
-                "updated_at": datetime.now().isoformat()
-            }
+            config = {  # ПОЯСНЕНИЕ: обновляется значение переменной config.
+                "providers": {},  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                "updated_at": datetime.now().isoformat()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            }  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-            for key, prompt_box in self.role_prompts.items():
-                prompt = prompt_box.get("1.0", "end-1c")
-                model = self.role_models[key].get()
-                config["providers"][key] = {
-                    "prompt": prompt,
-                    "model": model
-                }
+            # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+            for key, prompt_box in self.role_prompts.items():  # ПОЯСНЕНИЕ: запускается цикл for по коллекции.
+                prompt = prompt_box.get("1.0", "end-1c")  # ПОЯСНЕНИЕ: обновляется значение переменной prompt.
+                model = self.role_models[key].get()  # ПОЯСНЕНИЕ: обновляется значение переменной model.
+                config["providers"][key] = {  # ПОЯСНЕНИЕ: обновляется значение переменной config["providers"][key].
+                    "prompt": prompt,  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                    "model": model  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                }  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-            with open(config_path, 'w', encoding='utf-8') as f:
-                json.dump(config, f, ensure_ascii=False, indent=2)
+            with open(config_path, 'w', encoding='utf-8') as f:  # ПОЯСНЕНИЕ: открывается контекстный менеджер для ресурса.
+                json.dump(config, f, ensure_ascii=False, indent=2)  # ПОЯСНЕНИЕ: обновляется значение переменной json.dump(config, f, ensure_ascii.
 
-            messagebox.showinfo("Успешно", "Все промпты сохранены!")
-            self.status_label.configure(text="Промпты сохранены")
-        except Exception as e:
-            messagebox.showerror("Ошибка", f"Не удалось сохранить: {e}")
+            messagebox.showinfo("Успешно", "Все промпты сохранены!")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            self.status_label.configure(text="Промпты сохранены")  # ПОЯСНЕНИЕ: обновляется значение переменной self.status_label.configure(text.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except Exception as e:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+            messagebox.showerror("Ошибка", f"Не удалось сохранить: {e}")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def _load_role_settings(self):
-        """Load role settings"""
-        try:
-            config_path = os.path.join(".", "role_config.json")
-            if os.path.exists(config_path):
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_load_role_settings` — выполняет отдельный шаг бизнес-логики.
+    def _load_role_settings(self):  # ПОЯСНЕНИЕ: объявляется функция _load_role_settings с параметрами из сигнатуры.
+        """Load role settings"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+            config_path = os.path.join(".", "role_config.json")  # ПОЯСНЕНИЕ: обновляется значение переменной config_path.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if os.path.exists(config_path):  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
                 # Load from saved config
-                with open(config_path, 'r', encoding='utf-8') as f:
-                    config = json.load(f)
+                with open(config_path, 'r', encoding='utf-8') as f:  # ПОЯСНЕНИЕ: открывается контекстный менеджер для ресурса.
+                    config = json.load(f)  # ПОЯСНЕНИЕ: обновляется значение переменной config.
 
-                providers = config.get("providers", {})
-                for key, data in providers.items():
-                    if key in self.role_prompts:
-                        self.role_prompts[key].delete("1.0", "end")
-                        self.role_prompts[key].insert("1.0", data.get("prompt", ""))
-                    if key in self.role_models:
-                        self.role_models[key].set(data.get("model", "default"))
-            else:
+                providers = config.get("providers", {})  # ПОЯСНЕНИЕ: обновляется значение переменной providers.
+                # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+                for key, data in providers.items():  # ПОЯСНЕНИЕ: запускается цикл for по коллекции.
+                    # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                    if key in self.role_prompts:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                        self.role_prompts[key].delete("1.0", "end")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                        self.role_prompts[key].insert("1.0", data.get("prompt", ""))  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                    # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                    if key in self.role_models:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                        self.role_models[key].set(data.get("model", "default"))  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            else:  # ПОЯСНЕНИЕ: выполняется альтернативная ветка else.
                 # Load default prompts on first run
-                for key, default_prompt in self.DEFAULT_PROMPTS.items():
-                    if key in self.role_prompts:
-                        self.role_prompts[key].delete("1.0", "end")
-                        self.role_prompts[key].insert("1.0", default_prompt)
-                logging.info("Loaded default prompts for role settings")
-        except Exception as e:
-            logging.error(f"Failed to load role settings: {e}")
+                # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+                for key, default_prompt in self.DEFAULT_PROMPTS.items():  # ПОЯСНЕНИЕ: запускается цикл for по коллекции.
+                    # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                    if key in self.role_prompts:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                        self.role_prompts[key].delete("1.0", "end")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                        self.role_prompts[key].insert("1.0", default_prompt)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                logging.info("Loaded default prompts for role settings")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except Exception as e:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+            logging.error(f"Failed to load role settings: {e}")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def _save_prohibitions(self):
-        """Save prohibitions list"""
-        try:
-            config_path = os.path.join(".", "prohibitions_config.json")
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_save_prohibitions` — выполняет отдельный шаг бизнес-логики.
+    def _save_prohibitions(self):  # ПОЯСНЕНИЕ: объявляется функция _save_prohibitions с параметрами из сигнатуры.
+        """Save prohibitions list"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+            config_path = os.path.join(".", "prohibitions_config.json")  # ПОЯСНЕНИЕ: обновляется значение переменной config_path.
 
-            prohibitions_text = self.prohibitions_text.get("1.0", "end-1c")
-            prohibitions_list = [line.strip() for line in prohibitions_text.split('\n') if line.strip()]
+            prohibitions_text = self.prohibitions_text.get("1.0", "end-1c")  # ПОЯСНЕНИЕ: обновляется значение переменной prohibitions_text.
+            prohibitions_list = [line.strip() for line in prohibitions_text.split('\n') if line.strip()]  # ПОЯСНЕНИЕ: обновляется значение переменной prohibitions_list.
 
-            config = {
-                "prohibitions": prohibitions_list,
-                "updated_at": datetime.now().isoformat()
-            }
+            config = {  # ПОЯСНЕНИЕ: обновляется значение переменной config.
+                "prohibitions": prohibitions_list,  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                "updated_at": datetime.now().isoformat()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            }  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-            with open(config_path, 'w', encoding='utf-8') as f:
-                json.dump(config, f, ensure_ascii=False, indent=2)
+            with open(config_path, 'w', encoding='utf-8') as f:  # ПОЯСНЕНИЕ: открывается контекстный менеджер для ресурса.
+                json.dump(config, f, ensure_ascii=False, indent=2)  # ПОЯСНЕНИЕ: обновляется значение переменной json.dump(config, f, ensure_ascii.
 
-            messagebox.showinfo("Успешно", f"Сохранено {len(prohibitions_list)} запретов")
-            self.status_label.configure(text=f"Запреты сохранены: {len(prohibitions_list)}")
-        except Exception as e:
-            messagebox.showerror("Ошибка", f"Не удалось сохранить: {e}")
+            messagebox.showinfo("Успешно", f"Сохранено {len(prohibitions_list)} запретов")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            self.status_label.configure(text=f"Запреты сохранены: {len(prohibitions_list)}")  # ПОЯСНЕНИЕ: обновляется значение переменной self.status_label.configure(text.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except Exception as e:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+            messagebox.showerror("Ошибка", f"Не удалось сохранить: {e}")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def _load_prohibitions(self):
-        """Load prohibitions"""
-        try:
-            config_path = os.path.join(".", "prohibitions_config.json")
-            if os.path.exists(config_path):
-                with open(config_path, 'r', encoding='utf-8') as f:
-                    config = json.load(f)
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_load_prohibitions` — выполняет отдельный шаг бизнес-логики.
+    def _load_prohibitions(self):  # ПОЯСНЕНИЕ: объявляется функция _load_prohibitions с параметрами из сигнатуры.
+        """Load prohibitions"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+            config_path = os.path.join(".", "prohibitions_config.json")  # ПОЯСНЕНИЕ: обновляется значение переменной config_path.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if os.path.exists(config_path):  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                with open(config_path, 'r', encoding='utf-8') as f:  # ПОЯСНЕНИЕ: открывается контекстный менеджер для ресурса.
+                    config = json.load(f)  # ПОЯСНЕНИЕ: обновляется значение переменной config.
 
-                prohibitions = config.get("prohibitions", [])
-                self.prohibitions_text.delete("1.0", "end")
-                self.prohibitions_text.insert("1.0", "\n".join(prohibitions))
-        except Exception as e:
-            logging.error(f"Failed to load prohibitions: {e}")
+                prohibitions = config.get("prohibitions", [])  # ПОЯСНЕНИЕ: обновляется значение переменной prohibitions.
+                self.prohibitions_text.delete("1.0", "end")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                self.prohibitions_text.insert("1.0", "\n".join(prohibitions))  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except Exception as e:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+            logging.error(f"Failed to load prohibitions: {e}")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def _clear_prohibitions(self):
-        """Clear prohibitions text"""
-        if messagebox.askyesno("Подтверждение", "Очистить все запреты?"):
-            self.prohibitions_text.delete("1.0", "end")
-            self.status_label.configure(text="Запреты очищены")
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_clear_prohibitions` — выполняет отдельный шаг бизнес-логики.
+    def _clear_prohibitions(self):  # ПОЯСНЕНИЕ: объявляется функция _clear_prohibitions с параметрами из сигнатуры.
+        """Clear prohibitions text"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if messagebox.askyesno("Подтверждение", "Очистить все запреты?"):  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            self.prohibitions_text.delete("1.0", "end")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            self.status_label.configure(text="Запреты очищены")  # ПОЯСНЕНИЕ: обновляется значение переменной self.status_label.configure(text.
 
-    def _save_tasks(self):
-        """Save tasks/algorithm"""
-        try:
-            config_path = os.path.join(".", "tasks_config.json")
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_save_tasks` — выполняет отдельный шаг бизнес-логики.
+    def _save_tasks(self):  # ПОЯСНЕНИЕ: объявляется функция _save_tasks с параметрами из сигнатуры.
+        """Save tasks/algorithm"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+            config_path = os.path.join(".", "tasks_config.json")  # ПОЯСНЕНИЕ: обновляется значение переменной config_path.
 
-            tasks_text = self.tasks_text.get("1.0", "end-1c")
+            tasks_text = self.tasks_text.get("1.0", "end-1c")  # ПОЯСНЕНИЕ: обновляется значение переменной tasks_text.
 
-            config = {
-                "algorithm": tasks_text,
-                "updated_at": datetime.now().isoformat()
-            }
+            config = {  # ПОЯСНЕНИЕ: обновляется значение переменной config.
+                "algorithm": tasks_text,  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                "updated_at": datetime.now().isoformat()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            }  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-            with open(config_path, 'w', encoding='utf-8') as f:
-                json.dump(config, f, ensure_ascii=False, indent=2)
+            with open(config_path, 'w', encoding='utf-8') as f:  # ПОЯСНЕНИЕ: открывается контекстный менеджер для ресурса.
+                json.dump(config, f, ensure_ascii=False, indent=2)  # ПОЯСНЕНИЕ: обновляется значение переменной json.dump(config, f, ensure_ascii.
 
-            messagebox.showinfo("Успешно", "Алгоритм сохранен!")
-            self.status_label.configure(text="Алгоритм сохранен")
-        except Exception as e:
-            messagebox.showerror("Ошибка", f"Не удалось сохранить: {e}")
+            messagebox.showinfo("Успешно", "Алгоритм сохранен!")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            self.status_label.configure(text="Алгоритм сохранен")  # ПОЯСНЕНИЕ: обновляется значение переменной self.status_label.configure(text.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except Exception as e:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+            messagebox.showerror("Ошибка", f"Не удалось сохранить: {e}")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def _load_tasks(self):
-        """Load tasks/algorithm"""
-        try:
-            config_path = os.path.join(".", "tasks_config.json")
-            if os.path.exists(config_path):
-                with open(config_path, 'r', encoding='utf-8') as f:
-                    config = json.load(f)
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_load_tasks` — выполняет отдельный шаг бизнес-логики.
+    def _load_tasks(self):  # ПОЯСНЕНИЕ: объявляется функция _load_tasks с параметрами из сигнатуры.
+        """Load tasks/algorithm"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+            config_path = os.path.join(".", "tasks_config.json")  # ПОЯСНЕНИЕ: обновляется значение переменной config_path.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if os.path.exists(config_path):  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                with open(config_path, 'r', encoding='utf-8') as f:  # ПОЯСНЕНИЕ: открывается контекстный менеджер для ресурса.
+                    config = json.load(f)  # ПОЯСНЕНИЕ: обновляется значение переменной config.
 
-                algorithm = config.get("algorithm", "")
-                self.tasks_text.delete("1.0", "end")
-                self.tasks_text.insert("1.0", algorithm)
-        except Exception as e:
-            logging.error(f"Failed to load tasks: {e}")
+                algorithm = config.get("algorithm", "")  # ПОЯСНЕНИЕ: обновляется значение переменной algorithm.
+                self.tasks_text.delete("1.0", "end")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                self.tasks_text.insert("1.0", algorithm)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except Exception as e:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+            logging.error(f"Failed to load tasks: {e}")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def _clear_tasks(self):
-        """Clear tasks text"""
-        if messagebox.askyesno("Подтверждение", "Очистить алгоритм?"):
-            self.tasks_text.delete("1.0", "end")
-            self.status_label.configure(text="Алгоритм очищен")
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_clear_tasks` — выполняет отдельный шаг бизнес-логики.
+    def _clear_tasks(self):  # ПОЯСНЕНИЕ: объявляется функция _clear_tasks с параметрами из сигнатуры.
+        """Clear tasks text"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if messagebox.askyesno("Подтверждение", "Очистить алгоритм?"):  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            self.tasks_text.delete("1.0", "end")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            self.status_label.configure(text="Алгоритм очищен")  # ПОЯСНЕНИЕ: обновляется значение переменной self.status_label.configure(text.
 
-    def _load_task_preset(self, preset_type: str):
-        """Load preset algorithm"""
-        presets = {
-            "parallel": """# Параллельный режим
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_load_task_preset` — выполняет отдельный шаг бизнес-логики.
+    def _load_task_preset(self, preset_type: str):  # ПОЯСНЕНИЕ: объявляется функция _load_task_preset с параметрами из сигнатуры.
+        """Load preset algorithm"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        presets = {  # ПОЯСНЕНИЕ: обновляется значение переменной presets.
+            "parallel": """# Параллельный режим  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
 1. Отправить запрос всем активным нейросетям одновременно
 2. Дождаться ответов от всех
 3. Показать все ответы пользователю
 4. Пользователь выбирает лучший ответ""",
 
-            "sequential": """# Последовательный режим
+            "sequential": """# Последовательный режим  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
 1. Отправить запрос первой нейросети
 2. Если ответ неудовлетворителен, отправить следующей
 3. Продолжать пока не получим хороший ответ
 4. Показать финальный ответ пользователю""",
 
-            "arbitration": """# Режим арбитража
+            "arbitration": """# Режим арбитража  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
 1. Отправить запрос всем активным нейросетям
 2. Собрать все ответы
 3. Отправить все ответы Председателю для анализа
 4. Председатель выбирает или синтезирует финальный ответ
 5. Показать решение Председателя пользователю"""
-        }
+        }  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-        self.tasks_text.delete("1.0", "end")
-        self.tasks_text.insert("1.0", presets.get(preset_type, ""))
-        self.status_label.configure(text=f"Загружен шаблон: {preset_type}")
+        self.tasks_text.delete("1.0", "end")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self.tasks_text.insert("1.0", presets.get(preset_type, ""))  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self.status_label.configure(text=f"Загружен шаблон: {preset_type}")  # ПОЯСНЕНИЕ: обновляется значение переменной self.status_label.configure(text.
 
 
-def main():
-    """Entry point"""
+# ЛОГИЧЕСКИЙ БЛОК: функция `main` — выполняет отдельный шаг бизнес-логики.
+def main():  # ПОЯСНЕНИЕ: объявляется функция main с параметрами из сигнатуры.
+    """Entry point"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
     # Windows DPI awareness
-    try:
-        from ctypes import windll
-        windll.shcore.SetProcessDpiAwareness(1)
-    except:
-        pass
+    # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+    try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+        from ctypes import windll  # ПОЯСНЕНИЕ: импортируются внешние зависимости для работы модуля.
+        windll.shcore.SetProcessDpiAwareness(1)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+    except:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+        pass  # ПОЯСНЕНИЕ: оставляется пустая заглушка без действий.
 
-    app = AIManagerApp()
-    app.mainloop()
+    app = AIManagerApp()  # ПОЯСНЕНИЕ: обновляется значение переменной app.
+    app.mainloop()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
 
-if __name__ == "__main__":
-    main()
+# ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+if __name__ == "__main__":  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+    main()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.

@@ -1,198 +1,249 @@
+# НАЗНАЧЕНИЕ ФАЙЛА: Утилиты безопасности: хранение ключей и защитные операции.
 """
 Secure API Key Storage using system keyring
 Falls back to encrypted file storage if keyring unavailable
 """
 
-import json
-import os
-import logging
-import base64
-import hashlib
-from typing import Optional, Dict
+import json  # ПОЯСНЕНИЕ: импортируется модуль json.
+import os  # ПОЯСНЕНИЕ: импортируется модуль os.
+import logging  # ПОЯСНЕНИЕ: импортируется модуль logging.
+import base64  # ПОЯСНЕНИЕ: импортируется модуль base64.
+import hashlib  # ПОЯСНЕНИЕ: импортируется модуль hashlib.
+from typing import Optional, Dict  # ПОЯСНЕНИЕ: импортируются внешние зависимости для работы модуля.
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)  # ПОЯСНЕНИЕ: обновляется значение переменной logger.
 
 # Try to import keyring
-try:
-    import keyring
-    KEYRING_AVAILABLE = True
-except ImportError:
-    KEYRING_AVAILABLE = False
-    logger.warning("keyring not available, using fallback storage")
+# ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+    import keyring  # ПОЯСНЕНИЕ: импортируется модуль keyring.
+    KEYRING_AVAILABLE = True  # ПОЯСНЕНИЕ: обновляется значение переменной KEYRING_AVAILABLE.
+# ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+except ImportError:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+    KEYRING_AVAILABLE = False  # ПОЯСНЕНИЕ: обновляется значение переменной KEYRING_AVAILABLE.
+    logger.warning("keyring not available, using fallback storage")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
 
-class SecureKeyStorage:
-    """Secure storage for API keys using system keyring or encrypted fallback"""
+# ЛОГИЧЕСКИЙ БЛОК: класс `SecureKeyStorage` — объединяет состояние и поведение подсистемы.
+class SecureKeyStorage:  # ПОЯСНЕНИЕ: объявляется класс SecureKeyStorage.
+    """Secure storage for API keys using system keyring or encrypted fallback"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
 
-    SERVICE_NAME = "AIManager"
-    FALLBACK_FILE = "config_secure.dat"
+    SERVICE_NAME = "AIManager"  # ПОЯСНЕНИЕ: обновляется значение переменной SERVICE_NAME.
+    FALLBACK_FILE = "config_secure.dat"  # ПОЯСНЕНИЕ: обновляется значение переменной FALLBACK_FILE.
 
-    def __init__(self, config_dir: str = "."):
-        self.config_dir = config_dir
-        self.fallback_path = os.path.join(config_dir, self.FALLBACK_FILE)
-        self._machine_key = self._get_machine_key()
+    # ЛОГИЧЕСКИЙ БЛОК: функция `__init__` — выполняет отдельный шаг бизнес-логики.
+    def __init__(self, config_dir: str = "."):  # ПОЯСНЕНИЕ: объявляется функция __init__ с параметрами из сигнатуры.
+        """Описание: функция `__init__`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        self.config_dir = config_dir  # ПОЯСНЕНИЕ: обновляется значение переменной self.config_dir.
+        self.fallback_path = os.path.join(config_dir, self.FALLBACK_FILE)  # ПОЯСНЕНИЕ: обновляется значение переменной self.fallback_path.
+        self._machine_key = self._get_machine_key()  # ПОЯСНЕНИЕ: обновляется значение переменной self._machine_key.
 
-    def _get_machine_key(self) -> bytes:
-        """Get a machine-specific key for fallback encryption"""
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_get_machine_key` — выполняет отдельный шаг бизнес-логики.
+    def _get_machine_key(self) -> bytes:  # ПОЯСНЕНИЕ: объявляется функция _get_machine_key с параметрами из сигнатуры.
+        """Get a machine-specific key for fallback encryption"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
         # Use combination of username and machine-specific data
-        import platform
-        machine_id = f"{platform.node()}-{os.getlogin() if hasattr(os, 'getlogin') else 'user'}"
-        return hashlib.sha256(machine_id.encode()).digest()
+        import platform  # ПОЯСНЕНИЕ: импортируется модуль platform.
+        machine_id = f"{platform.node()}-{os.getlogin() if hasattr(os, 'getlogin') else 'user'}"  # ПОЯСНЕНИЕ: обновляется значение переменной machine_id.
+        return hashlib.sha256(machine_id.encode()).digest()  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
-    def _simple_encrypt(self, data: str) -> str:
-        """Simple XOR encryption with machine key (fallback only)"""
-        key = self._machine_key
-        encrypted = bytearray()
-        for i, char in enumerate(data.encode('utf-8')):
-            encrypted.append(char ^ key[i % len(key)])
-        return base64.b64encode(encrypted).decode('ascii')
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_simple_encrypt` — выполняет отдельный шаг бизнес-логики.
+    def _simple_encrypt(self, data: str) -> str:  # ПОЯСНЕНИЕ: объявляется функция _simple_encrypt с параметрами из сигнатуры.
+        """Simple XOR encryption with machine key (fallback only)"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        key = self._machine_key  # ПОЯСНЕНИЕ: обновляется значение переменной key.
+        encrypted = bytearray()  # ПОЯСНЕНИЕ: обновляется значение переменной encrypted.
+        # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+        for i, char in enumerate(data.encode('utf-8')):  # ПОЯСНЕНИЕ: запускается цикл for по коллекции.
+            encrypted.append(char ^ key[i % len(key)])  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        return base64.b64encode(encrypted).decode('ascii')  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
-    def _simple_decrypt(self, data: str) -> str:
-        """Simple XOR decryption with machine key (fallback only)"""
-        key = self._machine_key
-        encrypted = base64.b64decode(data.encode('ascii'))
-        decrypted = bytearray()
-        for i, byte in enumerate(encrypted):
-            decrypted.append(byte ^ key[i % len(key)])
-        return decrypted.decode('utf-8')
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_simple_decrypt` — выполняет отдельный шаг бизнес-логики.
+    def _simple_decrypt(self, data: str) -> str:  # ПОЯСНЕНИЕ: объявляется функция _simple_decrypt с параметрами из сигнатуры.
+        """Simple XOR decryption with machine key (fallback only)"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        key = self._machine_key  # ПОЯСНЕНИЕ: обновляется значение переменной key.
+        encrypted = base64.b64decode(data.encode('ascii'))  # ПОЯСНЕНИЕ: обновляется значение переменной encrypted.
+        decrypted = bytearray()  # ПОЯСНЕНИЕ: обновляется значение переменной decrypted.
+        # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+        for i, byte in enumerate(encrypted):  # ПОЯСНЕНИЕ: запускается цикл for по коллекции.
+            decrypted.append(byte ^ key[i % len(key)])  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        return decrypted.decode('utf-8')  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
-    def set_key(self, provider: str, api_key: str) -> bool:
-        """Store API key securely"""
-        if not api_key:
-            return self.delete_key(provider)
+    # ЛОГИЧЕСКИЙ БЛОК: функция `set_key` — выполняет отдельный шаг бизнес-логики.
+    def set_key(self, provider: str, api_key: str) -> bool:  # ПОЯСНЕНИЕ: объявляется функция set_key с параметрами из сигнатуры.
+        """Store API key securely"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if not api_key:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            return self.delete_key(provider)  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
-        try:
-            if KEYRING_AVAILABLE:
-                keyring.set_password(self.SERVICE_NAME, provider, api_key)
-                logger.info(f"Stored key for {provider} in system keyring")
-            else:
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if KEYRING_AVAILABLE:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                keyring.set_password(self.SERVICE_NAME, provider, api_key)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                logger.info(f"Stored key for {provider} in system keyring")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            else:  # ПОЯСНЕНИЕ: выполняется альтернативная ветка else.
                 # Fallback to encrypted file
-                self._save_to_fallback(provider, api_key)
-                logger.info(f"Stored key for {provider} in encrypted file")
-            return True
-        except Exception as e:
-            logger.error(f"Failed to store key for {provider}: {e}")
-            return False
+                self._save_to_fallback(provider, api_key)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                logger.info(f"Stored key for {provider} in encrypted file")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            return True  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except Exception as e:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+            logger.error(f"Failed to store key for {provider}: {e}")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            return False  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
-    def get_key(self, provider: str) -> Optional[str]:
-        """Retrieve API key"""
-        try:
-            if KEYRING_AVAILABLE:
-                key = keyring.get_password(self.SERVICE_NAME, provider)
-                if key:
-                    return key
+    # ЛОГИЧЕСКИЙ БЛОК: функция `get_key` — выполняет отдельный шаг бизнес-логики.
+    def get_key(self, provider: str) -> Optional[str]:  # ПОЯСНЕНИЕ: объявляется функция get_key с параметрами из сигнатуры.
+        """Retrieve API key"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if KEYRING_AVAILABLE:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                key = keyring.get_password(self.SERVICE_NAME, provider)  # ПОЯСНЕНИЕ: обновляется значение переменной key.
+                # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                if key:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                    return key  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
             # Try fallback
-            return self._load_from_fallback(provider)
-        except Exception as e:
-            logger.error(f"Failed to retrieve key for {provider}: {e}")
-            return None
+            return self._load_from_fallback(provider)  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except Exception as e:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+            logger.error(f"Failed to retrieve key for {provider}: {e}")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            return None  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
-    def delete_key(self, provider: str) -> bool:
-        """Delete stored API key"""
-        try:
-            if KEYRING_AVAILABLE:
-                try:
-                    keyring.delete_password(self.SERVICE_NAME, provider)
-                except keyring.errors.PasswordDeleteError:
-                    pass  # Key didn't exist
+    # ЛОГИЧЕСКИЙ БЛОК: функция `delete_key` — выполняет отдельный шаг бизнес-логики.
+    def delete_key(self, provider: str) -> bool:  # ПОЯСНЕНИЕ: объявляется функция delete_key с параметрами из сигнатуры.
+        """Delete stored API key"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if KEYRING_AVAILABLE:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+                try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+                    keyring.delete_password(self.SERVICE_NAME, provider)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+                except keyring.errors.PasswordDeleteError:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+                    pass  # Key didn't exist  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
             # Also remove from fallback
-            self._delete_from_fallback(provider)
-            return True
-        except Exception as e:
-            logger.error(f"Failed to delete key for {provider}: {e}")
-            return False
+            self._delete_from_fallback(provider)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            return True  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except Exception as e:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+            logger.error(f"Failed to delete key for {provider}: {e}")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            return False  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
-    def _save_to_fallback(self, provider: str, api_key: str):
-        """Save to encrypted fallback file"""
-        data = self._load_fallback_data()
-        data[provider] = self._simple_encrypt(api_key)
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_save_to_fallback` — выполняет отдельный шаг бизнес-логики.
+    def _save_to_fallback(self, provider: str, api_key: str):  # ПОЯСНЕНИЕ: объявляется функция _save_to_fallback с параметрами из сигнатуры.
+        """Save to encrypted fallback file"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        data = self._load_fallback_data()  # ПОЯСНЕНИЕ: обновляется значение переменной data.
+        data[provider] = self._simple_encrypt(api_key)  # ПОЯСНЕНИЕ: обновляется значение переменной data[provider].
 
-        with open(self.fallback_path, 'w', encoding='utf-8') as f:
-            json.dump(data, f)
+        with open(self.fallback_path, 'w', encoding='utf-8') as f:  # ПОЯСНЕНИЕ: открывается контекстный менеджер для ресурса.
+            json.dump(data, f)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def _load_from_fallback(self, provider: str) -> Optional[str]:
-        """Load from encrypted fallback file"""
-        data = self._load_fallback_data()
-        encrypted = data.get(provider)
-        if encrypted:
-            try:
-                return self._simple_decrypt(encrypted)
-            except Exception:
-                return None
-        return None
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_load_from_fallback` — выполняет отдельный шаг бизнес-логики.
+    def _load_from_fallback(self, provider: str) -> Optional[str]:  # ПОЯСНЕНИЕ: объявляется функция _load_from_fallback с параметрами из сигнатуры.
+        """Load from encrypted fallback file"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        data = self._load_fallback_data()  # ПОЯСНЕНИЕ: обновляется значение переменной data.
+        encrypted = data.get(provider)  # ПОЯСНЕНИЕ: обновляется значение переменной encrypted.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if encrypted:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+            try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+                return self._simple_decrypt(encrypted)  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+            # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+            except Exception:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+                return None  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+        return None  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
-    def _delete_from_fallback(self, provider: str):
-        """Delete from fallback file"""
-        data = self._load_fallback_data()
-        if provider in data:
-            del data[provider]
-            with open(self.fallback_path, 'w', encoding='utf-8') as f:
-                json.dump(data, f)
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_delete_from_fallback` — выполняет отдельный шаг бизнес-логики.
+    def _delete_from_fallback(self, provider: str):  # ПОЯСНЕНИЕ: объявляется функция _delete_from_fallback с параметрами из сигнатуры.
+        """Delete from fallback file"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        data = self._load_fallback_data()  # ПОЯСНЕНИЕ: обновляется значение переменной data.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if provider in data:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            del data[provider]  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            with open(self.fallback_path, 'w', encoding='utf-8') as f:  # ПОЯСНЕНИЕ: открывается контекстный менеджер для ресурса.
+                json.dump(data, f)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def _load_fallback_data(self) -> Dict[str, str]:
-        """Load fallback data file"""
-        if os.path.exists(self.fallback_path):
-            try:
-                with open(self.fallback_path, 'r', encoding='utf-8') as f:
-                    return json.load(f)
-            except Exception:
-                return {}
-        return {}
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_load_fallback_data` — выполняет отдельный шаг бизнес-логики.
+    def _load_fallback_data(self) -> Dict[str, str]:  # ПОЯСНЕНИЕ: объявляется функция _load_fallback_data с параметрами из сигнатуры.
+        """Load fallback data file"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if os.path.exists(self.fallback_path):  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+            try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+                with open(self.fallback_path, 'r', encoding='utf-8') as f:  # ПОЯСНЕНИЕ: открывается контекстный менеджер для ресурса.
+                    return json.load(f)  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+            # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+            except Exception:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+                return {}  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+        return {}  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
-    def get_all_keys(self) -> Dict[str, str]:
-        """Get all stored keys"""
-        providers = ["openai", "anthropic", "gemini", "deepseek", "groq", "mistral"]
-        keys = {}
-        for provider in providers:
-            key = self.get_key(provider)
-            if key:
-                keys[provider] = key
-        return keys
+    # ЛОГИЧЕСКИЙ БЛОК: функция `get_all_keys` — выполняет отдельный шаг бизнес-логики.
+    def get_all_keys(self) -> Dict[str, str]:  # ПОЯСНЕНИЕ: объявляется функция get_all_keys с параметрами из сигнатуры.
+        """Get all stored keys"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        providers = ["openai", "anthropic", "gemini", "deepseek", "groq", "mistral"]  # ПОЯСНЕНИЕ: обновляется значение переменной providers.
+        keys = {}  # ПОЯСНЕНИЕ: обновляется значение переменной keys.
+        # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+        for provider in providers:  # ПОЯСНЕНИЕ: запускается цикл for по коллекции.
+            key = self.get_key(provider)  # ПОЯСНЕНИЕ: обновляется значение переменной key.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if key:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                keys[provider] = key  # ПОЯСНЕНИЕ: обновляется значение переменной keys[provider].
+        return keys  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
-    def migrate_from_config(self, config_path: str) -> int:
-        """Migrate keys from plain config.json to secure storage"""
-        migrated = 0
-        if not os.path.exists(config_path):
-            return migrated
+    # ЛОГИЧЕСКИЙ БЛОК: функция `migrate_from_config` — выполняет отдельный шаг бизнес-логики.
+    def migrate_from_config(self, config_path: str) -> int:  # ПОЯСНЕНИЕ: объявляется функция migrate_from_config с параметрами из сигнатуры.
+        """Migrate keys from plain config.json to secure storage"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        migrated = 0  # ПОЯСНЕНИЕ: обновляется значение переменной migrated.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if not os.path.exists(config_path):  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            return migrated  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
-        try:
-            with open(config_path, 'r', encoding='utf-8') as f:
-                config = json.load(f)
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+            with open(config_path, 'r', encoding='utf-8') as f:  # ПОЯСНЕНИЕ: открывается контекстный менеджер для ресурса.
+                config = json.load(f)  # ПОЯСНЕНИЕ: обновляется значение переменной config.
 
-            key_mappings = {
-                "openai_key": "openai",
-                "anthropic_key": "anthropic",
-                "gemini_key": "gemini",
-                "deepseek_key": "deepseek",
-                "groq_key": "groq",
-                "mistral_key": "mistral"
-            }
+            key_mappings = {  # ПОЯСНЕНИЕ: обновляется значение переменной key_mappings.
+                "openai_key": "openai",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                "anthropic_key": "anthropic",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                "gemini_key": "gemini",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                "deepseek_key": "deepseek",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                "groq_key": "groq",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                "mistral_key": "mistral"  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            }  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-            for config_key, provider in key_mappings.items():
-                if config_key in config and config[config_key]:
-                    if self.set_key(provider, config[config_key]):
-                        migrated += 1
+            # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+            for config_key, provider in key_mappings.items():  # ПОЯСНЕНИЕ: запускается цикл for по коллекции.
+                # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                if config_key in config and config[config_key]:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                    # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                    if self.set_key(provider, config[config_key]):  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                        migrated += 1  # ПОЯСНЕНИЕ: обновляется значение переменной migrated +.
                         # Remove from plain config
-                        config[config_key] = ""
+                        config[config_key] = ""  # ПОЯСНЕНИЕ: обновляется значение переменной config[config_key].
 
             # Save config without keys
-            with open(config_path, 'w', encoding='utf-8') as f:
-                json.dump(config, f, indent=2)
+            with open(config_path, 'w', encoding='utf-8') as f:  # ПОЯСНЕНИЕ: открывается контекстный менеджер для ресурса.
+                json.dump(config, f, indent=2)  # ПОЯСНЕНИЕ: обновляется значение переменной json.dump(config, f, indent.
 
-            logger.info(f"Migrated {migrated} keys to secure storage")
-        except Exception as e:
-            logger.error(f"Migration failed: {e}")
+            logger.info(f"Migrated {migrated} keys to secure storage")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except Exception as e:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+            logger.error(f"Migration failed: {e}")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-        return migrated
+        return migrated  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
 
 # Singleton instance
-_storage_instance: Optional[SecureKeyStorage] = None
+_storage_instance: Optional[SecureKeyStorage] = None  # ПОЯСНЕНИЕ: обновляется значение переменной _storage_instance: Optional[SecureKeyStorage].
 
 
-def get_key_storage(config_dir: str = ".") -> SecureKeyStorage:
-    """Get or create key storage instance"""
-    global _storage_instance
-    if _storage_instance is None:
-        _storage_instance = SecureKeyStorage(config_dir)
-    return _storage_instance
+# ЛОГИЧЕСКИЙ БЛОК: функция `get_key_storage` — выполняет отдельный шаг бизнес-логики.
+def get_key_storage(config_dir: str = ".") -> SecureKeyStorage:  # ПОЯСНЕНИЕ: объявляется функция get_key_storage с параметрами из сигнатуры.
+    """Get or create key storage instance"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+    global _storage_instance  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+    # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+    if _storage_instance is None:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+        _storage_instance = SecureKeyStorage(config_dir)  # ПОЯСНЕНИЕ: обновляется значение переменной _storage_instance.
+    return _storage_instance  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.

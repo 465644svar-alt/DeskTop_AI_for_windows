@@ -1,113 +1,125 @@
 #!/usr/bin/env python3
+# НАЗНАЧЕНИЕ ФАЙЛА: Скрипт сборки Windows-исполняемого файла через PyInstaller.
 """
 AI Manager v9.0 - Cross-platform Build Script
 Builds executable for Windows using PyInstaller
 """
 
-import os
-import sys
-import subprocess
-import shutil
-from pathlib import Path
+import os  # ПОЯСНЕНИЕ: импортируется модуль os.
+import sys  # ПОЯСНЕНИЕ: импортируется модуль sys.
+import subprocess  # ПОЯСНЕНИЕ: импортируется модуль subprocess.
+import shutil  # ПОЯСНЕНИЕ: импортируется модуль shutil.
+from pathlib import Path  # ПОЯСНЕНИЕ: импортируются внешние зависимости для работы модуля.
 
 
-def main():
-    print("=" * 50)
-    print("AI Manager v9.0 - Build Script")
-    print("=" * 50)
-    print()
+# ЛОГИЧЕСКИЙ БЛОК: функция `main` — выполняет отдельный шаг бизнес-логики.
+def main():  # ПОЯСНЕНИЕ: объявляется функция main с параметрами из сигнатуры.
+    """Описание: функция `main`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+    print("=" * 50)  # ПОЯСНЕНИЕ: выводится служебное сообщение в консоль.
+    print("AI Manager v9.0 - Build Script")  # ПОЯСНЕНИЕ: выводится служебное сообщение в консоль.
+    print("=" * 50)  # ПОЯСНЕНИЕ: выводится служебное сообщение в консоль.
+    print()  # ПОЯСНЕНИЕ: выводится служебное сообщение в консоль.
 
     # Check Python version
-    if sys.version_info < (3, 8):
-        print("ERROR: Python 3.8+ required")
-        sys.exit(1)
+    # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+    if sys.version_info < (3, 8):  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+        print("ERROR: Python 3.8+ required")  # ПОЯСНЕНИЕ: выводится служебное сообщение в консоль.
+        sys.exit(1)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    print(f"Python version: {sys.version}")
-    print()
+    print(f"Python version: {sys.version}")  # ПОЯСНЕНИЕ: выводится служебное сообщение в консоль.
+    print()  # ПОЯСНЕНИЕ: выводится служебное сообщение в консоль.
 
     # Get script directory
-    script_dir = Path(__file__).parent.absolute()
-    os.chdir(script_dir)
+    script_dir = Path(__file__).parent.absolute()  # ПОЯСНЕНИЕ: обновляется значение переменной script_dir.
+    os.chdir(script_dir)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
     # Step 1: Install dependencies
-    print("[1/4] Installing dependencies...")
-    subprocess.run([
-        sys.executable, "-m", "pip", "install", "-r", "requirements.txt"
-    ], check=True)
+    print("[1/4] Installing dependencies...")  # ПОЯСНЕНИЕ: выводится служебное сообщение в консоль.
+    subprocess.run([  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        sys.executable, "-m", "pip", "install", "-r", "requirements.txt"  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+    ], check=True)  # ПОЯСНЕНИЕ: обновляется значение переменной ], check.
 
     # Step 2: Install PyInstaller
-    print()
-    print("[2/4] Installing PyInstaller...")
-    subprocess.run([
-        sys.executable, "-m", "pip", "install", "pyinstaller"
-    ], check=True)
+    print()  # ПОЯСНЕНИЕ: выводится служебное сообщение в консоль.
+    print("[2/4] Installing PyInstaller...")  # ПОЯСНЕНИЕ: выводится служебное сообщение в консоль.
+    subprocess.run([  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        sys.executable, "-m", "pip", "install", "pyinstaller"  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+    ], check=True)  # ПОЯСНЕНИЕ: обновляется значение переменной ], check.
 
     # Step 3: Build executable
-    print()
-    print("[3/4] Building executable...")
+    print()  # ПОЯСНЕНИЕ: выводится служебное сообщение в консоль.
+    print("[3/4] Building executable...")  # ПОЯСНЕНИЕ: выводится служебное сообщение в консоль.
 
     # PyInstaller arguments
-    args = [
-        sys.executable, "-m", "PyInstaller",
-        "--onefile",
-        "--windowed",
-        "--name", "AI_Manager",
-        "--clean",
+    args = [  # ПОЯСНЕНИЕ: обновляется значение переменной args.
+        sys.executable, "-m", "PyInstaller",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        "--onefile",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        "--windowed",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        "--name", "AI_Manager",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        "--clean",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
         # Hidden imports for customtkinter
-        "--hidden-import", "customtkinter",
-        "--collect-all", "customtkinter",
-    ]
+        "--hidden-import", "customtkinter",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        "--collect-all", "customtkinter",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+    ]  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
     # Add icon if exists
-    icon_path = script_dir / "icon.ico"
-    if icon_path.exists():
-        args.extend(["--icon", str(icon_path)])
-        print(f"  Using icon: {icon_path}")
+    icon_path = script_dir / "icon.ico"  # ПОЯСНЕНИЕ: обновляется значение переменной icon_path.
+    # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+    if icon_path.exists():  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+        args.extend(["--icon", str(icon_path)])  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        print(f"  Using icon: {icon_path}")  # ПОЯСНЕНИЕ: выводится служебное сообщение в консоль.
 
     # Add main script
-    args.append("main_app.py")
+    args.append("main_app.py")  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
     # Run PyInstaller
-    result = subprocess.run(args)
+    result = subprocess.run(args)  # ПОЯСНЕНИЕ: обновляется значение переменной result.
 
-    if result.returncode != 0:
-        print("ERROR: Build failed")
-        sys.exit(1)
+    # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+    if result.returncode != 0:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+        print("ERROR: Build failed")  # ПОЯСНЕНИЕ: выводится служебное сообщение в консоль.
+        sys.exit(1)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
     # Step 4: Cleanup
-    print()
-    print("[4/4] Cleaning up...")
+    print()  # ПОЯСНЕНИЕ: выводится служебное сообщение в консоль.
+    print("[4/4] Cleaning up...")  # ПОЯСНЕНИЕ: выводится служебное сообщение в консоль.
 
     # Remove build directory
-    build_dir = script_dir / "build"
-    if build_dir.exists():
-        shutil.rmtree(build_dir)
+    build_dir = script_dir / "build"  # ПОЯСНЕНИЕ: обновляется значение переменной build_dir.
+    # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+    if build_dir.exists():  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+        shutil.rmtree(build_dir)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
     # Remove spec file
-    spec_file = script_dir / "AI_Manager.spec"
-    if spec_file.exists():
-        spec_file.unlink()
+    spec_file = script_dir / "AI_Manager.spec"  # ПОЯСНЕНИЕ: обновляется значение переменной spec_file.
+    # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+    if spec_file.exists():  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+        spec_file.unlink()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
     # Success message
-    print()
-    print("=" * 50)
-    print("BUILD COMPLETE!")
-    print("=" * 50)
-    print()
+    print()  # ПОЯСНЕНИЕ: выводится служебное сообщение в консоль.
+    print("=" * 50)  # ПОЯСНЕНИЕ: выводится служебное сообщение в консоль.
+    print("BUILD COMPLETE!")  # ПОЯСНЕНИЕ: выводится служебное сообщение в консоль.
+    print("=" * 50)  # ПОЯСНЕНИЕ: выводится служебное сообщение в консоль.
+    print()  # ПОЯСНЕНИЕ: выводится служебное сообщение в консоль.
 
-    dist_dir = script_dir / "dist"
-    if sys.platform == "win32":
-        exe_path = dist_dir / "AI_Manager.exe"
-    else:
-        exe_path = dist_dir / "AI_Manager"
+    dist_dir = script_dir / "dist"  # ПОЯСНЕНИЕ: обновляется значение переменной dist_dir.
+    # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+    if sys.platform == "win32":  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+        exe_path = dist_dir / "AI_Manager.exe"  # ПОЯСНЕНИЕ: обновляется значение переменной exe_path.
+    # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+    else:  # ПОЯСНЕНИЕ: выполняется альтернативная ветка else.
+        exe_path = dist_dir / "AI_Manager"  # ПОЯСНЕНИЕ: обновляется значение переменной exe_path.
 
-    print(f"Executable location: {exe_path}")
-    print()
+    print(f"Executable location: {exe_path}")  # ПОЯСНЕНИЕ: выводится служебное сообщение в консоль.
+    print()  # ПОЯСНЕНИЕ: выводится служебное сообщение в консоль.
 
-    if exe_path.exists():
-        print(f"File size: {exe_path.stat().st_size / 1024 / 1024:.1f} MB")
-    print()
+    # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+    if exe_path.exists():  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+        print(f"File size: {exe_path.stat().st_size / 1024 / 1024:.1f} MB")  # ПОЯСНЕНИЕ: выводится служебное сообщение в консоль.
+    print()  # ПОЯСНЕНИЕ: выводится служебное сообщение в консоль.
 
 
-if __name__ == "__main__":
-    main()
+# ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+if __name__ == "__main__":  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+    main()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.

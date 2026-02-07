@@ -1,442 +1,543 @@
+# НАЗНАЧЕНИЕ ФАЙЛА: Реализации провайдеров ИИ в унифицированном формате запросов/ответов.
 """
 Unified AI Providers with consistent interface
 All providers inherit from HTTPAIProvider for common functionality
 """
 
-import time
-import logging
-import requests
-from typing import Dict, List, Tuple, Optional, Iterator
+import time  # ПОЯСНЕНИЕ: импортируется модуль time.
+import logging  # ПОЯСНЕНИЕ: импортируется модуль logging.
+import requests  # ПОЯСНЕНИЕ: импортируется модуль requests.
+from typing import Dict, List, Tuple, Optional, Iterator  # ПОЯСНЕНИЕ: импортируются внешние зависимости для работы модуля.
 
-from .base import HTTPAIProvider, AIProvider, APIError, ErrorCategory
+from .base import HTTPAIProvider, AIProvider, APIError, ErrorCategory  # ПОЯСНЕНИЕ: импортируются внешние зависимости для работы модуля.
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)  # ПОЯСНЕНИЕ: обновляется значение переменной logger.
 
 
-class OpenAIProvider(HTTPAIProvider):
-    """OpenAI GPT provider"""
+# ЛОГИЧЕСКИЙ БЛОК: класс `OpenAIProvider(HTTPAIProvider)` — объединяет состояние и поведение подсистемы.
+class OpenAIProvider(HTTPAIProvider):  # ПОЯСНЕНИЕ: объявляется класс OpenAIProvider.
+    """OpenAI GPT provider"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
 
-    AVAILABLE_MODELS = [
-        "gpt-4o-mini",
-        "gpt-4o",
-        "gpt-4-turbo",
-        "gpt-4",
-        "gpt-3.5-turbo",
-        "o1-preview",
-        "o1-mini"
-    ]
+    AVAILABLE_MODELS = [  # ПОЯСНЕНИЕ: обновляется значение переменной AVAILABLE_MODELS.
+        "gpt-4o-mini",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        "gpt-4o",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        "gpt-4-turbo",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        "gpt-4",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        "gpt-3.5-turbo",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        "o1-preview",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        "o1-mini"  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+    ]  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def __init__(self, api_key: str = "", model: str = "gpt-4o-mini"):
-        super().__init__("OpenAI GPT", api_key, "#10a37f", model)
-        self.base_url = "https://api.openai.com/v1"
-        self.max_context_tokens = 128000 if "gpt-4" in model else 16000
-        self.system_prompt = "You are a helpful assistant."
+    # ЛОГИЧЕСКИЙ БЛОК: функция `__init__` — выполняет отдельный шаг бизнес-логики.
+    def __init__(self, api_key: str = "", model: str = "gpt-4o-mini"):  # ПОЯСНЕНИЕ: объявляется функция __init__ с параметрами из сигнатуры.
+        """Описание: функция `__init__`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        super().__init__("OpenAI GPT", api_key, "#10a37f", model)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self.base_url = "https://api.openai.com/v1"  # ПОЯСНЕНИЕ: обновляется значение переменной self.base_url.
+        self.max_context_tokens = 128000 if "gpt-4" in model else 16000  # ПОЯСНЕНИЕ: обновляется значение переменной self.max_context_tokens.
+        self.system_prompt = "You are a helpful assistant."  # ПОЯСНЕНИЕ: обновляется значение переменной self.system_prompt.
 
-    def _get_headers(self) -> Dict[str, str]:
-        return {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json"
-        }
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_get_headers` — выполняет отдельный шаг бизнес-логики.
+    def _get_headers(self) -> Dict[str, str]:  # ПОЯСНЕНИЕ: объявляется функция _get_headers с параметрами из сигнатуры.
+        """Описание: функция `_get_headers`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        return {  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+            "Authorization": f"Bearer {self.api_key}",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            "Content-Type": "application/json"  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        }  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def _build_request_data(self, messages: List[dict]) -> dict:
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_build_request_data` — выполняет отдельный шаг бизнес-логики.
+    def _build_request_data(self, messages: List[dict]) -> dict:  # ПОЯСНЕНИЕ: объявляется функция _build_request_data с параметрами из сигнатуры.
         # Add system prompt
-        all_messages = [{"role": "system", "content": self.system_prompt}]
-        all_messages.extend(messages)
+        """Описание: функция `_build_request_data`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        all_messages = [{"role": "system", "content": self.system_prompt}]  # ПОЯСНЕНИЕ: обновляется значение переменной all_messages.
+        all_messages.extend(messages)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-        return {
-            "model": self.model,
-            "messages": all_messages,
-            "max_tokens": self.max_response_tokens,
-            "temperature": 0.7
-        }
+        return {  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+            "model": self.model,  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            "messages": all_messages,  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            "max_tokens": self.max_response_tokens,  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            "temperature": 0.7  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        }  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def _parse_response(self, response: requests.Response) -> str:
-        data = response.json()
-        return data["choices"][0]["message"]["content"]
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_parse_response` — выполняет отдельный шаг бизнес-логики.
+    def _parse_response(self, response: requests.Response) -> str:  # ПОЯСНЕНИЕ: объявляется функция _parse_response с параметрами из сигнатуры.
+        """Описание: функция `_parse_response`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        data = response.json()  # ПОЯСНЕНИЕ: обновляется значение переменной data.
+        return data["choices"][0]["message"]["content"]  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
-    def query_stream(self, question: str) -> Iterator[Tuple[str, bool]]:
-        """Stream query results"""
-        if not self.api_key:
-            yield f"Error: Enter {self.name} API key", True
-            return
+    # ЛОГИЧЕСКИЙ БЛОК: функция `query_stream` — выполняет отдельный шаг бизнес-логики.
+    def query_stream(self, question: str) -> Iterator[Tuple[str, bool]]:  # ПОЯСНЕНИЕ: объявляется функция query_stream с параметрами из сигнатуры.
+        """Stream query results"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if not self.api_key:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            yield f"Error: Enter {self.name} API key", True  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            return  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
-        self.add_to_history("user", question)
+        self.add_to_history("user", question)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-        try:
-            headers = self._get_headers()
-            data = self._build_request_data(self.conversation_history)
-            data["stream"] = True
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+            headers = self._get_headers()  # ПОЯСНЕНИЕ: обновляется значение переменной headers.
+            data = self._build_request_data(self.conversation_history)  # ПОЯСНЕНИЕ: обновляется значение переменной data.
+            data["stream"] = True  # ПОЯСНЕНИЕ: обновляется значение переменной data["stream"].
 
-            response = requests.post(
-                f"{self.base_url}/chat/completions",
-                headers=headers,
-                json=data,
-                stream=True,
-                timeout=self.timeout
-            )
+            response = requests.post(  # ПОЯСНЕНИЕ: обновляется значение переменной response.
+                f"{self.base_url}/chat/completions",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                headers=headers,  # ПОЯСНЕНИЕ: обновляется значение переменной headers.
+                json=data,  # ПОЯСНЕНИЕ: обновляется значение переменной json.
+                stream=True,  # ПОЯСНЕНИЕ: обновляется значение переменной stream.
+                timeout=self.timeout  # ПОЯСНЕНИЕ: обновляется значение переменной timeout.
+            )  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-            if response.status_code != 200:
-                raise self._parse_error(response)
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if response.status_code != 200:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                raise self._parse_error(response)  # ПОЯСНЕНИЕ: генерируется исключение для обработки ошибки.
 
-            full_response = ""
-            for line in response.iter_lines():
-                if line:
-                    line = line.decode('utf-8')
-                    if line.startswith("data: "):
-                        line = line[6:]
-                        if line == "[DONE]":
-                            break
-                        try:
-                            import json
-                            chunk_data = json.loads(line)
-                            delta = chunk_data["choices"][0].get("delta", {})
-                            content = delta.get("content", "")
-                            if content:
-                                full_response += content
-                                yield content, False
-                        except Exception:
-                            pass
+            full_response = ""  # ПОЯСНЕНИЕ: обновляется значение переменной full_response.
+            # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+            for line in response.iter_lines():  # ПОЯСНЕНИЕ: запускается цикл for по коллекции.
+                # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                if line:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                    line = line.decode('utf-8')  # ПОЯСНЕНИЕ: обновляется значение переменной line.
+                    # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                    if line.startswith("data: "):  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                        line = line[6:]  # ПОЯСНЕНИЕ: обновляется значение переменной line.
+                        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                        if line == "[DONE]":  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                            break  # ПОЯСНЕНИЕ: цикл прерывается немедленно.
+                        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+                        try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+                            import json  # ПОЯСНЕНИЕ: импортируется модуль json.
+                            chunk_data = json.loads(line)  # ПОЯСНЕНИЕ: обновляется значение переменной chunk_data.
+                            delta = chunk_data["choices"][0].get("delta", {})  # ПОЯСНЕНИЕ: обновляется значение переменной delta.
+                            content = delta.get("content", "")  # ПОЯСНЕНИЕ: обновляется значение переменной content.
+                            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                            if content:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                                full_response += content  # ПОЯСНЕНИЕ: обновляется значение переменной full_response +.
+                                yield content, False  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+                        except Exception:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+                            pass  # ПОЯСНЕНИЕ: оставляется пустая заглушка без действий.
 
-            self.add_to_history("assistant", full_response)
-            yield "", True
+            self.add_to_history("assistant", full_response)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            yield "", True  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-        except Exception as e:
-            if self.conversation_history and self.conversation_history[-1]["role"] == "user":
-                self.conversation_history.pop()
-            yield f"Error: {str(e)}", True
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except Exception as e:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if self.conversation_history and self.conversation_history[-1]["role"] == "user":  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                self.conversation_history.pop()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            yield f"Error: {str(e)}", True  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
 
-class AnthropicProvider(HTTPAIProvider):
-    """Anthropic Claude provider"""
+# ЛОГИЧЕСКИЙ БЛОК: класс `AnthropicProvider(HTTPAIProvider)` — объединяет состояние и поведение подсистемы.
+class AnthropicProvider(HTTPAIProvider):  # ПОЯСНЕНИЕ: объявляется класс AnthropicProvider.
+    """Anthropic Claude provider"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
 
-    AVAILABLE_MODELS = [
-        "claude-3-5-sonnet-20241022",
-        "claude-3-5-haiku-20241022",
-        "claude-3-opus-20240229",
-        "claude-3-sonnet-20240229",
-        "claude-3-haiku-20240307"
-    ]
+    AVAILABLE_MODELS = [  # ПОЯСНЕНИЕ: обновляется значение переменной AVAILABLE_MODELS.
+        "claude-3-5-sonnet-20241022",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        "claude-3-5-haiku-20241022",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        "claude-3-opus-20240229",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        "claude-3-sonnet-20240229",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        "claude-3-haiku-20240307"  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+    ]  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def __init__(self, api_key: str = "", model: str = "claude-3-5-haiku-20241022"):
-        super().__init__("Anthropic Claude", api_key, "#cc785c", model)
-        self.base_url = "https://api.anthropic.com/v1"
-        self.max_context_tokens = 200000
+    # ЛОГИЧЕСКИЙ БЛОК: функция `__init__` — выполняет отдельный шаг бизнес-логики.
+    def __init__(self, api_key: str = "", model: str = "claude-3-5-haiku-20241022"):  # ПОЯСНЕНИЕ: объявляется функция __init__ с параметрами из сигнатуры.
+        """Описание: функция `__init__`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        super().__init__("Anthropic Claude", api_key, "#cc785c", model)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self.base_url = "https://api.anthropic.com/v1"  # ПОЯСНЕНИЕ: обновляется значение переменной self.base_url.
+        self.max_context_tokens = 200000  # ПОЯСНЕНИЕ: обновляется значение переменной self.max_context_tokens.
 
-    def _get_headers(self) -> Dict[str, str]:
-        return {
-            "x-api-key": self.api_key,
-            "anthropic-version": "2023-06-01",
-            "Content-Type": "application/json"
-        }
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_get_headers` — выполняет отдельный шаг бизнес-логики.
+    def _get_headers(self) -> Dict[str, str]:  # ПОЯСНЕНИЕ: объявляется функция _get_headers с параметрами из сигнатуры.
+        """Описание: функция `_get_headers`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        return {  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+            "x-api-key": self.api_key,  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            "anthropic-version": "2023-06-01",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            "Content-Type": "application/json"  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        }  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def _get_chat_endpoint(self) -> str:
-        return "/messages"
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_get_chat_endpoint` — выполняет отдельный шаг бизнес-логики.
+    def _get_chat_endpoint(self) -> str:  # ПОЯСНЕНИЕ: объявляется функция _get_chat_endpoint с параметрами из сигнатуры.
+        """Описание: функция `_get_chat_endpoint`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        return "/messages"  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
-    def _build_request_data(self, messages: List[dict]) -> dict:
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_build_request_data` — выполняет отдельный шаг бизнес-логики.
+    def _build_request_data(self, messages: List[dict]) -> dict:  # ПОЯСНЕНИЕ: объявляется функция _build_request_data с параметрами из сигнатуры.
         # Anthropic doesn't use system in messages array
-        return {
-            "model": self.model,
-            "max_tokens": self.max_response_tokens,
-            "messages": messages
-        }
+        """Описание: функция `_build_request_data`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        return {  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+            "model": self.model,  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            "max_tokens": self.max_response_tokens,  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            "messages": messages  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        }  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def _parse_response(self, response: requests.Response) -> str:
-        data = response.json()
-        return data["content"][0]["text"]
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_parse_response` — выполняет отдельный шаг бизнес-логики.
+    def _parse_response(self, response: requests.Response) -> str:  # ПОЯСНЕНИЕ: объявляется функция _parse_response с параметрами из сигнатуры.
+        """Описание: функция `_parse_response`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        data = response.json()  # ПОЯСНЕНИЕ: обновляется значение переменной data.
+        return data["content"][0]["text"]  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
-    def query_stream(self, question: str) -> Iterator[Tuple[str, bool]]:
-        """Stream query results"""
-        if not self.api_key:
-            yield f"Error: Enter {self.name} API key", True
-            return
+    # ЛОГИЧЕСКИЙ БЛОК: функция `query_stream` — выполняет отдельный шаг бизнес-логики.
+    def query_stream(self, question: str) -> Iterator[Tuple[str, bool]]:  # ПОЯСНЕНИЕ: объявляется функция query_stream с параметрами из сигнатуры.
+        """Stream query results"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if not self.api_key:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            yield f"Error: Enter {self.name} API key", True  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            return  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
-        self.add_to_history("user", question)
+        self.add_to_history("user", question)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-        try:
-            headers = self._get_headers()
-            data = self._build_request_data(self.conversation_history)
-            data["stream"] = True
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+            headers = self._get_headers()  # ПОЯСНЕНИЕ: обновляется значение переменной headers.
+            data = self._build_request_data(self.conversation_history)  # ПОЯСНЕНИЕ: обновляется значение переменной data.
+            data["stream"] = True  # ПОЯСНЕНИЕ: обновляется значение переменной data["stream"].
 
-            response = requests.post(
-                f"{self.base_url}/messages",
-                headers=headers,
-                json=data,
-                stream=True,
-                timeout=self.timeout
-            )
+            response = requests.post(  # ПОЯСНЕНИЕ: обновляется значение переменной response.
+                f"{self.base_url}/messages",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                headers=headers,  # ПОЯСНЕНИЕ: обновляется значение переменной headers.
+                json=data,  # ПОЯСНЕНИЕ: обновляется значение переменной json.
+                stream=True,  # ПОЯСНЕНИЕ: обновляется значение переменной stream.
+                timeout=self.timeout  # ПОЯСНЕНИЕ: обновляется значение переменной timeout.
+            )  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-            if response.status_code != 200:
-                raise self._parse_error(response)
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if response.status_code != 200:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                raise self._parse_error(response)  # ПОЯСНЕНИЕ: генерируется исключение для обработки ошибки.
 
-            full_response = ""
-            for line in response.iter_lines():
-                if line:
-                    line = line.decode('utf-8')
-                    if line.startswith("data: "):
-                        try:
-                            import json
-                            event_data = json.loads(line[6:])
-                            if event_data.get("type") == "content_block_delta":
-                                content = event_data.get("delta", {}).get("text", "")
-                                if content:
-                                    full_response += content
-                                    yield content, False
-                        except Exception:
-                            pass
+            full_response = ""  # ПОЯСНЕНИЕ: обновляется значение переменной full_response.
+            # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+            for line in response.iter_lines():  # ПОЯСНЕНИЕ: запускается цикл for по коллекции.
+                # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                if line:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                    line = line.decode('utf-8')  # ПОЯСНЕНИЕ: обновляется значение переменной line.
+                    # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                    if line.startswith("data: "):  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+                        try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+                            import json  # ПОЯСНЕНИЕ: импортируется модуль json.
+                            event_data = json.loads(line[6:])  # ПОЯСНЕНИЕ: обновляется значение переменной event_data.
+                            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                            if event_data.get("type") == "content_block_delta":  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                                content = event_data.get("delta", {}).get("text", "")  # ПОЯСНЕНИЕ: обновляется значение переменной content.
+                                # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+                                if content:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                                    full_response += content  # ПОЯСНЕНИЕ: обновляется значение переменной full_response +.
+                                    yield content, False  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+                        except Exception:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+                            pass  # ПОЯСНЕНИЕ: оставляется пустая заглушка без действий.
 
-            self.add_to_history("assistant", full_response)
-            yield "", True
+            self.add_to_history("assistant", full_response)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            yield "", True  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-        except Exception as e:
-            if self.conversation_history and self.conversation_history[-1]["role"] == "user":
-                self.conversation_history.pop()
-            yield f"Error: {str(e)}", True
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except Exception as e:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if self.conversation_history and self.conversation_history[-1]["role"] == "user":  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                self.conversation_history.pop()  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            yield f"Error: {str(e)}", True  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
 
-class GeminiProvider(HTTPAIProvider):
-    """Google Gemini provider"""
+# ЛОГИЧЕСКИЙ БЛОК: класс `GeminiProvider(HTTPAIProvider)` — объединяет состояние и поведение подсистемы.
+class GeminiProvider(HTTPAIProvider):  # ПОЯСНЕНИЕ: объявляется класс GeminiProvider.
+    """Google Gemini provider"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
 
-    AVAILABLE_MODELS = [
-        "gemini-1.5-flash",
-        "gemini-1.5-pro",
-        "gemini-1.0-pro"
-    ]
+    AVAILABLE_MODELS = [  # ПОЯСНЕНИЕ: обновляется значение переменной AVAILABLE_MODELS.
+        "gemini-1.5-flash",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        "gemini-1.5-pro",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        "gemini-1.0-pro"  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+    ]  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def __init__(self, api_key: str = "", model: str = "gemini-1.5-flash"):
-        super().__init__("Google Gemini", api_key, "#4285f4", model)
-        self.base_url = "https://generativelanguage.googleapis.com/v1beta"
-        self.max_context_tokens = 1000000  # Gemini has huge context
+    # ЛОГИЧЕСКИЙ БЛОК: функция `__init__` — выполняет отдельный шаг бизнес-логики.
+    def __init__(self, api_key: str = "", model: str = "gemini-1.5-flash"):  # ПОЯСНЕНИЕ: объявляется функция __init__ с параметрами из сигнатуры.
+        """Описание: функция `__init__`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        super().__init__("Google Gemini", api_key, "#4285f4", model)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self.base_url = "https://generativelanguage.googleapis.com/v1beta"  # ПОЯСНЕНИЕ: обновляется значение переменной self.base_url.
+        self.max_context_tokens = 1000000  # Gemini has huge context  # ПОЯСНЕНИЕ: обновляется значение переменной self.max_context_tokens.
 
-    def _get_headers(self) -> Dict[str, str]:
-        return {"Content-Type": "application/json"}
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_get_headers` — выполняет отдельный шаг бизнес-логики.
+    def _get_headers(self) -> Dict[str, str]:  # ПОЯСНЕНИЕ: объявляется функция _get_headers с параметрами из сигнатуры.
+        """Описание: функция `_get_headers`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        return {"Content-Type": "application/json"}  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
-    def _get_chat_endpoint(self) -> str:
-        return f"/models/{self.model}:generateContent?key={self.api_key}"
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_get_chat_endpoint` — выполняет отдельный шаг бизнес-логики.
+    def _get_chat_endpoint(self) -> str:  # ПОЯСНЕНИЕ: объявляется функция _get_chat_endpoint с параметрами из сигнатуры.
+        """Описание: функция `_get_chat_endpoint`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        return f"/models/{self.model}:generateContent?key={self.api_key}"  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
-    def _build_request_data(self, messages: List[dict]) -> dict:
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_build_request_data` — выполняет отдельный шаг бизнес-логики.
+    def _build_request_data(self, messages: List[dict]) -> dict:  # ПОЯСНЕНИЕ: объявляется функция _build_request_data с параметрами из сигнатуры.
         # Convert to Gemini format
-        contents = []
-        for msg in messages:
-            role = "user" if msg["role"] == "user" else "model"
-            contents.append({
-                "role": role,
-                "parts": [{"text": msg["content"]}]
-            })
+        """Описание: функция `_build_request_data`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        contents = []  # ПОЯСНЕНИЕ: обновляется значение переменной contents.
+        # ЛОГИЧЕСКИЙ БЛОК: цикл для поэтапной обработки данных.
+        for msg in messages:  # ПОЯСНЕНИЕ: запускается цикл for по коллекции.
+            role = "user" if msg["role"] == "user" else "model"  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            contents.append({  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                "role": role,  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                "parts": [{"text": msg["content"]}]  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            })  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-        return {
-            "contents": contents,
-            "generationConfig": {
-                "temperature": 0.7,
-                "maxOutputTokens": self.max_response_tokens
-            }
-        }
+        return {  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+            "contents": contents,  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            "generationConfig": {  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                "temperature": 0.7,  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+                "maxOutputTokens": self.max_response_tokens  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            }  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        }  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def _parse_response(self, response: requests.Response) -> str:
-        data = response.json()
-        if "candidates" in data and len(data["candidates"]) > 0:
-            return data["candidates"][0]["content"]["parts"][0]["text"]
-        raise APIError("No response from Gemini", ErrorCategory.UNKNOWN, provider=self.name)
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_parse_response` — выполняет отдельный шаг бизнес-логики.
+    def _parse_response(self, response: requests.Response) -> str:  # ПОЯСНЕНИЕ: объявляется функция _parse_response с параметрами из сигнатуры.
+        """Описание: функция `_parse_response`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        data = response.json()  # ПОЯСНЕНИЕ: обновляется значение переменной data.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if "candidates" in data and len(data["candidates"]) > 0:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            return data["candidates"][0]["content"]["parts"][0]["text"]  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+        raise APIError("No response from Gemini", ErrorCategory.UNKNOWN, provider=self.name)  # ПОЯСНЕНИЕ: генерируется исключение для обработки ошибки.
 
-    def _make_request(self, method: str, endpoint: str, headers: Dict[str, str],
-                      data: Optional[dict] = None, timeout: Optional[int] = None,
-                      stream: bool = False) -> requests.Response:
-        """Override to handle Gemini's different URL structure"""
-        url = f"{self.base_url}{endpoint}"
-        timeout = timeout or self.timeout
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_make_request` — выполняет отдельный шаг бизнес-логики.
+    def _make_request(self, method: str, endpoint: str, headers: Dict[str, str],  # ПОЯСНЕНИЕ: объявляется функция _make_request с параметрами из сигнатуры.
+                      data: Optional[dict] = None, timeout: Optional[int] = None,  # ПОЯСНЕНИЕ: обновляется значение переменной data: Optional[dict].
+                      stream: bool = False) -> requests.Response:  # ПОЯСНЕНИЕ: обновляется значение переменной stream: bool.
+        """Override to handle Gemini's different URL structure"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        url = f"{self.base_url}{endpoint}"  # ПОЯСНЕНИЕ: обновляется значение переменной url.
+        timeout = timeout or self.timeout  # ПОЯСНЕНИЕ: обновляется значение переменной timeout.
 
-        try:
-            response = requests.post(url, headers=headers, json=data, timeout=timeout)
-            if response.status_code >= 400:
-                raise self._parse_error(response)
-            return response
-        except APIError:
-            raise
-        except requests.exceptions.Timeout:
-            raise APIError("Request timeout", ErrorCategory.NETWORK, provider=self.name)
-        except Exception as e:
-            raise APIError(str(e), ErrorCategory.UNKNOWN, provider=self.name)
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+            response = requests.post(url, headers=headers, json=data, timeout=timeout)  # ПОЯСНЕНИЕ: обновляется значение переменной response.
+            # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+            if response.status_code >= 400:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+                raise self._parse_error(response)  # ПОЯСНЕНИЕ: генерируется исключение для обработки ошибки.
+            return response  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except APIError:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+            raise  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except requests.exceptions.Timeout:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+            raise APIError("Request timeout", ErrorCategory.NETWORK, provider=self.name)  # ПОЯСНЕНИЕ: генерируется исключение для обработки ошибки.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except Exception as e:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+            raise APIError(str(e), ErrorCategory.UNKNOWN, provider=self.name)  # ПОЯСНЕНИЕ: генерируется исключение для обработки ошибки.
 
-    def test_connection(self) -> bool:
-        if not self.api_key:
-            self.is_connected = False
-            return False
-        try:
-            headers = self._get_headers()
-            data = {"contents": [{"parts": [{"text": "Hi"}]}]}
-            url = f"{self.base_url}/models/{self.model}:generateContent?key={self.api_key}"
-            response = requests.post(url, headers=headers, json=data, timeout=15)
-            self.is_connected = response.status_code == 200
-            return self.is_connected
-        except Exception:
-            self.is_connected = False
-            return False
-
-
-class DeepSeekProvider(HTTPAIProvider):
-    """DeepSeek provider"""
-
-    AVAILABLE_MODELS = [
-        "deepseek-chat",
-        "deepseek-coder"
-    ]
-
-    def __init__(self, api_key: str = "", model: str = "deepseek-chat"):
-        super().__init__("DeepSeek", api_key, "#5c6bc0", model)
-        self.base_url = "https://api.deepseek.com/v1"
-        self.max_context_tokens = 64000
-        self.system_prompt = "You are a helpful assistant."
-
-    def _get_headers(self) -> Dict[str, str]:
-        return {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json"
-        }
-
-    def _build_request_data(self, messages: List[dict]) -> dict:
-        all_messages = [{"role": "system", "content": self.system_prompt}]
-        all_messages.extend(messages)
-
-        return {
-            "model": self.model,
-            "messages": all_messages,
-            "max_tokens": self.max_response_tokens,
-            "temperature": 0.7
-        }
-
-    def _parse_response(self, response: requests.Response) -> str:
-        data = response.json()
-        return data["choices"][0]["message"]["content"]
+    # ЛОГИЧЕСКИЙ БЛОК: функция `test_connection` — выполняет отдельный шаг бизнес-логики.
+    def test_connection(self) -> bool:  # ПОЯСНЕНИЕ: объявляется функция test_connection с параметрами из сигнатуры.
+        """Описание: функция `test_connection`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if not self.api_key:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            self.is_connected = False  # ПОЯСНЕНИЕ: обновляется значение переменной self.is_connected.
+            return False  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        try:  # ПОЯСНЕНИЕ: начинается блок перехвата возможных ошибок.
+            headers = self._get_headers()  # ПОЯСНЕНИЕ: обновляется значение переменной headers.
+            data = {"contents": [{"parts": [{"text": "Hi"}]}]}  # ПОЯСНЕНИЕ: обновляется значение переменной data.
+            url = f"{self.base_url}/models/{self.model}:generateContent?key={self.api_key}"  # ПОЯСНЕНИЕ: обновляется значение переменной url.
+            response = requests.post(url, headers=headers, json=data, timeout=15)  # ПОЯСНЕНИЕ: обновляется значение переменной response.
+            self.is_connected = response.status_code == 200  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            return self.is_connected  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+        # ЛОГИЧЕСКИЙ БЛОК: обработка ошибок и устойчивость выполнения.
+        except Exception:  # ПОЯСНЕНИЕ: обрабатывается ошибка в блоке except.
+            self.is_connected = False  # ПОЯСНЕНИЕ: обновляется значение переменной self.is_connected.
+            return False  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
 
-class GroqProvider(HTTPAIProvider):
-    """Groq provider (fast inference)"""
+# ЛОГИЧЕСКИЙ БЛОК: класс `DeepSeekProvider(HTTPAIProvider)` — объединяет состояние и поведение подсистемы.
+class DeepSeekProvider(HTTPAIProvider):  # ПОЯСНЕНИЕ: объявляется класс DeepSeekProvider.
+    """DeepSeek provider"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
 
-    AVAILABLE_MODELS = [
-        "llama-3.3-70b-versatile",
-        "llama-3.1-8b-instant",
-        "mixtral-8x7b-32768",
-        "gemma2-9b-it"
-    ]
+    AVAILABLE_MODELS = [  # ПОЯСНЕНИЕ: обновляется значение переменной AVAILABLE_MODELS.
+        "deepseek-chat",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        "deepseek-coder"  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+    ]  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def __init__(self, api_key: str = "", model: str = "llama-3.3-70b-versatile"):
-        super().__init__("Groq", api_key, "#f55036", model)
-        self.base_url = "https://api.groq.com/openai/v1"
-        self.max_context_tokens = 32000
-        self.system_prompt = "You are a helpful assistant."
+    # ЛОГИЧЕСКИЙ БЛОК: функция `__init__` — выполняет отдельный шаг бизнес-логики.
+    def __init__(self, api_key: str = "", model: str = "deepseek-chat"):  # ПОЯСНЕНИЕ: объявляется функция __init__ с параметрами из сигнатуры.
+        """Описание: функция `__init__`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        super().__init__("DeepSeek", api_key, "#5c6bc0", model)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self.base_url = "https://api.deepseek.com/v1"  # ПОЯСНЕНИЕ: обновляется значение переменной self.base_url.
+        self.max_context_tokens = 64000  # ПОЯСНЕНИЕ: обновляется значение переменной self.max_context_tokens.
+        self.system_prompt = "You are a helpful assistant."  # ПОЯСНЕНИЕ: обновляется значение переменной self.system_prompt.
 
-    def _get_headers(self) -> Dict[str, str]:
-        return {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json"
-        }
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_get_headers` — выполняет отдельный шаг бизнес-логики.
+    def _get_headers(self) -> Dict[str, str]:  # ПОЯСНЕНИЕ: объявляется функция _get_headers с параметрами из сигнатуры.
+        """Описание: функция `_get_headers`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        return {  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+            "Authorization": f"Bearer {self.api_key}",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            "Content-Type": "application/json"  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        }  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def _build_request_data(self, messages: List[dict]) -> dict:
-        all_messages = [{"role": "system", "content": self.system_prompt}]
-        all_messages.extend(messages)
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_build_request_data` — выполняет отдельный шаг бизнес-логики.
+    def _build_request_data(self, messages: List[dict]) -> dict:  # ПОЯСНЕНИЕ: объявляется функция _build_request_data с параметрами из сигнатуры.
+        """Описание: функция `_build_request_data`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        all_messages = [{"role": "system", "content": self.system_prompt}]  # ПОЯСНЕНИЕ: обновляется значение переменной all_messages.
+        all_messages.extend(messages)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-        return {
-            "model": self.model,
-            "messages": all_messages,
-            "max_tokens": self.max_response_tokens,
-            "temperature": 0.7
-        }
+        return {  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+            "model": self.model,  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            "messages": all_messages,  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            "max_tokens": self.max_response_tokens,  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            "temperature": 0.7  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        }  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def _parse_response(self, response: requests.Response) -> str:
-        data = response.json()
-        return data["choices"][0]["message"]["content"]
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_parse_response` — выполняет отдельный шаг бизнес-логики.
+    def _parse_response(self, response: requests.Response) -> str:  # ПОЯСНЕНИЕ: объявляется функция _parse_response с параметрами из сигнатуры.
+        """Описание: функция `_parse_response`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        data = response.json()  # ПОЯСНЕНИЕ: обновляется значение переменной data.
+        return data["choices"][0]["message"]["content"]  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
 
-class MistralProvider(HTTPAIProvider):
-    """Mistral AI provider"""
+# ЛОГИЧЕСКИЙ БЛОК: класс `GroqProvider(HTTPAIProvider)` — объединяет состояние и поведение подсистемы.
+class GroqProvider(HTTPAIProvider):  # ПОЯСНЕНИЕ: объявляется класс GroqProvider.
+    """Groq provider (fast inference)"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
 
-    AVAILABLE_MODELS = [
-        "mistral-small-latest",
-        "mistral-medium-latest",
-        "mistral-large-latest",
-        "open-mistral-7b",
-        "open-mixtral-8x7b"
-    ]
+    AVAILABLE_MODELS = [  # ПОЯСНЕНИЕ: обновляется значение переменной AVAILABLE_MODELS.
+        "llama-3.3-70b-versatile",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        "llama-3.1-8b-instant",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        "mixtral-8x7b-32768",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        "gemma2-9b-it"  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+    ]  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def __init__(self, api_key: str = "", model: str = "mistral-small-latest"):
-        super().__init__("Mistral AI", api_key, "#ff7000", model)
-        self.base_url = "https://api.mistral.ai/v1"
-        self.max_context_tokens = 32000
+    # ЛОГИЧЕСКИЙ БЛОК: функция `__init__` — выполняет отдельный шаг бизнес-логики.
+    def __init__(self, api_key: str = "", model: str = "llama-3.3-70b-versatile"):  # ПОЯСНЕНИЕ: объявляется функция __init__ с параметрами из сигнатуры.
+        """Описание: функция `__init__`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        super().__init__("Groq", api_key, "#f55036", model)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self.base_url = "https://api.groq.com/openai/v1"  # ПОЯСНЕНИЕ: обновляется значение переменной self.base_url.
+        self.max_context_tokens = 32000  # ПОЯСНЕНИЕ: обновляется значение переменной self.max_context_tokens.
+        self.system_prompt = "You are a helpful assistant."  # ПОЯСНЕНИЕ: обновляется значение переменной self.system_prompt.
 
-    def _get_headers(self) -> Dict[str, str]:
-        return {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json"
-        }
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_get_headers` — выполняет отдельный шаг бизнес-логики.
+    def _get_headers(self) -> Dict[str, str]:  # ПОЯСНЕНИЕ: объявляется функция _get_headers с параметрами из сигнатуры.
+        """Описание: функция `_get_headers`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        return {  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+            "Authorization": f"Bearer {self.api_key}",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            "Content-Type": "application/json"  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        }  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def _build_request_data(self, messages: List[dict]) -> dict:
-        return {
-            "model": self.model,
-            "messages": messages,
-            "max_tokens": self.max_response_tokens,
-            "temperature": 0.7
-        }
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_build_request_data` — выполняет отдельный шаг бизнес-логики.
+    def _build_request_data(self, messages: List[dict]) -> dict:  # ПОЯСНЕНИЕ: объявляется функция _build_request_data с параметрами из сигнатуры.
+        """Описание: функция `_build_request_data`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        all_messages = [{"role": "system", "content": self.system_prompt}]  # ПОЯСНЕНИЕ: обновляется значение переменной all_messages.
+        all_messages.extend(messages)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
-    def _parse_response(self, response: requests.Response) -> str:
-        data = response.json()
-        return data["choices"][0]["message"]["content"]
+        return {  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+            "model": self.model,  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            "messages": all_messages,  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            "max_tokens": self.max_response_tokens,  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            "temperature": 0.7  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        }  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_parse_response` — выполняет отдельный шаг бизнес-логики.
+    def _parse_response(self, response: requests.Response) -> str:  # ПОЯСНЕНИЕ: объявляется функция _parse_response с параметрами из сигнатуры.
+        """Описание: функция `_parse_response`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        data = response.json()  # ПОЯСНЕНИЕ: обновляется значение переменной data.
+        return data["choices"][0]["message"]["content"]  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+
+
+# ЛОГИЧЕСКИЙ БЛОК: класс `MistralProvider(HTTPAIProvider)` — объединяет состояние и поведение подсистемы.
+class MistralProvider(HTTPAIProvider):  # ПОЯСНЕНИЕ: объявляется класс MistralProvider.
+    """Mistral AI provider"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+
+    AVAILABLE_MODELS = [  # ПОЯСНЕНИЕ: обновляется значение переменной AVAILABLE_MODELS.
+        "mistral-small-latest",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        "mistral-medium-latest",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        "mistral-large-latest",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        "open-mistral-7b",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        "open-mixtral-8x7b"  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+    ]  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+
+    # ЛОГИЧЕСКИЙ БЛОК: функция `__init__` — выполняет отдельный шаг бизнес-логики.
+    def __init__(self, api_key: str = "", model: str = "mistral-small-latest"):  # ПОЯСНЕНИЕ: объявляется функция __init__ с параметрами из сигнатуры.
+        """Описание: функция `__init__`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        super().__init__("Mistral AI", api_key, "#ff7000", model)  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        self.base_url = "https://api.mistral.ai/v1"  # ПОЯСНЕНИЕ: обновляется значение переменной self.base_url.
+        self.max_context_tokens = 32000  # ПОЯСНЕНИЕ: обновляется значение переменной self.max_context_tokens.
+
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_get_headers` — выполняет отдельный шаг бизнес-логики.
+    def _get_headers(self) -> Dict[str, str]:  # ПОЯСНЕНИЕ: объявляется функция _get_headers с параметрами из сигнатуры.
+        """Описание: функция `_get_headers`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        return {  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+            "Authorization": f"Bearer {self.api_key}",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            "Content-Type": "application/json"  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        }  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_build_request_data` — выполняет отдельный шаг бизнес-логики.
+    def _build_request_data(self, messages: List[dict]) -> dict:  # ПОЯСНЕНИЕ: объявляется функция _build_request_data с параметрами из сигнатуры.
+        """Описание: функция `_build_request_data`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        return {  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+            "model": self.model,  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            "messages": messages,  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            "max_tokens": self.max_response_tokens,  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+            "temperature": 0.7  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        }  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+
+    # ЛОГИЧЕСКИЙ БЛОК: функция `_parse_response` — выполняет отдельный шаг бизнес-логики.
+    def _parse_response(self, response: requests.Response) -> str:  # ПОЯСНЕНИЕ: объявляется функция _parse_response с параметрами из сигнатуры.
+        """Описание: функция `_parse_response`."""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+        data = response.json()  # ПОЯСНЕНИЕ: обновляется значение переменной data.
+        return data["choices"][0]["message"]["content"]  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
 
 
 # Provider registry for dynamic creation
-PROVIDER_REGISTRY = {
-    "openai": OpenAIProvider,
-    "anthropic": AnthropicProvider,
-    "gemini": GeminiProvider,
-    "deepseek": DeepSeekProvider,
-    "groq": GroqProvider,
-    "mistral": MistralProvider
-}
+PROVIDER_REGISTRY = {  # ПОЯСНЕНИЕ: обновляется значение переменной PROVIDER_REGISTRY.
+    "openai": OpenAIProvider,  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+    "anthropic": AnthropicProvider,  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+    "gemini": GeminiProvider,  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+    "deepseek": DeepSeekProvider,  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+    "groq": GroqProvider,  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+    "mistral": MistralProvider  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+}  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
 # Provider display info
-PROVIDER_INFO = {
-    "openai": {
-        "name": "OpenAI GPT",
-        "color": "#10a37f",
-        "url": "https://platform.openai.com/api-keys",
-        "description": "GPT-4, GPT-3.5 models"
-    },
-    "anthropic": {
-        "name": "Anthropic Claude",
-        "color": "#cc785c",
-        "url": "https://console.anthropic.com/",
-        "description": "Claude 3.5, Claude 3 models"
-    },
-    "gemini": {
-        "name": "Google Gemini",
-        "color": "#4285f4",
-        "url": "https://aistudio.google.com/apikey",
-        "description": "Gemini 1.5 Pro/Flash"
-    },
-    "deepseek": {
-        "name": "DeepSeek",
-        "color": "#5c6bc0",
-        "url": "https://platform.deepseek.com/",
-        "description": "DeepSeek Chat & Coder"
-    },
-    "groq": {
-        "name": "Groq",
-        "color": "#f55036",
-        "url": "https://console.groq.com/keys",
-        "description": "Llama, Mixtral (fast)"
-    },
-    "mistral": {
-        "name": "Mistral AI",
-        "color": "#ff7000",
-        "url": "https://console.mistral.ai/api-keys/",
-        "description": "Mistral models"
-    }
-}
+PROVIDER_INFO = {  # ПОЯСНЕНИЕ: обновляется значение переменной PROVIDER_INFO.
+    "openai": {  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        "name": "OpenAI GPT",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        "color": "#10a37f",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        "url": "https://platform.openai.com/api-keys",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        "description": "GPT-4, GPT-3.5 models"  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+    },  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+    "anthropic": {  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        "name": "Anthropic Claude",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        "color": "#cc785c",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        "url": "https://console.anthropic.com/",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        "description": "Claude 3.5, Claude 3 models"  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+    },  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+    "gemini": {  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        "name": "Google Gemini",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        "color": "#4285f4",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        "url": "https://aistudio.google.com/apikey",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        "description": "Gemini 1.5 Pro/Flash"  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+    },  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+    "deepseek": {  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        "name": "DeepSeek",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        "color": "#5c6bc0",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        "url": "https://platform.deepseek.com/",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        "description": "DeepSeek Chat & Coder"  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+    },  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+    "groq": {  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        "name": "Groq",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        "color": "#f55036",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        "url": "https://console.groq.com/keys",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        "description": "Llama, Mixtral (fast)"  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+    },  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+    "mistral": {  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        "name": "Mistral AI",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        "color": "#ff7000",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        "url": "https://console.mistral.ai/api-keys/",  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+        "description": "Mistral models"  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+    }  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
+}  # ПОЯСНЕНИЕ: выполняется текущая инструкция этого шага логики.
 
 
-def create_provider(provider_key: str, api_key: str = "", model: str = "") -> Optional[AIProvider]:
-    """Create a provider instance by key"""
-    if provider_key in PROVIDER_REGISTRY:
-        provider_class = PROVIDER_REGISTRY[provider_key]
-        if model:
-            return provider_class(api_key, model)
-        return provider_class(api_key)
-    return None
+# ЛОГИЧЕСКИЙ БЛОК: функция `create_provider` — выполняет отдельный шаг бизнес-логики.
+def create_provider(provider_key: str, api_key: str = "", model: str = "") -> Optional[AIProvider]:  # ПОЯСНЕНИЕ: объявляется функция create_provider с параметрами из сигнатуры.
+    """Create a provider instance by key"""  # ПОЯСНЕНИЕ: задается или продолжается строка документации.
+    # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+    if provider_key in PROVIDER_REGISTRY:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+        provider_class = PROVIDER_REGISTRY[provider_key]  # ПОЯСНЕНИЕ: обновляется значение переменной provider_class.
+        # ЛОГИЧЕСКИЙ БЛОК: ветвление условий для выбора дальнейшего сценария.
+        if model:  # ПОЯСНЕНИЕ: проверяется условие ветвления if.
+            return provider_class(api_key, model)  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+        return provider_class(api_key)  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.
+    return None  # ПОЯСНЕНИЕ: возвращается результат из текущей функции.

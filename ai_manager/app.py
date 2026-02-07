@@ -108,12 +108,21 @@ class AIManagerApp(ctk.CTk):
         self._create_metrics_tab()
 
     def _create_chat_tab(self):
-        """Create chat tab with provider selection"""
-        self.tab_chat.grid_rowconfigure(1, weight=1)
-        self.tab_chat.grid_columnconfigure(0, weight=1)
+        """Create chat tab with left sidebar for branches and right main area"""
+        self.tab_chat.grid_rowconfigure(0, weight=1)
+        self.tab_chat.grid_columnconfigure(1, weight=1)
+
+        # ===== Left Sidebar =====
+        self._create_branch_sidebar()
+
+        # ===== Right Main Area =====
+        main_area = ctk.CTkFrame(self.tab_chat, fg_color="transparent")
+        main_area.grid(row=0, column=1, sticky="nsew", padx=(10, 0))
+        main_area.grid_rowconfigure(1, weight=1)
+        main_area.grid_columnconfigure(0, weight=1)
 
         # Header with provider toggles
-        header = ctk.CTkFrame(self.tab_chat, fg_color="transparent")
+        header = ctk.CTkFrame(main_area, fg_color="transparent")
         header.grid(row=0, column=0, sticky="ew", pady=(0, 10))
 
         ctk.CTkLabel(
@@ -129,7 +138,7 @@ class AIManagerApp(ctk.CTk):
         self.status_label.pack(side="right")
 
         # Provider toggles
-        toggles_frame = ctk.CTkFrame(self.tab_chat, fg_color="transparent")
+        toggles_frame = ctk.CTkFrame(main_area, fg_color="transparent")
         toggles_frame.grid(row=0, column=0, sticky="e", pady=(0, 10), padx=(0, 100))
 
         for key, info in PROVIDER_INFO.items():
@@ -141,14 +150,14 @@ class AIManagerApp(ctk.CTk):
 
         # Chat display
         self.chat_display = ctk.CTkTextbox(
-            self.tab_chat, corner_radius=12,
+            main_area, corner_radius=12,
             font=ctk.CTkFont(family="Consolas", size=12),
             state="disabled"
         )
         self.chat_display.grid(row=1, column=0, sticky="nsew", pady=(0, 10))
 
         # Input area
-        input_frame = ctk.CTkFrame(self.tab_chat, fg_color="transparent")
+        input_frame = ctk.CTkFrame(main_area, fg_color="transparent")
         input_frame.grid(row=2, column=0, sticky="ew")
         input_frame.grid_columnconfigure(0, weight=1)
 
@@ -163,88 +172,123 @@ class AIManagerApp(ctk.CTk):
         self.chat_input.bind("<Shift-Return>", self._handle_shift_enter)
         self._setup_chat_bindings()
 
-        # Buttons
-        btn_frame = ctk.CTkFrame(input_frame, fg_color="transparent")
-        btn_frame.grid(row=0, column=1)
-
+        # Send button next to input
         self.send_btn = ctk.CTkButton(
-            btn_frame, text="Send", width=100, height=40,
+            input_frame, text="Send", width=100, height=100,
             corner_radius=10, font=ctk.CTkFont(size=14, weight="bold"),
             command=self._send_query
         )
-        self.send_btn.pack(pady=(0, 4))
-
-        ctk.CTkButton(
-            btn_frame, text="Clear", width=100, height=30,
-            corner_radius=10, fg_color="gray30",
-            command=self._clear_chat
-        ).pack(pady=(0, 4))
-
-        ctk.CTkButton(
-            btn_frame, text="New Chat", width=100, height=30,
-            corner_radius=10, fg_color="#e74c3c", hover_color="#c0392b",
-            command=self._new_chat
-        ).pack(pady=(0, 4))
-
-        ctk.CTkButton(
-            btn_frame, text="Save Chat", width=100, height=30,
-            corner_radius=10, fg_color="#9b59b6", hover_color="#8e44ad",
-            command=self._save_chat_to_file
-        ).pack()
+        self.send_btn.grid(row=0, column=1)
 
         # Progress bar
-        self.progress = ctk.CTkProgressBar(self.tab_chat, mode="indeterminate", height=3)
+        self.progress = ctk.CTkProgressBar(main_area, mode="indeterminate", height=3)
 
         # Streaming indicator
         self.streaming_label = ctk.CTkLabel(
-            self.tab_chat, text="",
+            main_area, text="",
             font=ctk.CTkFont(size=11), text_color="#27ae60"
         )
 
-        # Branches panel
-        self._create_branches_panel()
+    def _create_branch_sidebar(self):
+        """Create left sidebar with branch navigation and control buttons"""
+        sidebar = ctk.CTkFrame(self.tab_chat, width=240, corner_radius=12)
+        sidebar.grid(row=0, column=0, sticky="nsew", padx=(0, 0))
+        sidebar.grid_propagate(False)
+        sidebar.grid_rowconfigure(2, weight=1)
+        sidebar.grid_columnconfigure(0, weight=1)
 
-    def _create_branches_panel(self):
-        """Create conversation branches management panel"""
-        branches_frame = ctk.CTkFrame(self.tab_chat, corner_radius=12)
-        branches_frame.grid(row=4, column=0, sticky="ew", pady=(10, 0))
-
-        # Header
-        branches_header = ctk.CTkFrame(branches_frame, fg_color="transparent")
-        branches_header.pack(fill="x", padx=10, pady=(10, 5))
+        # --- Sidebar Header ---
+        sidebar_header = ctk.CTkFrame(sidebar, fg_color="transparent")
+        sidebar_header.grid(row=0, column=0, sticky="ew", padx=10, pady=(10, 5))
 
         ctk.CTkLabel(
-            branches_header, text="Conversation Branches",
-            font=ctk.CTkFont(size=14, weight="bold")
+            sidebar_header, text="Branches",
+            font=ctk.CTkFont(size=16, weight="bold")
         ).pack(side="left")
 
+        # Refresh button (small, in header)
+        ctk.CTkButton(
+            sidebar_header, text="\u21BB", width=28, height=28,
+            corner_radius=6, fg_color="gray30", hover_color="gray40",
+            font=ctk.CTkFont(size=14),
+            command=self._refresh_branches_list
+        ).pack(side="right")
+
+        # Save branch button (small, in header)
+        ctk.CTkButton(
+            sidebar_header, text="+", width=28, height=28,
+            corner_radius=6, fg_color="#27ae60", hover_color="#1e8449",
+            font=ctk.CTkFont(size=16, weight="bold"),
+            command=self._save_branch
+        ).pack(side="right", padx=(0, 4))
+
+        # --- Current branch label ---
         self.current_branch_label = ctk.CTkLabel(
-            branches_header, text="Current: None",
+            sidebar, text="Current: None",
             font=ctk.CTkFont(size=11), text_color="gray"
         )
-        self.current_branch_label.pack(side="right")
+        self.current_branch_label.grid(row=1, column=0, sticky="w", padx=12, pady=(0, 5))
 
-        # Controls
-        branches_controls = ctk.CTkFrame(branches_frame, fg_color="transparent")
-        branches_controls.pack(fill="x", padx=10, pady=(0, 10))
-
-        self.branches_combo = ctk.CTkComboBox(
-            branches_controls, width=250, height=32,
-            values=["No saved branches"], state="readonly"
+        # --- Scrollable Branch List ---
+        self.branch_list_frame = ctk.CTkScrollableFrame(
+            sidebar, corner_radius=8, fg_color=("gray90", "gray17"),
+            label_text=""
         )
-        self.branches_combo.pack(side="left", padx=(0, 10))
+        self.branch_list_frame.grid(row=2, column=0, sticky="nsew", padx=8, pady=(0, 8))
+        self.branch_list_frame.grid_columnconfigure(0, weight=1)
 
-        for text, color, cmd in [
-            ("Save", "#27ae60", self._save_branch),
-            ("Load", "#3498db", self._load_branch),
-            ("Delete", "#e74c3c", self._delete_branch),
-            ("Refresh", "gray30", self._refresh_branches_list)
-        ]:
-            ctk.CTkButton(
-                branches_controls, text=text, width=70, height=32,
-                corner_radius=8, fg_color=color,
-                command=cmd
-            ).pack(side="left", padx=(0, 5))
+        # Placeholder for branch items
+        self.branch_items: List[ctk.CTkFrame] = []
+        self.selected_branch_idx: Optional[int] = None
+
+        # --- Branch action buttons ---
+        branch_actions = ctk.CTkFrame(sidebar, fg_color="transparent")
+        branch_actions.grid(row=3, column=0, sticky="ew", padx=8, pady=(0, 8))
+        branch_actions.grid_columnconfigure((0, 1), weight=1)
+
+        ctk.CTkButton(
+            branch_actions, text="Load", height=30,
+            corner_radius=8, fg_color="#3498db", hover_color="#2980b9",
+            font=ctk.CTkFont(size=12),
+            command=self._load_branch
+        ).grid(row=0, column=0, sticky="ew", padx=(0, 3))
+
+        ctk.CTkButton(
+            branch_actions, text="Delete", height=30,
+            corner_radius=8, fg_color="#e74c3c", hover_color="#c0392b",
+            font=ctk.CTkFont(size=12),
+            command=self._delete_branch
+        ).grid(row=0, column=1, sticky="ew", padx=(3, 0))
+
+        # --- Separator ---
+        separator = ctk.CTkFrame(sidebar, height=1, fg_color="gray40")
+        separator.grid(row=4, column=0, sticky="ew", padx=10, pady=(0, 8))
+
+        # --- Control Buttons (below branches) ---
+        controls_frame = ctk.CTkFrame(sidebar, fg_color="transparent")
+        controls_frame.grid(row=5, column=0, sticky="ew", padx=8, pady=(0, 10))
+        controls_frame.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkButton(
+            controls_frame, text="New Chat", height=32,
+            corner_radius=8, fg_color="#e74c3c", hover_color="#c0392b",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            command=self._new_chat
+        ).pack(fill="x", pady=(0, 4))
+
+        ctk.CTkButton(
+            controls_frame, text="Clear Chat", height=30,
+            corner_radius=8, fg_color="gray30", hover_color="gray40",
+            font=ctk.CTkFont(size=12),
+            command=self._clear_chat
+        ).pack(fill="x", pady=(0, 4))
+
+        ctk.CTkButton(
+            controls_frame, text="Save to File", height=30,
+            corner_radius=8, fg_color="#9b59b6", hover_color="#8e44ad",
+            font=ctk.CTkFont(size=12),
+            command=self._save_chat_to_file
+        ).pack(fill="x")
 
         self._refresh_branches_list()
 
@@ -938,20 +982,115 @@ class AIManagerApp(ctk.CTk):
     # ==================== Branches ====================
 
     def _refresh_branches_list(self):
-        """Refresh branches dropdown"""
+        """Refresh branches list in sidebar"""
+        # Clear existing items
+        for item in self.branch_items:
+            item.destroy()
+        self.branch_items.clear()
+        self.selected_branch_idx = None
+
         branches = self.branch_manager.get_branches_list()
-        if branches:
-            values = [f"{b['name']} ({b['created_at'][:10]})" for b in branches]
-            self.branches_combo.configure(values=values)
-            if self.branch_manager.current_branch_id:
-                for i, b in enumerate(branches):
-                    if b['id'] == self.branch_manager.current_branch_id:
-                        self.branches_combo.set(values[i])
-                        self.current_branch_label.configure(text=f"Current: {b['name']}")
-                        break
-        else:
-            self.branches_combo.configure(values=["No saved branches"])
-            self.branches_combo.set("No saved branches")
+        if not branches:
+            empty_label = ctk.CTkLabel(
+                self.branch_list_frame, text="No saved branches",
+                font=ctk.CTkFont(size=11), text_color="gray"
+            )
+            empty_label.grid(row=0, column=0, pady=20)
+            self.branch_items.append(empty_label)
+            return
+
+        for i, branch in enumerate(branches):
+            is_current = branch['id'] == self.branch_manager.current_branch_id
+            self._create_branch_item(i, branch, is_current)
+
+            if is_current:
+                self.selected_branch_idx = i
+                self.current_branch_label.configure(text=f"Current: {branch['name']}")
+
+    def _create_branch_item(self, index: int, branch: dict, is_current: bool):
+        """Create a clickable branch item in the sidebar list"""
+        # Colors for selection states
+        normal_fg = ("gray85", "gray20")
+        selected_fg = ("gray75", "gray30")
+        current_indicator = "#3498db"
+
+        item_frame = ctk.CTkFrame(
+            self.branch_list_frame, corner_radius=8,
+            fg_color=selected_fg if is_current else normal_fg,
+            cursor="hand2"
+        )
+        item_frame.grid(row=index, column=0, sticky="ew", pady=(0, 4))
+        item_frame.grid_columnconfigure(0, weight=1)
+
+        # Current branch indicator (colored left border)
+        if is_current:
+            indicator = ctk.CTkFrame(
+                item_frame, width=4, corner_radius=2,
+                fg_color=current_indicator
+            )
+            indicator.pack(side="left", fill="y", padx=(4, 0), pady=4)
+
+        # Content area
+        content = ctk.CTkFrame(item_frame, fg_color="transparent")
+        content.pack(side="left", fill="both", expand=True, padx=8, pady=6)
+
+        # Branch name
+        name_label = ctk.CTkLabel(
+            content, text=branch['name'],
+            font=ctk.CTkFont(size=12, weight="bold" if is_current else "normal"),
+            anchor="w"
+        )
+        name_label.pack(fill="x")
+
+        # Branch metadata (date + message count)
+        date_str = branch.get('created_at', '')[:10]
+        msg_count = branch.get('message_count', 0)
+        meta_text = f"{date_str}  |  {msg_count} msgs"
+
+        meta_label = ctk.CTkLabel(
+            content, text=meta_text,
+            font=ctk.CTkFont(size=10), text_color="gray",
+            anchor="w"
+        )
+        meta_label.pack(fill="x")
+
+        # Click handler for the entire item
+        def on_click(event, idx=index):
+            self._select_branch_item(idx)
+
+        for widget in [item_frame, content, name_label, meta_label]:
+            widget.bind("<Button-1>", on_click)
+
+        # Double-click to load
+        def on_double_click(event, idx=index):
+            self._select_branch_item(idx)
+            self._load_branch()
+
+        for widget in [item_frame, content, name_label, meta_label]:
+            widget.bind("<Double-Button-1>", on_double_click)
+
+        # Store reference
+        item_frame._branch_index = index
+        self.branch_items.append(item_frame)
+
+    def _select_branch_item(self, index: int):
+        """Select a branch item in the list"""
+        branches = self.branch_manager.get_branches_list()
+        if index < 0 or index >= len(branches):
+            return
+
+        self.selected_branch_idx = index
+
+        # Update visual selection
+        normal_fg = ("gray85", "gray20")
+        selected_fg = ("gray75", "gray30")
+
+        for i, item in enumerate(self.branch_items):
+            if isinstance(item, ctk.CTkFrame) and hasattr(item, '_branch_index'):
+                if i == index:
+                    item.configure(fg_color=selected_fg)
+                else:
+                    item.configure(fg_color=normal_fg)
 
     def _save_branch(self):
         """Save current conversation as branch"""
@@ -975,25 +1114,16 @@ class AIManagerApp(ctk.CTk):
             messagebox.showerror("Error", "Failed to save branch")
 
     def _load_branch(self):
-        """Load selected branch"""
-        selection = self.branches_combo.get()
-        if selection == "No saved branches":
-            messagebox.showwarning("Warning", "No branches to load")
+        """Load selected branch from sidebar list"""
+        if self.selected_branch_idx is None:
+            messagebox.showwarning("Warning", "Select a branch first")
             return
 
         branches = self.branch_manager.get_branches_list()
-        values = [f"{b['name']} ({b['created_at'][:10]})" for b in branches]
-
-        selected_idx = None
-        for i, v in enumerate(values):
-            if v == selection:
-                selected_idx = i
-                break
-
-        if selected_idx is None:
+        if self.selected_branch_idx >= len(branches):
             return
 
-        branch = branches[selected_idx]
+        branch = branches[self.selected_branch_idx]
         branch_data = self.branch_manager.load_branch(branch['id'])
         if not branch_data:
             messagebox.showerror("Error", "Failed to load branch")
@@ -1011,33 +1141,24 @@ class AIManagerApp(ctk.CTk):
         self.chat_display.configure(state="disabled")
 
         self.current_branch_label.configure(text=f"Current: {branch['name']}")
-        messagebox.showinfo("Success", f"Branch '{branch['name']}' loaded!")
+        self._refresh_branches_list()
 
     def _delete_branch(self):
-        """Delete selected branch"""
-        selection = self.branches_combo.get()
-        if selection == "No saved branches":
+        """Delete selected branch from sidebar list"""
+        if self.selected_branch_idx is None:
+            messagebox.showwarning("Warning", "Select a branch first")
             return
 
         branches = self.branch_manager.get_branches_list()
-        values = [f"{b['name']} ({b['created_at'][:10]})" for b in branches]
-
-        selected_idx = None
-        for i, v in enumerate(values):
-            if v == selection:
-                selected_idx = i
-                break
-
-        if selected_idx is None:
+        if self.selected_branch_idx >= len(branches):
             return
 
-        branch = branches[selected_idx]
+        branch = branches[self.selected_branch_idx]
         if not messagebox.askyesno("Confirm", f"Delete branch '{branch['name']}'?"):
             return
 
         if self.branch_manager.delete_branch(branch['id']):
             self._refresh_branches_list()
-            messagebox.showinfo("Success", f"Branch deleted")
         else:
             messagebox.showerror("Error", "Failed to delete branch")
 

@@ -50,7 +50,8 @@ class ConversationBranchManager:
         self,
         name: str,
         providers_history: Dict[str, List[dict]],
-        chat_content: str = ""
+        chat_content: str = "",
+        context_summaries: Dict[str, str] = None
     ) -> str:
         """Create a new branch from current state"""
         branch_id = datetime.now().strftime("%Y%m%d_%H%M%S_") + str(len(self.branches))
@@ -68,6 +69,7 @@ class ConversationBranchManager:
             "name": name,
             "created_at": branch["created_at"],
             "providers_history": providers_history,
+            "context_summaries": context_summaries or {},
             "chat_content": chat_content
         }
 
@@ -120,6 +122,36 @@ class ConversationBranchManager:
     def get_branches_list(self) -> List[dict]:
         """Get list of all branches"""
         return self.branches.copy()
+
+    def update_branch(self, branch_id: str, providers_history: Dict[str, List[dict]],
+                      chat_content: str = "", context_summaries: Dict[str, str] = None) -> bool:
+        """Update existing branch data in-place (for auto-save)"""
+        branch_file = os.path.join(self.save_dir, f"branch_{branch_id}.json")
+        try:
+            if not os.path.exists(branch_file):
+                return False
+
+            with open(branch_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+
+            data["providers_history"] = providers_history
+            data["chat_content"] = chat_content
+            if context_summaries is not None:
+                data["context_summaries"] = context_summaries
+
+            with open(branch_file, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+
+            # Update message count in index
+            for branch in self.branches:
+                if branch["id"] == branch_id:
+                    branch["message_count"] = sum(len(h) for h in providers_history.values())
+                    break
+            self._save_branches_index()
+            return True
+        except Exception as e:
+            logger.error(f"Failed to update branch: {e}")
+            return False
 
     def rename_branch(self, branch_id: str, new_name: str) -> bool:
         """Rename a branch"""

@@ -64,6 +64,7 @@ class AIProvider(ABC):
 
         # Conversation history
         self.conversation_history: List[dict] = []
+        self.context_summary: str = ""  # Summary of older trimmed messages
 
         # Token management
         self.max_context_tokens = 8000  # Default, override per provider
@@ -87,24 +88,51 @@ class AIProvider(ABC):
         yield response, True
 
     def clear_history(self):
-        """Clear conversation history"""
+        """Clear conversation history and summary"""
         self.conversation_history = []
+        self.context_summary = ""
 
     def add_to_history(self, role: str, content: str):
-        """Add message to history with token-based trimming"""
+        """Add message to history with smart trimming (checkpoint summary)"""
         self.conversation_history.append({"role": role, "content": content})
         self._trim_history()
 
     def _trim_history(self):
-        """Trim history to fit within token limit"""
+        """Trim history with checkpoint summary to preserve context"""
         max_history_tokens = self.max_context_tokens - self.max_response_tokens - 500  # Buffer
 
-        while len(self.conversation_history) > 1:
-            total_tokens = self._token_counter.count_messages_tokens(self.conversation_history)
-            if total_tokens <= max_history_tokens:
-                break
-            # Remove oldest message (keep at least the last one)
-            self.conversation_history.pop(0)
+        total_tokens = self._token_counter.count_messages_tokens(self.conversation_history)
+        if total_tokens <= max_history_tokens:
+            return
+
+        # Create a checkpoint summary from older messages instead of just deleting them
+        keep_count = max(1, len(self.conversation_history) // 2)
+        to_summarize = self.conversation_history[:-keep_count]
+        self.conversation_history = self.conversation_history[-keep_count:]
+
+        summary_parts = []
+        if self.context_summary:
+            summary_parts.append(self.context_summary)
+        for msg in to_summarize:
+            text = msg["content"]
+            if len(text) > 300:
+                text = text[:300] + "..."
+            summary_parts.append(f"[{msg['role']}]: {text}")
+
+        self.context_summary = "\n".join(summary_parts)
+        if len(self.context_summary) > 4000:
+            self.context_summary = self.context_summary[-4000:]
+
+    def get_messages_with_context(self) -> List[dict]:
+        """Get conversation messages with context summary prepended"""
+        messages = []
+        if self.context_summary:
+            messages.append({
+                "role": "system",
+                "content": f"Previous conversation context summary:\n{self.context_summary}"
+            })
+        messages.extend(self.conversation_history)
+        return messages
 
     def get_history_tokens(self) -> int:
         """Get current token count of history"""
@@ -302,9 +330,9 @@ class HTTPAIProvider(AIProvider):
         start_time = time.time()
 
         try:
-            # Build request
+            # Build request with context summary
             headers = self._get_headers()
-            data = self._build_request_data(self.conversation_history)
+            data = self._build_request_data(self.get_messages_with_context())
 
             # Make request
             response = self._make_request("POST", self._get_chat_endpoint(), headers, data)

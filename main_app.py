@@ -367,7 +367,7 @@ class ConversationBranchManager:
             logging.error(f"Failed to save branches index: {e}")
 
     def create_branch(self, name: str, providers_history: Dict[str, List[dict]],
-                      chat_content: str = "") -> str:
+                      chat_content: str = "", context_summaries: Dict[str, str] = None) -> str:
         """Create a new branch from current state"""
         branch_id = datetime.now().strftime("%Y%m%d_%H%M%S_") + str(len(self.branches))
 
@@ -384,6 +384,7 @@ class ConversationBranchManager:
             "name": name,
             "created_at": branch["created_at"],
             "providers_history": providers_history,
+            "context_summaries": context_summaries or {},
             "chat_content": chat_content
         }
 
@@ -437,6 +438,36 @@ class ConversationBranchManager:
         """Get list of all branches"""
         return self.branches.copy()
 
+    def update_branch(self, branch_id: str, providers_history: Dict[str, List[dict]],
+                      chat_content: str = "", context_summaries: Dict[str, str] = None) -> bool:
+        """Update existing branch data in-place (for auto-save)"""
+        branch_file = os.path.join(self.save_dir, f"branch_{branch_id}.json")
+        try:
+            if not os.path.exists(branch_file):
+                return False
+
+            with open(branch_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+
+            data["providers_history"] = providers_history
+            data["chat_content"] = chat_content
+            if context_summaries is not None:
+                data["context_summaries"] = context_summaries
+
+            with open(branch_file, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+
+            # Update message count in index
+            for branch in self.branches:
+                if branch["id"] == branch_id:
+                    branch["message_count"] = sum(len(h) for h in providers_history.values())
+                    break
+            self._save_branches_index()
+            return True
+        except Exception as e:
+            logging.error(f"Failed to update branch: {e}")
+            return False
+
     def rename_branch(self, branch_id: str, new_name: str) -> bool:
         """Rename a branch"""
         for branch in self.branches:
@@ -479,7 +510,10 @@ class AIProvider:
         self.is_connected = False
         self.enabled = True
         self.conversation_history: List[dict] = []  # Store conversation history
-        self.max_history = 20  # Max messages to keep
+        self.context_summary: str = ""  # Summary of older trimmed messages
+        self.max_history = 40  # Max messages to keep in active window
+        self.trim_threshold = 40  # Start trimming at this count
+        self.trim_keep = 20  # Keep this many recent messages after trim
 
     def test_connection(self) -> bool:
         raise NotImplementedError
@@ -489,15 +523,52 @@ class AIProvider:
         raise NotImplementedError
 
     def clear_history(self):
-        """Clear conversation history"""
+        """Clear conversation history and summary"""
         self.conversation_history = []
+        self.context_summary = ""
 
     def add_to_history(self, role: str, content: str):
-        """Add message to history"""
+        """Add message to history with smart trimming (checkpoint summary)"""
         self.conversation_history.append({"role": role, "content": content})
-        # Keep only last N messages
-        if len(self.conversation_history) > self.max_history:
-            self.conversation_history = self.conversation_history[-self.max_history:]
+        # When history exceeds threshold, summarize older messages
+        if len(self.conversation_history) > self.trim_threshold:
+            self._create_checkpoint_summary()
+
+    def _create_checkpoint_summary(self):
+        """Summarize older messages into a context checkpoint instead of deleting them"""
+        # Messages to summarize (everything except the last trim_keep)
+        to_summarize = self.conversation_history[:-self.trim_keep]
+        # Keep only recent messages
+        self.conversation_history = self.conversation_history[-self.trim_keep:]
+
+        # Build summary from old messages
+        summary_parts = []
+        if self.context_summary:
+            summary_parts.append(self.context_summary)
+
+        for msg in to_summarize:
+            role = msg["role"]
+            text = msg["content"]
+            # Truncate very long messages in summary
+            if len(text) > 300:
+                text = text[:300] + "..."
+            summary_parts.append(f"[{role}]: {text}")
+
+        self.context_summary = "\n".join(summary_parts)
+        # Limit total summary size to ~4000 chars
+        if len(self.context_summary) > 4000:
+            self.context_summary = self.context_summary[-4000:]
+
+    def get_messages_with_context(self) -> List[dict]:
+        """Get conversation messages with context summary prepended"""
+        messages = []
+        if self.context_summary:
+            messages.append({
+                "role": "system",
+                "content": f"Previous conversation context summary:\n{self.context_summary}"
+            })
+        messages.extend(self.conversation_history)
+        return messages
 
 
 class OpenAIProvider(AIProvider):
@@ -534,9 +605,9 @@ class OpenAIProvider(AIProvider):
                 "Content-Type": "application/json"
             }
 
-            # Build messages with history
+            # Build messages with history + context summary
             messages = [{"role": "system", "content": "You are a helpful assistant."}]
-            messages.extend(self.conversation_history)
+            messages.extend(self.get_messages_with_context())
 
             data = {
                 "model": self.model,
@@ -616,11 +687,25 @@ class AnthropicProvider(AIProvider):
                 "anthropic-version": "2023-06-01",
                 "Content-Type": "application/json"
             }
+            # Build messages with context summary for Anthropic
+            context_messages = self.get_messages_with_context()
+            # Anthropic doesn't use system role in messages - extract it for system param
+            system_text = ""
+            chat_messages = []
+            for msg in context_messages:
+                if msg["role"] == "system":
+                    system_text += msg["content"] + "\n"
+                else:
+                    chat_messages.append(msg)
+
             data = {
                 "model": self.model,
                 "max_tokens": 4000,
-                "messages": self.conversation_history.copy()
+                "messages": chat_messages
             }
+            if system_text.strip():
+                data["system"] = system_text.strip()
+
             response = requests.post(
                 f"{self.base_url}/messages",
                 headers=headers,
@@ -677,11 +762,17 @@ class GeminiProvider(AIProvider):
             url = f"{self.base_url}/models/{self.model}:generateContent?key={self.api_key}"
             headers = {"Content-Type": "application/json"}
 
-            # Build contents from history for Gemini format
+            # Build contents from history + context summary for Gemini format
+            context_messages = self.get_messages_with_context()
             contents = []
-            for msg in self.conversation_history:
-                role = "user" if msg["role"] == "user" else "model"
-                contents.append({"role": role, "parts": [{"text": msg["content"]}]})
+            for msg in context_messages:
+                if msg["role"] == "system":
+                    # Gemini: inject system context as a user message at start
+                    contents.append({"role": "user", "parts": [{"text": f"[Context]: {msg['content']}"}]})
+                    contents.append({"role": "model", "parts": [{"text": "Understood, I have the context."}]})
+                else:
+                    role = "user" if msg["role"] == "user" else "model"
+                    contents.append({"role": role, "parts": [{"text": msg["content"]}]})
 
             data = {
                 "contents": contents,
@@ -743,9 +834,9 @@ class DeepSeekProvider(AIProvider):
                 "Content-Type": "application/json"
             }
 
-            # Build messages with history
+            # Build messages with history + context summary
             messages = [{"role": "system", "content": "You are a helpful assistant."}]
-            messages.extend(self.conversation_history)
+            messages.extend(self.get_messages_with_context())
 
             data = {
                 "model": self.model,
@@ -813,9 +904,9 @@ class GroqProvider(AIProvider):
                 "Content-Type": "application/json"
             }
 
-            # Build messages with history
+            # Build messages with history + context summary
             messages = [{"role": "system", "content": "You are a helpful assistant."}]
-            messages.extend(self.conversation_history)
+            messages.extend(self.get_messages_with_context())
 
             data = {
                 "model": self.model,
@@ -881,8 +972,8 @@ class MistralProvider(AIProvider):
                 "Content-Type": "application/json"
             }
 
-            # Build messages with history
-            messages = self.conversation_history.copy()
+            # Build messages with history + context summary
+            messages = self.get_messages_with_context()
 
             data = {
                 "model": self.model,
@@ -1186,8 +1277,14 @@ class AIManagerApp(ctk.CTk):
         # Load config to UI
         self._load_config_to_ui()
 
+        # Auto-load last session
+        self.after(100, self._auto_load_last_session)
+
         # Check connections in background
         self.after(500, self._check_connections_background)
+
+        # Handle window close - save before exit
+        self.protocol("WM_DELETE_WINDOW", self._on_close)
 
     def _load_config(self) -> dict:
         """Load configuration (keys from secure storage)"""
@@ -2126,6 +2223,9 @@ class AIManagerApp(ctk.CTk):
         if filepath:
             self._add_to_chat(f"\nSaved to: {filepath}\n\n", "info")
 
+        # Auto-save current branch after each query
+        self._auto_save_branch()
+
     def _add_to_chat(self, text: str, tag: str = None):
         """Add text to chat display"""
         self.chat_display.configure(state="normal")
@@ -2142,13 +2242,108 @@ class AIManagerApp(ctk.CTk):
 
     def _new_chat(self):
         """Clear conversation history and start new chat"""
+        # Auto-save current branch before clearing
+        self._auto_save_branch()
         # Clear history for all providers
         for provider in self.providers.values():
             provider.clear_history()
         # Clear chat display
         self._clear_chat()
+        # Reset current branch so next auto-save creates a new one
+        branch_manager.current_branch_id = None
         self.status_label.configure(text="New chat started - history cleared")
         self.current_branch_label.configure(text="Current: None")
+
+    def _auto_save_branch(self):
+        """Auto-save current conversation state to the active branch"""
+        # Collect current state
+        providers_history = {}
+        context_summaries = {}
+        has_history = False
+        for key, provider in self.providers.items():
+            providers_history[key] = provider.conversation_history.copy()
+            if provider.context_summary:
+                context_summaries[key] = provider.context_summary
+            if provider.conversation_history:
+                has_history = True
+
+        if not has_history:
+            return  # Nothing to save
+
+        self.chat_display.configure(state="normal")
+        chat_content = self.chat_display.get("1.0", "end-1c")
+        self.chat_display.configure(state="disabled")
+
+        current_id = branch_manager.current_branch_id
+
+        if current_id:
+            # Update existing branch
+            branch_manager.update_branch(current_id, providers_history, chat_content, context_summaries)
+        else:
+            # Create new auto-save branch
+            timestamp = datetime.now().strftime("%H:%M %d.%m")
+            # Use first user message as branch name if available
+            branch_name = None
+            for history in providers_history.values():
+                for msg in history:
+                    if msg["role"] == "user":
+                        text = msg["content"].strip()
+                        branch_name = text[:40] + ("..." if len(text) > 40 else "")
+                        break
+                if branch_name:
+                    break
+            if not branch_name:
+                branch_name = f"auto-{timestamp}"
+
+            branch_id = branch_manager.create_branch(branch_name, providers_history, chat_content, context_summaries)
+            if branch_id:
+                self.current_branch_label.configure(text=f"Current: {branch_name}")
+                self._refresh_branches_list()
+
+    def _auto_load_last_session(self):
+        """Auto-load the last active branch on startup"""
+        current_id = branch_manager.current_branch_id
+        if not current_id:
+            return
+
+        branch_data = branch_manager.load_branch(current_id)
+        if not branch_data:
+            return
+
+        # Restore conversation history and context summaries for each provider
+        context_summaries = branch_data.get("context_summaries", {})
+        for key, history in branch_data.get("providers_history", {}).items():
+            if key in self.providers:
+                self.providers[key].conversation_history = history.copy()
+                self.providers[key].context_summary = context_summaries.get(key, "")
+
+        # Clear history for providers NOT in the saved branch
+        saved_providers = set(branch_data.get("providers_history", {}).keys())
+        for key in self.providers:
+            if key not in saved_providers:
+                self.providers[key].clear_history()
+
+        # Restore chat display
+        chat_content = branch_data.get("chat_content", "")
+        if chat_content.strip():
+            self.chat_display.configure(state="normal")
+            self.chat_display.delete("1.0", "end")
+            self.chat_display.insert("1.0", chat_content)
+            self.chat_display.see("end")
+            self.chat_display.configure(state="disabled")
+
+        branch_name = branch_data.get("name", current_id)
+        self.current_branch_label.configure(text=f"Current: {branch_name}")
+        self.status_label.configure(text=f"Session restored: {branch_name}")
+        self._refresh_branches_list()
+
+    def _on_close(self):
+        """Handle window close - save state before exit"""
+        try:
+            self._auto_save_branch()
+        except Exception as e:
+            logging.error(f"Failed to auto-save on close: {e}")
+        self.destroy()
 
     def _save_chat_to_file(self):
         """Save chat content to a file with directory selection"""
@@ -2302,14 +2497,17 @@ class AIManagerApp(ctk.CTk):
             return
 
         providers_history = {}
+        context_summaries = {}
         for key, provider in self.providers.items():
             providers_history[key] = provider.conversation_history.copy()
+            if provider.context_summary:
+                context_summaries[key] = provider.context_summary
 
         self.chat_display.configure(state="normal")
         chat_content = self.chat_display.get("1.0", "end-1c")
         self.chat_display.configure(state="disabled")
 
-        branch_id = branch_manager.create_branch(name, providers_history, chat_content)
+        branch_id = branch_manager.create_branch(name, providers_history, chat_content, context_summaries)
         if branch_id:
             self._refresh_branches_list()
             self.status_label.configure(text=f"Branch '{name}' saved")
@@ -2324,6 +2522,9 @@ class AIManagerApp(ctk.CTk):
             messagebox.showwarning("Warning", "Select a branch first")
             return
 
+        # Auto-save current branch before switching
+        self._auto_save_branch()
+
         branches = branch_manager.get_branches_list()
         if not branches or self.selected_branch_idx >= len(branches):
             return
@@ -2334,16 +2535,26 @@ class AIManagerApp(ctk.CTk):
             messagebox.showerror("Error", "Failed to load branch")
             return
 
-        # Restore conversation history
+        # Restore conversation history and context summaries
+        saved_providers = set(branch_data.get("providers_history", {}).keys())
+        context_summaries = branch_data.get("context_summaries", {})
+
         for key, history in branch_data.get("providers_history", {}).items():
             if key in self.providers:
                 self.providers[key].conversation_history = history.copy()
+                self.providers[key].context_summary = context_summaries.get(key, "")
+
+        # Clear history for providers NOT in the saved branch
+        for key in self.providers:
+            if key not in saved_providers:
+                self.providers[key].clear_history()
 
         # Restore chat display
         chat_content = branch_data.get("chat_content", "")
         self.chat_display.configure(state="normal")
         self.chat_display.delete("1.0", "end")
         self.chat_display.insert("1.0", chat_content)
+        self.chat_display.see("end")
         self.chat_display.configure(state="disabled")
 
         self.current_branch_label.configure(text=f"Current: {branch['name']}")
